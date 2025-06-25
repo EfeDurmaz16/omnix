@@ -1,4 +1,6 @@
 import { createHash } from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export interface StoredVideo {
   id: string;
@@ -12,11 +14,14 @@ export interface StoredVideo {
   format: string; // Video format (mp4, webm, etc.)
 }
 
-// Simple in-memory storage for demo purposes with localStorage backup
+// Simple in-memory storage for demo purposes with file backup
 // In production, this should be replaced with a proper database
 const videoStorage = new Map<string, StoredVideo>();
 
-// Load videos from localStorage on initialization
+// Storage file path for server-side persistence
+const STORAGE_FILE = path.join(process.cwd(), 'video-storage.json');
+
+// Load videos from storage on initialization
 let initialized = false;
 
 export class VideoStorage {
@@ -24,18 +29,29 @@ export class VideoStorage {
     if (initialized) return;
     
     try {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('omnix-videos');
-        if (stored) {
-          const videos = JSON.parse(stored) as StoredVideo[];
-          videos.forEach(video => {
-            videoStorage.set(video.id, video);
-          });
-          console.log(`📁 Loaded ${videos.length} videos from localStorage`);
+      // Try to load from file storage (server-side)
+      try {
+        const data = await fs.readFile(STORAGE_FILE, 'utf8');
+        const videos = JSON.parse(data) as StoredVideo[];
+        videos.forEach(video => {
+          videoStorage.set(video.id, video);
+        });
+        console.log(`📁 Loaded ${videos.length} videos from file storage`);
+      } catch (fileError) {
+        // File doesn't exist or is corrupted, try localStorage (client-side)
+        if (typeof window !== 'undefined') {
+          const stored = localStorage.getItem('omnix-videos');
+          if (stored) {
+            const videos = JSON.parse(stored) as StoredVideo[];
+            videos.forEach(video => {
+              videoStorage.set(video.id, video);
+            });
+            console.log(`📁 Loaded ${videos.length} videos from localStorage`);
+          }
         }
       }
     } catch (error) {
-      console.warn('Could not load videos from localStorage:', error);
+      console.warn('Could not load videos from storage:', error);
     }
     
     initialized = true;
@@ -43,13 +59,23 @@ export class VideoStorage {
 
   private static async persist() {
     try {
-      if (typeof window !== 'undefined') {
-        const videos = Array.from(videoStorage.values());
-        localStorage.setItem('omnix-videos', JSON.stringify(videos));
-        console.log(`💾 Persisted ${videos.length} videos to localStorage`);
+      const videos = Array.from(videoStorage.values());
+      
+      // Try to persist to file storage (server-side)
+      try {
+        await fs.writeFile(STORAGE_FILE, JSON.stringify(videos, null, 2));
+        console.log(`💾 Persisted ${videos.length} videos to file storage`);
+      } catch (fileError) {
+        // Fall back to localStorage (client-side)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('omnix-videos', JSON.stringify(videos));
+          console.log(`💾 Persisted ${videos.length} videos to localStorage`);
+        } else {
+          console.warn('Could not persist to file or localStorage:', fileError);
+        }
       }
     } catch (error) {
-      console.warn('Could not persist videos to localStorage:', error);
+      console.warn('Could not persist videos:', error);
     }
   }
 

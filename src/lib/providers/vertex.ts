@@ -931,6 +931,25 @@ export class VertexAIProvider implements ModelProvider {
             console.log('✅ Operation completed!');
             console.log('📋 Full response structure:', JSON.stringify(pollData, null, 2));
             
+            // Check for Google Cloud internal errors first
+            if (pollData.error) {
+              const errorMessage = pollData.error.message || 'Unknown Veo internal error';
+              const errorCode = pollData.error.code;
+              
+              console.log('🚨 Google Cloud internal error detected:', errorMessage);
+              
+              // Handle specific Google Cloud internal errors
+              if (errorMessage.includes('ExecHandler') || errorMessage.includes('RuntimeTracker2')) {
+                throw new Error(
+                  `🔧 Google Cloud Veo service is experiencing internal issues. ` +
+                  `This is a temporary Google infrastructure problem. Please try again in a few minutes. ` +
+                  `Error: ${errorMessage}`
+                );
+              }
+              
+              throw new Error(`Google Cloud internal error (${errorCode}): ${errorMessage}`);
+            }
+            
             // Extract videos from response
             const videos = pollData.response?.videos;
             if (!videos || videos.length === 0) {
@@ -992,8 +1011,8 @@ export class VertexAIProvider implements ModelProvider {
         
         console.log('🔗 Found video URL:', videoUrl.substring(0, 100) + (videoUrl.length > 100 ? '...' : ''));
         
-        // Import video storage here to avoid circular dependencies
-        const { VideoStorage } = await import('../video-storage');
+        // Import GCS storage for proper cloud storage
+        const { storeGeneratedVideo } = await import('../gcp-storage');
         
         const duration = options.duration || 5; // Default duration
         
@@ -1007,21 +1026,44 @@ export class VertexAIProvider implements ModelProvider {
           }
         }
         
-        // Store the actual generated video in our storage system
-        const storedVideo = await VideoStorage.store({
-          url: videoUrl,
+        // Store the actual generated video in GCS and Firestore
+        console.log('🔥 VERTEX: About to store generated video in GCS/Firestore...');
+        console.log('🔥 VERTEX: Video data to store:', {
+          url: videoUrl.substring(0, 100) + '...',
           prompt: options.prompt,
           model: options.model,
           duration: duration,
-          createdAt: new Date().toISOString(),
-          userId: 'current-user', // In production, get this from authentication
+          userId: 'current-user',
           size: videoSize,
           format: videoResult.mimeType ? videoResult.mimeType.split('/')[1] || 'mp4' : 'mp4'
         });
         
-        console.log('✅ Real Veo generation completed:', storedVideo.id);
-        console.log('📁 Video stored in database');
-        console.log('🔗 Real video URL:', storedVideo.url);
+        let storedVideo;
+        try {
+          console.log('🔥 VERTEX: About to call storeGeneratedVideo...');
+          storedVideo = await storeGeneratedVideo({
+            url: videoUrl,
+            prompt: options.prompt,
+            model: options.model,
+            duration: duration,
+            userId: 'current-user', // In production, get this from authentication
+            size: videoSize,
+            format: videoResult.mimeType ? videoResult.mimeType.split('/')[1] || 'mp4' : 'mp4'
+          });
+          console.log('🔥 VERTEX: storeGeneratedVideo completed successfully');
+        } catch (storageError) {
+          console.error('❌ VERTEX: Failed to store video in GCS/Firestore:', storageError);
+          console.log('🔥 VERTEX: Video was generated successfully but storage failed');
+          console.log('🔥 VERTEX: Raw video URL:', videoUrl.substring(0, 200));
+          console.log('🔥 VERTEX: Storage error details:', storageError);
+          
+          // Don't return fallback - let the error propagate to see what's happening
+          throw storageError;
+        }
+        
+        console.log('✅ VERTEX: Real Veo generation completed:', storedVideo.id);
+        console.log('📁 VERTEX: Video stored in database');
+        console.log('🔗 VERTEX: Real video URL:', storedVideo.url);
 
         return {
           id: storedVideo.id,
@@ -1070,8 +1112,11 @@ export class VertexAIProvider implements ModelProvider {
           );
         }
         
-        // For other errors, provide the actual error details
-        throw new Error(`Veo API error: ${errorMessage}`);
+        // For other errors, provide the actual error details with helpful alternatives
+        throw new Error(
+          `Veo API error: ${errorMessage}. ` +
+          `💡 Tip: Try using the "Wavespeed" model instead - it's working reliably for video generation.`
+        );
       }
 
     } catch (error) {

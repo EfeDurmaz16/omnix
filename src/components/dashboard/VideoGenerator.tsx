@@ -112,11 +112,18 @@ export function VideoGenerator() {
       console.log('📡 Video API response status:', response.status);
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (jsonError) {
+          // If response is not JSON, create a basic error object
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
         console.error('❌ Video API Error:', errorData);
         
         // Extract the actual error message for better user feedback
-        const errorMessage = errorData.details || errorData.error || errorData.message || `HTTP ${response.status}`;
+        const errorMessage = errorData?.details || errorData?.error || errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
 
@@ -179,10 +186,22 @@ export function VideoGenerator() {
           `2. Request access to Veo API\n` +
           `3. We'll connect it automatically once approved`
         );
+      } else if (errorMessage.includes('Google Cloud Veo service is experiencing internal issues')) {
+        // Google Cloud infrastructure issue
+        alert(
+          `🔧 Google Cloud Infrastructure Issue\n\n` +
+          `The Google Cloud Veo service is experiencing temporary internal issues. This is not a problem with your setup.\n\n` +
+          `Your prompt: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"\n\n` +
+          `What to do:\n` +
+          `1. ✅ Try the "Wavespeed" model instead (it's working reliably)\n` +
+          `2. ⏰ Or wait 15-30 minutes and try Veo again\n` +
+          `3. 📊 Check Google Cloud status page for updates\n\n` +
+          `Your application is working correctly - this is a temporary Google issue.`
+        );
       } else if (errorMessage.includes('Wavespeed')) {
         // Seedance-specific error
         alert(
-          `🎬 Seedance Video Generation Error\n\n` +
+          `🎬 Wavespeed Video Generation Error\n\n` +
           `Error: ${errorMessage}\n\n` +
           `This could be due to:\n` +
           `1. API quota limits\n` +
@@ -255,6 +274,39 @@ export function VideoGenerator() {
     } catch (error) {
       console.error('❌ Storage test error:', error);
       alert(`❌ Storage test error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Function to migrate local videos to Firestore
+  const migrateLocalVideos = async () => {
+    if (!confirm('Migrate all local videos to Firestore? This will speed up the site significantly.')) {
+      return;
+    }
+    
+    try {
+      console.log('🔄 Migrating local videos to Firestore...');
+      
+      const response = await fetch('/api/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'migrate-local' })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Migration completed:', result);
+        alert(`🎉 Migration Complete!\n\n${result.migrated} videos migrated to Firestore\n${result.skipped} videos skipped\n\nLocal storage cleared - site should be much faster now!`);
+        
+        // Refresh the video list
+        await loadStoredVideos();
+      } else {
+        console.error('❌ Migration failed:', result);
+        alert(`❌ Migration failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Migration error:', error);
+      alert(`❌ Migration error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -397,6 +449,16 @@ export function VideoGenerator() {
                 Refresh
               </Button>
               
+              {/* Migration button */}
+              <Button 
+                onClick={migrateLocalVideos} 
+                variant="outline"
+                size="sm"
+                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+              >
+                🔄 Migrate to Cloud
+              </Button>
+              
               {/* Storage test button */}
               <Button 
                 onClick={testVideoStorage} 
@@ -505,7 +567,16 @@ export function VideoGenerator() {
                       onLoadStart={() => console.log('🎬 Video loading started:', video.url)}
                       onCanPlay={() => console.log('✅ Video can play:', video.url)}
                       onError={(e) => {
-                        console.error('❌ Video error:', e);
+                        const error = e.currentTarget.error;
+                        console.error('❌ Video error details:', {
+                          error: error,
+                          errorCode: error?.code,
+                          errorMessage: error?.message,
+                          networkState: e.currentTarget.networkState,
+                          readyState: e.currentTarget.readyState,
+                          url: video.url,
+                          currentSrc: e.currentTarget.currentSrc
+                        });
                         console.error('Video URL:', video.url);
                       }}
                     >
@@ -551,7 +622,18 @@ export function VideoGenerator() {
                               className="w-full rounded-lg"
                               controls
                               autoPlay
-                              onError={(e) => console.error('❌ Fullscreen video error:', e)}
+                              onError={(e) => {
+                                const error = e.currentTarget.error;
+                                console.error('❌ Fullscreen video error details:', {
+                                  error: error,
+                                  errorCode: error?.code,
+                                  errorMessage: error?.message,
+                                  networkState: e.currentTarget.networkState,
+                                  readyState: e.currentTarget.readyState,
+                                  url: video.url,
+                                  currentSrc: e.currentTarget.currentSrc
+                                });
+                              }}
                             >
                               <source src={video.url} type="video/mp4" />
                               Your browser does not support the video tag.

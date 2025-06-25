@@ -161,22 +161,45 @@ export class WavespeedProvider implements ModelProvider {
           console.log('✅ Wavespeed video generation completed!');
           console.log('🔗 Video URL:', resultUrl);
 
-          // Import video storage here to avoid circular dependencies
-          const { VideoStorage } = await import('../video-storage');
+          // Import GCS storage for proper cloud storage
+          const { storeGeneratedVideo } = await import('../gcp-storage');
           
-          // Store the generated video in our storage system
-          const storedVideo = await VideoStorage.store({
+          console.log('🔥 WAVESPEED: About to store generated video in GCS/Firestore...');
+          console.log('🔥 WAVESPEED: Video data to store:', {
             url: resultUrl,
             prompt: options.prompt,
             model: options.model,
             duration: options.duration || 5,
-            createdAt: new Date().toISOString(),
-            userId: 'current-user', // In production, get this from authentication
-            size: 0, // API doesn't provide file size
-            format: 'mp4' // Wavespeed typically generates MP4
+            userId: 'current-user',
+            size: 0,
+            format: 'mp4'
           });
+          
+          // Store the generated video in GCS and Firestore
+          let storedVideo;
+          try {
+            console.log('🔥 WAVESPEED: About to call storeGeneratedVideo...');
+            storedVideo = await storeGeneratedVideo({
+              url: resultUrl,
+              prompt: options.prompt,
+              model: options.model,
+              duration: options.duration || 5,
+              userId: 'current-user', // In production, get this from authentication
+              size: 0, // API doesn't provide file size
+              format: 'mp4' // Wavespeed typically generates MP4
+            });
+            console.log('🔥 WAVESPEED: storeGeneratedVideo completed successfully');
+          } catch (storageError) {
+            console.error('❌ WAVESPEED: Failed to store video in GCS/Firestore:', storageError);
+            console.log('🔥 WAVESPEED: Video was generated successfully but storage failed');
+            console.log('🔥 WAVESPEED: Raw video URL:', resultUrl);
+            console.log('🔥 WAVESPEED: Storage error details:', storageError);
+            
+            // Don't return fallback - let the error propagate to see what's happening
+            throw storageError;
+          }
 
-          console.log('📁 Video stored in database with ID:', storedVideo.id);
+          console.log('✅ WAVESPEED: Video stored in database with ID:', storedVideo.id);
 
           return {
             id: storedVideo.id,
