@@ -87,6 +87,8 @@ export class ModelRouter {
         console.warn('⚠️ WAVESPEED_API_KEY not set, Wavespeed models unavailable');
       }
 
+      // Note: Azure OpenAI provider removed - using OpenAI direct API instead
+
       // TODO: Initialize other providers
       // if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
       //   const bedrockProvider = new BedrockProvider();

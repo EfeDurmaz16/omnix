@@ -123,8 +123,8 @@ export async function GET() {
       console.log('Using fallback models:', fallbackModels.length);
     }
     
-    // Get user's plan - allow all models for unauthenticated users with basic access
-    const userPlan = isAuthenticated ? 'free' : 'demo'; // TODO: Get actual plan from Clerk user metadata
+    // Get user's plan - give ultra access for development
+    const userPlan = isAuthenticated ? 'ultra' : 'demo'; // TODO: Get actual plan from Clerk user metadata
     console.log('User plan:', userPlan, 'Authenticated:', isAuthenticated);
     
     // Filter models based on user's plan - show all text models for demo users
@@ -133,8 +133,8 @@ export async function GET() {
     if (isAuthenticated) {
       availableModels = getAvailableModelsForPlan(userPlan, allModels);
     } else {
-      // For unauthenticated users, show all text models but limited access
-      availableModels = allModels.filter(model => model.type === 'text' || model.type === 'multimodal');
+      // For unauthenticated users, show ALL models for development
+      availableModels = allModels;
     }
     console.log('Available models after filtering:', availableModels?.length || 0);
     
@@ -200,6 +200,13 @@ export async function GET() {
             description: 'Deep analysis with comprehensive reasoning',
             temperature: 0.7,
             maxTokens: 4000
+          },
+          {
+            mode: 'full-think',
+            name: 'FullThink Mode',
+            description: 'Maximum creativity with high temperature for diverse outputs',
+            temperature: 1.0,
+            maxTokens: 3000
           }
         ]
       }

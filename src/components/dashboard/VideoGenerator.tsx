@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Download, Play, Video, RefreshCw } from 'lucide-react';
+import { Loader2, Download, Play, Video, RefreshCw, Trash2 } from 'lucide-react';
 import { AI_MODELS } from '@/lib/constants';
 import { GenerationResult } from '@/lib/types';
 
@@ -218,55 +218,86 @@ export function VideoGenerator() {
   };
 
   const handleDownload = (videoUrl: string, prompt: string) => {
-    const link = document.createElement('a');
-    link.href = videoUrl;
-    link.download = `omnix-video-${Date.now()}.mp4`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const element = document.createElement('a');
+    element.href = videoUrl;
+    element.download = `video-${Date.now()}.mp4`;
+    element.click();
   };
 
-  // Debug function to test video addition
-  const addTestVideo = () => {
-    const testVideo: GenerationResult = {
-      id: `test-${Date.now()}`,
-      type: 'video',
-      content: 'Test video',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      model: 'test-model',
-      prompt: 'Test video for debugging',
-      userId: 'test-user',
-      tokensUsed: 50,
-      createdAt: new Date()
-    };
-    
-    setGeneratedVideos(prev => {
-      // Check if this test video already exists to prevent duplicates
-      const exists = prev.some(v => v.url === testVideo.url && v.model === 'test-model');
-      if (exists) {
-        console.log('🧪 Test video already exists, not adding duplicate');
-        return prev;
-      }
-      console.log('🧪 Test video added:', testVideo.id);
-      return [testVideo, ...prev];
-    });
-  };
-
-  // Function to test video storage system
-  const testVideoStorage = async () => {
+  // Add video delete function
+  const handleDeleteVideo = async (videoId: string) => {
     try {
-      console.log('🧪 Testing video storage system...');
+      console.log('🗑️ Deleting video:', videoId);
       
-      // Test creating a video via API
-      const response = await fetch('/api/videos?test=create');
+      const response = await fetch('/api/videos', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoId }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const result = await response.json();
       
       if (result.success) {
-        console.log('✅ Storage test successful:', result.data);
-        alert(`🎉 Storage Test Successful!\n\nCreated video: ${result.data.id}\nURL: ${result.data.url}\n\nRefreshing gallery...`);
+        console.log('✅ Video deleted successfully');
         
-        // Refresh the video list
+        // Remove from local state
+        setGeneratedVideos(prev => prev.filter(v => v.id !== videoId));
+        setStoredVideos(prev => prev.filter(v => v.id !== videoId));
+        
+        // Refresh the video list to ensure consistency
         await loadStoredVideos();
+        
+        alert('🗑️ Video deleted successfully!');
+      } else {
+        throw new Error(result.error || 'Delete failed');
+      }
+    } catch (error) {
+      console.error('❌ Failed to delete video:', error);
+      alert(`❌ Failed to delete video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Keep the existing functions but comment them out from UI
+  const addTestVideo = () => {
+    const testVideo: GenerationResult = {
+      id: `test_${Date.now()}`,
+      type: 'video',
+      content: 'Test video for debugging',
+      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      model: 'test-model',
+      prompt: 'A test video for debugging purposes',
+      userId: 'test-user',
+      tokensUsed: 0,
+      createdAt: new Date()
+    };
+    
+    setGeneratedVideos(prev => [testVideo, ...prev]);
+    console.log('🧪 Test video added for debugging');
+  };
+
+  const testVideoStorage = async () => {
+    try {
+      console.log('🧪 Testing video storage...');
+      
+      const response = await fetch('/api/videos/test-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          testUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Storage test passed:', result);
+        alert(`✅ Storage test passed!\n\nTest results:\n${JSON.stringify(result.data, null, 2)}`);
       } else {
         console.error('❌ Storage test failed:', result);
         alert(`❌ Storage test failed: ${result.error}`);
@@ -277,28 +308,22 @@ export function VideoGenerator() {
     }
   };
 
-  // Function to migrate local videos to Firestore
   const migrateLocalVideos = async () => {
-    if (!confirm('Migrate all local videos to Firestore? This will speed up the site significantly.')) {
-      return;
-    }
-    
     try {
-      console.log('🔄 Migrating local videos to Firestore...');
+      console.log('🔄 Starting migration to cloud storage...');
       
-      const response = await fetch('/api/videos', {
+      const response = await fetch('/api/videos/fix-missing', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'migrate-local' })
+        headers: { 'Content-Type': 'application/json' }
       });
       
       const result = await response.json();
       
       if (result.success) {
         console.log('✅ Migration completed:', result);
-        alert(`🎉 Migration Complete!\n\n${result.migrated} videos migrated to Firestore\n${result.skipped} videos skipped\n\nLocal storage cleared - site should be much faster now!`);
+        alert(`✅ Migration completed!\n\nResults:\n${JSON.stringify(result.data, null, 2)}`);
         
-        // Refresh the video list
+        // Refresh stored videos
         await loadStoredVideos();
       } else {
         console.error('❌ Migration failed:', result);
@@ -434,7 +459,8 @@ export function VideoGenerator() {
             </div>
 
             <div className="flex items-center space-x-2">
-              {/* Refresh button */}
+              {/* Commented out buttons - keeping functions for future use */}
+              {/* 
               <Button 
                 onClick={loadStoredVideos} 
                 variant="outline"
@@ -449,7 +475,6 @@ export function VideoGenerator() {
                 Refresh
               </Button>
               
-              {/* Migration button */}
               <Button 
                 onClick={migrateLocalVideos} 
                 variant="outline"
@@ -459,7 +484,6 @@ export function VideoGenerator() {
                 🔄 Migrate to Cloud
               </Button>
               
-              {/* Storage test button */}
               <Button 
                 onClick={testVideoStorage} 
                 variant="outline"
@@ -468,22 +492,21 @@ export function VideoGenerator() {
                 🧪 Test Storage
               </Button>
               
-              {/* Clear storage button */}
-              <Button 
-                onClick={clearStoredVideos} 
-                variant="outline"
-                size="sm"
-              >
-                🧹 Clear All
-              </Button>
-              
-              {/* Debug button */}
               <Button 
                 onClick={addTestVideo} 
                 variant="outline"
                 size="sm"
               >
                 🧪 Test Video
+              </Button>
+              */}
+              
+              <Button 
+                onClick={clearStoredVideos} 
+                variant="outline"
+                size="sm"
+              >
+                🧹 Clear All
               </Button>
               
               <Button 
@@ -503,11 +526,11 @@ export function VideoGenerator() {
             </div>
           </div>
 
-          {/* Video model info */}
+          {/* Video model info - Updated to remove "100% Available" status */}
           <div className="p-3 bg-green-50 border border-green-200 rounded-md">
             <p className="text-sm text-green-600">
-              <strong>🎬 Video Generation Available:</strong> 
-              <strong>Veo 2.0</strong>, <strong>Veo 3.0</strong>, and <strong>Seedance</strong> are 100% available and fully functional! 
+              <strong>🎬 Video Generation:</strong> 
+              <strong>Veo 2.0</strong>, <strong>Veo 3.0</strong>, and <strong>Seedance</strong> models are integrated and functional! 
               Real API calls are being made to generate actual videos.
             </p>
           </div>
@@ -660,6 +683,16 @@ export function VideoGenerator() {
                       >
                         <Download className="mr-2 h-4 w-4" />
                         Download
+                      </Button>
+                      
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteVideo(video.id)}
+                        title="Delete video"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
                       </Button>
                     </div>
                   </div>

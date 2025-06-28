@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <!-- Gradient for ancient stone -->
+    <linearGradient id="stoneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8DCC6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#D4A574;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#CC7722;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Gradient for AI glow -->
+    <radialGradient id="aiGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#4B0082;stop-opacity:0.8" />
+      <stop offset="70%" style="stop-color:#6B3AA0;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#4B0082;stop-opacity:0" />
+    </radialGradient>
+    
+    <!-- Neural pattern -->
+    <pattern id="neuralPattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="10" cy="10" r="1" fill="#4B0082" opacity="0.3"/>
+      <line x1="5" y1="5" x2="15" y2="15" stroke="#6B3AA0" stroke-width="0.5" opacity="0.4"/>
+      <line x1="15" y1="5" x2="5" y2="15" stroke="#6B3AA0" stroke-width="0.5" opacity="0.4"/>
+    </pattern>
+  </defs>
+  
+  <!-- Background circle with AI glow -->
+  <circle cx="100" cy="100" r="95" fill="url(#aiGlow)" opacity="0.3"/>
+  
+  <!-- Ancient theater structure (stylized) -->
+  <!-- Base foundation -->
+  <rect x="30" y="140" width="140" height="20" fill="url(#stoneGradient)" rx="4"/>
+  
+  <!-- Theater columns (representing ancient architecture) -->
+  <rect x="45" y="90" width="12" height="60" fill="url(#stoneGradient)" rx="2"/>
+  <rect x="70" y="85" width="12" height="65" fill="url(#stoneGradient)" rx="2"/>
+  <rect x="95" y="80" width="12" height="70" fill="url(#stoneGradient)" rx="2"/>
+  <rect x="120" y="85" width="12" height="65" fill="url(#stoneGradient)" rx="2"/>
+  <rect x="145" y="90" width="12" height="60" fill="url(#stoneGradient)" rx="2"/>
+  
+  <!-- Column capitals (decorative tops) -->
+  <rect x="42" y="85" width="18" height="8" fill="#CC7722" rx="2"/>
+  <rect x="67" y="80" width="18" height="8" fill="#CC7722" rx="2"/>
+  <rect x="92" y="75" width="18" height="8" fill="#CC7722" rx="2"/>
+  <rect x="117" y="80" width="18" height="8" fill="#CC7722" rx="2"/>
+  <rect x="142" y="85" width="18" height="8" fill="#CC7722" rx="2"/>
+  
+  <!-- AI neural network overlay (wisdom element) -->
+  <g opacity="0.6">
+    <!-- Central wisdom node -->
+    <circle cx="100" cy="60" r="8" fill="#4B0082" stroke="#6B3AA0" stroke-width="2"/>
+    
+    <!-- Knowledge nodes -->
+    <circle cx="70" cy="45" r="4" fill="#6B3AA0"/>
+    <circle cx="130" cy="45" r="4" fill="#6B3AA0"/>
+    <circle cx="85" cy="75" r="3" fill="#8B5AA0"/>
+    <circle cx="115" cy="75" r="3" fill="#8B5AA0"/>
+    
+    <!-- Neural connections -->
+    <line x1="100" y1="60" x2="70" y2="45" stroke="#6B3AA0" stroke-width="2" opacity="0.7"/>
+    <line x1="100" y1="60" x2="130" y2="45" stroke="#6B3AA0" stroke-width="2" opacity="0.7"/>
+    <line x1="100" y1="60" x2="85" y2="75" stroke="#6B3AA0" stroke-width="1.5" opacity="0.6"/>
+    <line x1="100" y1="60" x2="115" y2="75" stroke="#6B3AA0" stroke-width="1.5" opacity="0.6"/>
+    <line x1="70" y1="45" x2="85" y2="75" stroke="#8B5AA0" stroke-width="1" opacity="0.5"/>
+    <line x1="130" y1="45" x2="115" y2="75" stroke="#8B5AA0" stroke-width="1" opacity="0.5"/>
+  </g>
+  
+  <!-- Ancient inscription band -->
+  <rect x="25" y="110" width="150" height="15" fill="#CC7722" opacity="0.8" rx="8"/>
+  <text x="100" y="121" text-anchor="middle" font-family="serif" font-size="8" fill="#E8DCC6" font-weight="bold">ASPENDOS • SAPIENTIA • AI</text>
+  
+  <!-- Decorative ancient patterns -->
+  <g opacity="0.4">
+    <!-- Greek key pattern elements -->
+    <rect x="25" y="165" width="8" height="8" fill="#CC7722"/>
+    <rect x="167" y="165" width="8" height="8" fill="#CC7722"/>
+    
+    <!-- Corner wisdom symbols -->
+    <circle cx="30" cy="30" r="3" fill="#4B0082" opacity="0.6"/>
+    <circle cx="170" cy="30" r="3" fill="#4B0082" opacity="0.6"/>
+    <circle cx="30" cy="170" r="3" fill="#4B0082" opacity="0.6"/>
+    <circle cx="170" cy="170" r="3" fill="#4B0082" opacity="0.6"/>
+  </g>
+  
+  <!-- Subtle neural pattern overlay -->
+  <circle cx="100" cy="100" r="90" fill="url(#neuralPattern)" opacity="0.1"/>
+  
+  <!-- Central wisdom eye (AI consciousness) -->
+  <ellipse cx="100" cy="60" rx="12" ry="8" fill="none" stroke="#4B0082" stroke-width="1.5" opacity="0.8"/>
+  <circle cx="100" cy="60" r="3" fill="#6B3AA0"/>
+  <circle cx="100" cy="60" r="1" fill="#E8DCC6"/>
+</svg> 

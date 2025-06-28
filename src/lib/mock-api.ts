@@ -6,10 +6,10 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Mock user data
 const mockUser: User = {
-  id: 'user-123',
-  email: 'demo@omnix.ai',
+  id: '1',
   name: 'Demo User',
-  avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+  email: 'demo@aspendos.ai',
+  avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
   plan: 'pro',
   credits: 1500,
   createdAt: new Date('2024-01-01'),

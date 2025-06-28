@@ -11,31 +11,31 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Omnix - Your All-in-One AI Platform",
+  title: "Aspendos - Your All-in-One AI Platform",
   description: "Chat with advanced AI models, generate stunning images, and create videos. Access GPT-4, Claude, Gemini, Imagen, Veo, and Seedance in one unified platform.",
   keywords: ["AI", "artificial intelligence", "text generation", "image generation", "video generation", "GPT", "Claude", "Gemini", "Imagen", "Veo", "Seedance"],
-  authors: [{ name: "Omnix Team" }],
-  creator: "Omnix",
-  publisher: "Omnix",
+  authors: [{ name: "Aspendos Team" }],
+  creator: "Aspendos",
+  publisher: "Aspendos",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Omnix AI",
+    title: "Aspendos AI",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://omnix.ai",
-    title: "Omnix - Your All-in-One AI Platform",
+    url: "https://aspendos.ai",
+    title: "Aspendos - Your All-in-One AI Platform",
     description: "Chat with advanced AI models, generate stunning images, and create videos. Access GPT-4, Claude, Gemini, Imagen, Veo, and Seedance in one unified platform.",
-    siteName: "Omnix",
+    siteName: "Aspendos",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Omnix - Your All-in-One AI Platform",
+    title: "Aspendos - Your All-in-One AI Platform",
     description: "Chat with advanced AI models, generate stunning images, and create videos. Access GPT-4, Claude, Gemini, Imagen, Veo, and Seedance in one unified platform.",
-    creator: "@omnix",
+    creator: "@aspendos",
   },
   viewport: {
     width: "device-width",
@@ -45,6 +45,11 @@ export const metadata: Metadata = {
   },
   themeColor: "#8b5cf6",
   robots: "index, follow",
+  icons: {
+    icon: '/aspendos-icon.svg',
+    shortcut: '/aspendos-icon.svg',
+    apple: '/aspendos-icon.svg',
+  },
 };
 
 export default function RootLayout({
@@ -59,12 +64,12 @@ export default function RootLayout({
           <meta name="mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-capable" content="yes" />
           <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-          <meta name="apple-mobile-web-app-title" content="Omnix AI" />
+          <meta name="apple-mobile-web-app-title" content="Aspendos AI" />
           <link rel="apple-touch-icon" href="/icon-192.png" />
           <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
           <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
         </head>
-        <body className={`${inter.variable} font-mono antialiased`}>
+        <body className={`${inter.variable} font-mono antialiased cultural-bg`}>
           <ThemeProvider>
             <AuthWrapper>
               {children}

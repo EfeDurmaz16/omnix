@@ -15,15 +15,17 @@ export class OpenAIProvider implements ModelProvider {
   private client: OpenAI;
   
   models: ModelInfo[] = [
+    // GPT-4 Series
     {
       id: 'gpt-4',
       name: 'GPT-4',
       provider: 'openai',
       type: 'multimodal',
-      contextWindow: 128000,
-      inputCostPer1kTokens: 0.0025,
-      outputCostPer1kTokens: 0.01,
+      contextWindow: 8192,
+      inputCostPer1kTokens: 0.03,
+      outputCostPer1kTokens: 0.06,
       maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 10000, requestsPerMinute: 500 },
       capabilities: [
         { type: 'text-generation', supported: true },
         { type: 'image-analysis', supported: true },
@@ -32,30 +34,15 @@ export class OpenAIProvider implements ModelProvider {
       ]
     },
     {
-      id: 'gpt-4o',
-      name: 'GPT-4o',
+      id: 'gpt-4-0613',
+      name: 'GPT-4 (June 2023)',
       provider: 'openai',
       type: 'multimodal',
-      contextWindow: 128000,
-      inputCostPer1kTokens: 0.0025,
-      outputCostPer1kTokens: 0.01,
-      maxTokens: 16384,
-      capabilities: [
-        { type: 'text-generation', supported: true },
-        { type: 'image-analysis', supported: true },
-        { type: 'function-calling', supported: true },
-        { type: 'json-mode', supported: true }
-      ]
-    },
-    {
-      id: 'gpt-4o-mini',
-      name: 'GPT-4o Mini',
-      provider: 'openai',
-      type: 'multimodal',
-      contextWindow: 128000,
-      inputCostPer1kTokens: 0.00015,
-      outputCostPer1kTokens: 0.0006,
-      maxTokens: 16384,
+      contextWindow: 8192,
+      inputCostPer1kTokens: 0.03,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 10000, requestsPerMinute: 500 },
       capabilities: [
         { type: 'text-generation', supported: true },
         { type: 'image-analysis', supported: true },
@@ -72,6 +59,7 @@ export class OpenAIProvider implements ModelProvider {
       inputCostPer1kTokens: 0.01,
       outputCostPer1kTokens: 0.03,
       maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
       capabilities: [
         { type: 'text-generation', supported: true },
         { type: 'image-analysis', supported: true },
@@ -79,6 +67,151 @@ export class OpenAIProvider implements ModelProvider {
         { type: 'json-mode', supported: true }
       ]
     },
+    {
+      id: 'gpt-4-turbo-2024-04-09',
+      name: 'GPT-4 Turbo (April 2024)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.01,
+      outputCostPer1kTokens: 0.03,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4-turbo-preview',
+      name: 'GPT-4 Turbo Preview',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.01,
+      outputCostPer1kTokens: 0.03,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // GPT-4o Series
+    {
+      id: 'gpt-4o',
+      name: 'GPT-4o',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.0025,
+      outputCostPer1kTokens: 0.01,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'audio-processing', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4o-2024-05-13',
+      name: 'GPT-4o (May 2024)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.0025,
+      outputCostPer1kTokens: 0.01,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'audio-processing', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4o-2024-08-06',
+      name: 'GPT-4o (August 2024)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.0025,
+      outputCostPer1kTokens: 0.01,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'audio-processing', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4o-2024-11-20',
+      name: 'GPT-4o (November 2024)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.0025,
+      outputCostPer1kTokens: 0.01,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'audio-processing', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // GPT-4o Mini Series
+    {
+      id: 'gpt-4o-mini',
+      name: 'GPT-4o Mini',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.00015,
+      outputCostPer1kTokens: 0.0006,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'audio-processing', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4o-mini-2024-07-18',
+      name: 'GPT-4o Mini (July 2024)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.00015,
+      outputCostPer1kTokens: 0.0006,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'audio-processing', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // GPT-3.5 Series
     {
       id: 'gpt-3.5-turbo',
       name: 'GPT-3.5 Turbo',
@@ -88,6 +221,7 @@ export class OpenAIProvider implements ModelProvider {
       inputCostPer1kTokens: 0.0005,
       outputCostPer1kTokens: 0.0015,
       maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
       capabilities: [
         { type: 'text-generation', supported: true },
         { type: 'function-calling', supported: true },
@@ -95,14 +229,461 @@ export class OpenAIProvider implements ModelProvider {
       ]
     },
     {
+      id: 'gpt-3.5-turbo-0125',
+      name: 'GPT-3.5 Turbo (January 2024)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 16385,
+      inputCostPer1kTokens: 0.0005,
+      outputCostPer1kTokens: 0.0015,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-3.5-turbo-1106',
+      name: 'GPT-3.5 Turbo (November 2023)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 16385,
+      inputCostPer1kTokens: 0.0005,
+      outputCostPer1kTokens: 0.0015,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-3.5-turbo-16k',
+      name: 'GPT-3.5 Turbo 16K',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 16385,
+      inputCostPer1kTokens: 0.001,
+      outputCostPer1kTokens: 0.002,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-3.5-turbo-instruct',
+      name: 'GPT-3.5 Turbo Instruct',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 4096,
+      inputCostPer1kTokens: 0.0015,
+      outputCostPer1kTokens: 0.002,
+      maxTokens: 4096,
+      rateLimits: { tokensPerMinute: 90000, requestsPerMinute: 3500 },
+      capabilities: [
+        { type: 'text-generation', supported: true }
+      ]
+    },
+    // GPT-4.1 Series (Latest)
+    {
+      id: 'gpt-4.1-2025-04-14',
+      name: 'GPT-4.1 (April 2025)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.0025,
+      outputCostPer1kTokens: 0.01,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4.1-mini',
+      name: 'GPT-4.1 Mini',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.00015,
+      outputCostPer1kTokens: 0.0006,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4.1-nano-2025-04-14',
+      name: 'GPT-4.1 Nano (April 2025)',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.00010,
+      outputCostPer1kTokens: 0.0004,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // GPT-4.1 Series - Simple Versions
+    {
+      id: 'gpt-4.1',
+      name: 'gpt-4.1',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.0025,
+      outputCostPer1kTokens: 0.01,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    {
+      id: 'gpt-4.1-nano',
+      name: 'gpt-4.1-nano',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.00010,
+      outputCostPer1kTokens: 0.0004,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // GPT-4.5 Preview
+    {
+      id: 'gpt-4.5-preview',
+      name: 'GPT-4.5 Preview',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.005,
+      outputCostPer1kTokens: 0.015,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 125000, requestsPerMinute: 1000 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // o1 Series (Reasoning Models)
+    {
+      id: 'o1',
+      name: 'o1',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o1-2024-12-17',
+      name: 'o1 (December 2024)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o1-mini',
+      name: 'o1 Mini',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o1-mini-2024-09-12',
+      name: 'o1 Mini (September 2024)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o1-preview',
+      name: 'o1 Preview',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o1-preview-2024-09-12',
+      name: 'o1 Preview (September 2024)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o1-pro-2025-03-19',
+      name: 'o1 Pro (March 2025)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.06,
+      outputCostPer1kTokens: 0.24,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    // o1 Series - Simple Versions
+    {
+      id: 'o1-pro',
+      name: 'o1-pro',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.06,
+      outputCostPer1kTokens: 0.24,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    // o3 Series (Next Generation) - Dated Versions
+    {
+      id: 'o3-2025-04-16',
+      name: 'o3 (April 2025)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o4-mini-2025-04-16',
+      name: 'o4 Mini (April 2025)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o3-pro-2025-06-10',
+      name: 'o3 Pro (June 2025)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.06,
+      outputCostPer1kTokens: 0.24,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o3-mini-2025-01-31',
+      name: 'o3 Mini (January 2025)',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    // o3 Series (Next Generation) - Simple Versions  
+    {
+      id: 'o3',
+      name: 'o3',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0.06,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o4-mini',
+      name: 'o4-mini',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o3-pro',
+      name: 'o3-pro',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 200000,
+      inputCostPer1kTokens: 0.06,
+      outputCostPer1kTokens: 0.24,
+      maxTokens: 32768,
+      rateLimits: { tokensPerMinute: 30000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o3-mini',
+      name: 'o3-mini',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true }
+      ]
+    },
+    {
+      id: 'o4-mini-deep-research',
+      name: 'o4 Mini Deep Research',
+      provider: 'openai',
+      type: 'text',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.003,
+      outputCostPer1kTokens: 0.012,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 200000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'reasoning', supported: true },
+        { type: 'research', supported: true }
+      ]
+    },
+    // ChatGPT Models
+    {
+      id: 'chatgpt-4o-latest',
+      name: 'ChatGPT-4o Latest',
+      provider: 'openai',
+      type: 'multimodal',
+      contextWindow: 128000,
+      inputCostPer1kTokens: 0.005,
+      outputCostPer1kTokens: 0.015,
+      maxTokens: 16384,
+      rateLimits: { tokensPerMinute: 500000, requestsPerMinute: 200 },
+      capabilities: [
+        { type: 'text-generation', supported: true },
+        { type: 'image-analysis', supported: true },
+        { type: 'function-calling', supported: true },
+        { type: 'json-mode', supported: true }
+      ]
+    },
+    // Image Generation Models
+    {
       id: 'dall-e-3',
       name: 'DALL-E 3',
       provider: 'openai',
       type: 'image',
       contextWindow: 4000,
-      inputCostPer1kTokens: 0, // DALL-E pricing is per image
+      inputCostPer1kTokens: 0,
       outputCostPer1kTokens: 0,
       maxTokens: 0,
+      rateLimits: { requestsPerMinute: 500, imagesPerMinute: 5 },
       capabilities: [
         { type: 'image-generation', supported: true }
       ]
@@ -113,14 +694,144 @@ export class OpenAIProvider implements ModelProvider {
       provider: 'openai',
       type: 'image',
       contextWindow: 4000,
-      inputCostPer1kTokens: 0, // DALL-E pricing is per image
+      inputCostPer1kTokens: 0,
       outputCostPer1kTokens: 0,
       maxTokens: 0,
+      rateLimits: { requestsPerMinute: 500, imagesPerMinute: 5 },
       capabilities: [
         { type: 'image-generation', supported: true }
       ]
     },
-    // Fallback video models (sample videos) when Vertex AI isn't available
+    {
+      id: 'gpt-image-1',
+      name: 'GPT Image 1',
+      provider: 'openai',
+      type: 'image',
+      contextWindow: 4000,
+      inputCostPer1kTokens: 0,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { tokensPerMinute: 100000, imagesPerMinute: 5 },
+      capabilities: [
+        { type: 'image-generation', supported: true }
+      ]
+    },
+    // Audio Models
+    {
+      id: 'tts-1',
+      name: 'TTS-1',
+      provider: 'openai',
+      type: 'audio',
+      contextWindow: 4096,
+      inputCostPer1kTokens: 0.015,
+      outputCostPer1kTokens: 0,
+      maxTokens: 4096,
+      rateLimits: { requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-to-speech', supported: true }
+      ]
+    },
+    {
+      id: 'tts-1-hd',
+      name: 'TTS-1 HD',
+      provider: 'openai',
+      type: 'audio',
+      contextWindow: 4096,
+      inputCostPer1kTokens: 0.03,
+      outputCostPer1kTokens: 0,
+      maxTokens: 4096,
+      rateLimits: { requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'text-to-speech', supported: true }
+      ]
+    },
+    {
+      id: 'whisper-1',
+      name: 'Whisper-1',
+      provider: 'openai',
+      type: 'audio',
+      contextWindow: 0,
+      inputCostPer1kTokens: 0.006,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'speech-to-text', supported: true }
+      ]
+    },
+    // Embedding Models
+    {
+      id: 'text-embedding-3-large',
+      name: 'Text Embedding 3 Large',
+      provider: 'openai',
+      type: 'embedding',
+      contextWindow: 8191,
+      inputCostPer1kTokens: 0.00013,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { tokensPerMinute: 1000000, requestsPerMinute: 3000 },
+      capabilities: [
+        { type: 'embeddings', supported: true }
+      ]
+    },
+    {
+      id: 'text-embedding-3-small',
+      name: 'Text Embedding 3 Small',
+      provider: 'openai',
+      type: 'embedding',
+      contextWindow: 8191,
+      inputCostPer1kTokens: 0.00002,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { tokensPerMinute: 1000000, requestsPerMinute: 3000 },
+      capabilities: [
+        { type: 'embeddings', supported: true }
+      ]
+    },
+    {
+      id: 'text-embedding-ada-002',
+      name: 'Text Embedding Ada 002',
+      provider: 'openai',
+      type: 'embedding',
+      contextWindow: 8191,
+      inputCostPer1kTokens: 0.0001,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { tokensPerMinute: 1000000, requestsPerMinute: 3000 },
+      capabilities: [
+        { type: 'embeddings', supported: true }
+      ]
+    },
+    // Moderation Models
+    {
+      id: 'omni-moderation-latest',
+      name: 'Omni Moderation Latest',
+      provider: 'openai',
+      type: 'moderation',
+      contextWindow: 32768,
+      inputCostPer1kTokens: 0,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { tokensPerMinute: 10000, requestsPerMinute: 500 },
+      capabilities: [
+        { type: 'content-moderation', supported: true }
+      ]
+    },
+    {
+      id: 'text-moderation-latest',
+      name: 'Text Moderation Latest',
+      provider: 'openai',
+      type: 'moderation',
+      contextWindow: 32768,
+      inputCostPer1kTokens: 0,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      rateLimits: { tokensPerMinute: 150000, requestsPerMinute: 1000 },
+      capabilities: [
+        { type: 'content-moderation', supported: true }
+      ]
+    },
+    // Fallback video models (sample videos) when other providers aren't available
     {
       id: 'veo-2.0-generate-001',
       name: 'Veo 2.0 (Sample)',
@@ -167,8 +878,11 @@ export class OpenAIProvider implements ModelProvider {
       const computeModeConfig = request.mode ? COMPUTE_MODES[request.mode] : null;
       let messages = [...request.messages];
       
-      if (computeModeConfig) {
-        // Prepend system message for compute mode
+      // Check if this is an o1 or o3 model that doesn't support system messages
+      const isReasoningModel = request.model.includes('o1') || request.model.includes('o3');
+      
+      if (computeModeConfig && !isReasoningModel) {
+        // Prepend system message for compute mode (only for non-reasoning models)
         if (messages[0]?.role !== 'system') {
           messages.unshift({
             role: 'system',
@@ -177,9 +891,29 @@ export class OpenAIProvider implements ModelProvider {
         } else {
           messages[0].content = `${computeModeConfig.systemPrompt}\n\n${messages[0].content}`;
         }
+      } else if (computeModeConfig && isReasoningModel) {
+        // For reasoning models, add compute mode instructions to the first user message
+        const firstUserMessageIndex = messages.findIndex(msg => msg.role === 'user');
+        if (firstUserMessageIndex >= 0) {
+          messages[firstUserMessageIndex].content = `${computeModeConfig.systemPrompt}\n\n${messages[firstUserMessageIndex].content}`;
+        }
       }
 
-      const completion = await this.client.chat.completions.create({
+      // Convert system messages to user messages for o1/o3 models
+      if (isReasoningModel) {
+        messages = messages.map(msg => {
+          if (msg.role === 'system') {
+            return {
+              role: 'user' as const,
+              content: `Instructions: ${msg.content}`
+            };
+          }
+          return msg;
+        });
+      }
+
+      // Prepare OpenAI API request parameters
+      const requestParams: any = {
         model: request.model,
         messages: messages.map(msg => {
           const baseMessage: any = {
@@ -198,14 +932,22 @@ export class OpenAIProvider implements ModelProvider {
           return baseMessage;
         }),
         temperature: computeModeConfig?.temperature ?? request.temperature ?? 0.7,
-        max_tokens: computeModeConfig?.maxTokens ?? request.maxTokens ?? 1000,
         top_p: request.topP,
         frequency_penalty: request.frequencyPenalty,
         presence_penalty: request.presencePenalty,
         stop: request.stop,
         ...(request.functions && { functions: request.functions }),
         stream: false,
-      });
+      };
+
+      // Use max_completion_tokens for o1/o3 models, max_tokens for others
+      if (isReasoningModel) {
+        requestParams.max_completion_tokens = computeModeConfig?.maxTokens ?? request.maxTokens ?? 1000;
+      } else {
+        requestParams.max_tokens = computeModeConfig?.maxTokens ?? request.maxTokens ?? 1000;
+      }
+
+      const completion = await this.client.chat.completions.create(requestParams);
 
       const latency = Date.now() - startTime;
       const choice = completion.choices[0];
@@ -274,7 +1016,10 @@ export class OpenAIProvider implements ModelProvider {
       const computeModeConfig = request.mode ? COMPUTE_MODES[request.mode] : null;
       let messages = [...request.messages];
       
-      if (computeModeConfig) {
+      // Check if this is an o1 or o3 model that doesn't support system messages
+      const isReasoningModel = request.model.includes('o1') || request.model.includes('o3');
+      
+      if (computeModeConfig && !isReasoningModel) {
         if (messages[0]?.role !== 'system') {
           messages.unshift({
             role: 'system',
@@ -283,9 +1028,29 @@ export class OpenAIProvider implements ModelProvider {
         } else {
           messages[0].content = `${computeModeConfig.systemPrompt}\n\n${messages[0].content}`;
         }
+      } else if (computeModeConfig && isReasoningModel) {
+        // For reasoning models, add compute mode instructions to the first user message
+        const firstUserMessageIndex = messages.findIndex(msg => msg.role === 'user');
+        if (firstUserMessageIndex >= 0) {
+          messages[firstUserMessageIndex].content = `${computeModeConfig.systemPrompt}\n\n${messages[firstUserMessageIndex].content}`;
+        }
       }
 
-      const stream = await this.client.chat.completions.create({
+      // Convert system messages to user messages for o1/o3 models
+      if (isReasoningModel) {
+        messages = messages.map(msg => {
+          if (msg.role === 'system') {
+            return {
+              role: 'user' as const,
+              content: `Instructions: ${msg.content}`
+            };
+          }
+          return msg;
+        });
+      }
+
+      // Prepare streaming request parameters
+      const streamParams: any = {
         model: request.model,
         messages: messages.map(msg => {
           const baseMessage: any = {
@@ -300,9 +1065,17 @@ export class OpenAIProvider implements ModelProvider {
           return baseMessage;
         }),
         temperature: computeModeConfig?.temperature ?? request.temperature ?? 0.7,
-        max_tokens: computeModeConfig?.maxTokens ?? request.maxTokens ?? 1000,
         stream: true,
-      });
+      };
+
+      // Use max_completion_tokens for o1/o3 models, max_tokens for others
+      if (isReasoningModel) {
+        streamParams.max_completion_tokens = computeModeConfig?.maxTokens ?? request.maxTokens ?? 1000;
+      } else {
+        streamParams.max_tokens = computeModeConfig?.maxTokens ?? request.maxTokens ?? 1000;
+      }
+
+      const stream = await this.client.chat.completions.create(streamParams) as any;
 
       let accumulatedContent = '';
       let promptTokens = 0;

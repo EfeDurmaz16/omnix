@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Download, Eye, Sparkles } from 'lucide-react';
+import { Loader2, Download, Eye, Sparkles, Trash2 } from 'lucide-react';
 import { AI_MODELS } from '@/lib/constants';
 import { mockApi } from '@/lib/mock-api';
 import { GenerationResult } from '@/lib/types';
@@ -22,8 +22,37 @@ export function ImageGenerator() {
   const [loading, setLoading] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GenerationResult[]>([]);
   const [lastError, setLastError] = useState<string>('');
+  const [imageModels, setImageModels] = useState<any[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
 
-  const imageModels = AI_MODELS.filter(model => model.type === 'image' && model.available);
+  // Load available image models from API
+  useEffect(() => {
+    const fetchImageModels = async () => {
+      try {
+        const response = await fetch('/api/models');
+        if (response.ok) {
+          const data = await response.json();
+          const allModels = data.data.providers.flatMap((provider: any) => 
+            provider.models.map((model: any) => ({ ...model, provider: provider.name }))
+          );
+          const imageModels = allModels.filter((model: any) => model.type === 'image');
+          setImageModels(imageModels);
+          console.log('📸 Loaded image models:', imageModels);
+        }
+      } catch (error) {
+        console.error('Failed to load image models:', error);
+        // Fallback to basic models
+        setImageModels([
+          { id: 'dall-e-3', name: 'DALL-E 3', provider: 'openai', type: 'image' },
+          { id: 'dall-e-2', name: 'DALL-E 2', provider: 'openai', type: 'image' }
+        ]);
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    fetchImageModels();
+  }, []);
 
   // Check if model is actually working or just a placeholder
   const isModelWorking = (modelId: string) => {
@@ -177,6 +206,17 @@ export function ImageGenerator() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Add image delete function
+  const handleDeleteImage = (imageId: string) => {
+    console.log('🗑️ Deleting image:', imageId);
+    
+    // Remove from local state
+    setGeneratedImages(prev => prev.filter(img => img.id !== imageId));
+    
+    console.log('✅ Image deleted successfully');
+    alert('🗑️ Image deleted successfully!');
   };
 
   return (
@@ -375,6 +415,15 @@ export function ImageGenerator() {
                       onClick={() => handleDownload(image.url!, image.prompt)}
                     >
                       <Download className="h-4 w-4" />
+                    </Button>
+                    
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      onClick={() => handleDeleteImage(image.id)}
+                      title="Delete image"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
 

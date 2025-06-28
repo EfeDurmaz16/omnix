@@ -433,10 +433,10 @@ export const CREDIT_COSTS = {
 };
 
 export const APP_CONFIG = {
-  name: 'Omnix',
-  description: 'Your All-in-One AI Platform',
+  name: 'Aspendos',
   version: '1.0.0',
-  supportEmail: 'support@omnix.ai',
+  description: 'Unified AI Platform for Text, Image, and Video Generation',
+  supportEmail: 'support@aspendos.ai',
   maxFileSize: 10 * 1024 * 1024, // 10MB
   allowedFileTypes: ['image/jpeg', 'image/png', 'image/webp'],
 }; 

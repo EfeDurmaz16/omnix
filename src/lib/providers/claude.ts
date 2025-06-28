@@ -150,13 +150,105 @@ export class ClaudeProvider implements ModelProvider {
     try {
       console.log('🤖 Generating text with Claude:', { model: request.model, messages: request.messages.length });
       
-      // Convert our messages to Anthropic format
+      // Convert our messages to Anthropic format with image support
       const anthropicMessages = request.messages
         .filter(msg => msg.role !== 'system')
-        .map(msg => ({
-          role: msg.role === 'assistant' ? 'assistant' : 'user',
-          content: msg.content
-        }));
+        .map((msg, index) => {
+          // Check if this is the last message and we have images attached
+          const isLastMessage = index === request.messages.filter(m => m.role !== 'system').length - 1;
+          const hasImages = request.attachedImages && request.attachedImages.length > 0;
+          
+          if (isLastMessage && hasImages && msg.role === 'user') {
+            console.log('🖼️ Formatting message with images for Claude Vision');
+            
+            // Create content array with images and text
+            const content: any[] = [];
+            
+            // Add images first
+            request.attachedImages?.forEach((image) => {
+              console.log('📷 Adding image to Claude message:', image.name, 'MIME:', image.mimeType);
+              
+              // Extract base64 data from data URL more carefully
+              let base64Data = image.content;
+              let detectedMimeType = image.mimeType || 'image/jpeg';
+              
+              if (image.content.startsWith('data:')) {
+                // Extract MIME type and base64 part from data URL
+                const parts = image.content.split(',');
+                if (parts.length === 2) {
+                  // Get MIME type from data URL (more reliable than file extension)
+                  const dataUrlPrefix = parts[0]; // e.g., "data:image/png;base64"
+                  const mimeMatch = dataUrlPrefix.match(/data:([^;]+)/);
+                  if (mimeMatch) {
+                    detectedMimeType = mimeMatch[1];
+                    console.log('🔍 Detected MIME type from data URL:', detectedMimeType);
+                  }
+                  
+                  base64Data = parts[1];
+                  console.log('🔧 Extracted base64 from data URL, length:', base64Data.length);
+                } else {
+                  console.warn('⚠️ Unexpected data URL format:', image.content.substring(0, 100));
+                }
+              }
+              
+              // Validate base64 data by checking the header
+              try {
+                const headerBytes = Buffer.from(base64Data.substring(0, 12), 'base64');
+                const header = headerBytes.toString('hex').toUpperCase();
+                
+                // Detect actual format from file header
+                let actualFormat = detectedMimeType;
+                if (header.startsWith('FFD8FF')) {
+                  actualFormat = 'image/jpeg';
+                } else if (header.startsWith('89504E47')) {
+                  actualFormat = 'image/png';
+                } else if (header.startsWith('47494638')) {
+                  actualFormat = 'image/gif';
+                } else if (header.startsWith('52494646')) {
+                  actualFormat = 'image/webp';
+                }
+                
+                if (actualFormat !== detectedMimeType) {
+                  console.log('🔧 Format mismatch detected! Claimed:', detectedMimeType, 'Actual:', actualFormat);
+                  detectedMimeType = actualFormat;
+                }
+                
+                console.log('✅ Using validated MIME type:', detectedMimeType, 'for image:', image.name);
+              } catch (validationError) {
+                console.warn('⚠️ Image validation failed:', validationError);
+                // Fallback to PNG as it's most commonly used
+                detectedMimeType = 'image/png';
+                console.log('🔄 Falling back to PNG format');
+              }
+              
+              content.push({
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: detectedMimeType,
+                  data: base64Data
+                }
+              });
+            });
+            
+            // Add text content
+            content.push({
+              type: "text",
+              text: msg.content
+            });
+            
+            return {
+              role: 'user',
+              content: content
+            };
+          } else {
+            // Regular text message
+            return {
+              role: msg.role === 'assistant' ? 'assistant' : 'user',
+              content: msg.content
+            };
+          }
+        });
 
       // Handle system message separately if present
       const systemMessage = request.messages.find(msg => msg.role === 'system');
@@ -174,8 +266,39 @@ export class ClaudeProvider implements ModelProvider {
       }
 
       console.log('📡 Calling Claude API...');
+      if (request.attachedImages && request.attachedImages.length > 0) {
+        console.log('🎨 Claude API call includes', request.attachedImages.length, 'images for vision analysis');
+      }
       
-      const response = await this.client.messages.create(requestOptions);
+      let response;
+      try {
+        response = await this.client.messages.create(requestOptions);
+      } catch (visionError: any) {
+        // If this is a vision-related error and we have images, try again without images
+        if (request.attachedImages && request.attachedImages.length > 0 && 
+            (visionError.message?.includes('image') || visionError.message?.includes('media_type'))) {
+          console.warn('⚠️ Claude vision failed, retrying without images:', visionError.message);
+          
+          // Recreate request without images - just text
+          const fallbackMessages = request.messages
+            .filter(msg => msg.role !== 'system')
+            .map(msg => ({
+              role: msg.role === 'assistant' ? 'assistant' : 'user',
+              content: `[Images were attached but couldn't be processed due to format issues]\n\n${msg.content}`
+            }));
+          
+          const fallbackOptions = {
+            ...requestOptions,
+            messages: fallbackMessages
+          };
+          
+          console.log('🔄 Retrying Claude API call without images...');
+          response = await this.client.messages.create(fallbackOptions);
+          console.log('✅ Claude fallback (text-only) successful');
+        } else {
+          throw visionError; // Re-throw if it's not a vision-related error
+        }
+      }
       
       console.log('✅ Claude API response received');
       

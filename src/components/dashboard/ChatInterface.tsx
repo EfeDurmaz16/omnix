@@ -551,7 +551,7 @@ export function ChatInterface({
                         <button
                           key={mode.id}
                           onClick={() => setPromptMode(mode.id)}
-                          className={`w-full p-3 rounded-lg border transition-all duration-200 text-left ${
+                          className={`thinking-mode-original w-full p-3 rounded-lg border transition-all duration-200 text-left ${
                             promptMode === mode.id
                               ? 'bg-slate-700/70 border-slate-500/50 ring-1 ring-purple-400/30'
                               : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/30'

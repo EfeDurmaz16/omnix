@@ -14,35 +14,49 @@ export interface ModelInfo {
   id: string;
   name: string;
   provider: string;
-  type: 'text' | 'multimodal' | 'image' | 'code' | 'video';
+  type: 'text' | 'multimodal' | 'image' | 'code' | 'video' | 'audio' | 'embedding' | 'moderation';
   contextWindow: number;
   inputCostPer1kTokens: number;
   outputCostPer1kTokens: number;
   capabilities: ModelCapability[];
   maxTokens?: number;
+  rateLimits?: {
+    tokensPerMinute?: number;
+    requestsPerMinute?: number;
+    requestsPerDay?: number;
+    imagesPerMinute?: number;
+  };
 }
 
 export interface ModelCapability {
-  type: 'text-generation' | 'image-analysis' | 'code-generation' | 'function-calling' | 'json-mode' | 'file-upload' | 'image-generation' | 'video-generation';
+  type: 'text-generation' | 'image-analysis' | 'code-generation' | 'function-calling' | 'json-mode' | 'file-upload' | 'image-generation' | 'video-generation' | 'audio-processing' | 'reasoning' | 'research' | 'text-to-speech' | 'speech-to-text' | 'embeddings' | 'content-moderation';
   supported: boolean;
   details?: Record<string, any>;
 }
 
 export interface GenerateRequest {
   model: string;
-  messages: Message[];
-  stream?: boolean;
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant' | 'function';
+    content: string;
+    name?: string;
+    functionCall?: any;
+  }>;
+  userId?: string;
+  sessionId?: string;
+  mode?: 'flash' | 'think' | 'ultra-think' | 'full-think';
   temperature?: number;
   maxTokens?: number;
   topP?: number;
   frequencyPenalty?: number;
   presencePenalty?: number;
-  stop?: string[];
-  functions?: FunctionDefinition[];
-  mode?: ComputeMode;
-  agentId?: string;
-  userId: string;
-  sessionId?: string;
+  stop?: string | string[];
+  functions?: any[];
+  attachedImages?: Array<{
+    name: string;
+    content: string;
+    mimeType: string;
+  }>;
 }
 
 export interface Message {
@@ -100,7 +114,7 @@ export interface ResponseMetadata {
   rateLimitReset?: number;
 }
 
-export type ComputeMode = 'flash' | 'think' | 'ultra-think';
+export type ComputeMode = 'flash' | 'think' | 'ultra-think' | 'full-think';
 
 export interface ComputeModeConfig {
   mode: ComputeMode;
@@ -131,6 +145,13 @@ export const COMPUTE_MODES: Record<ComputeMode, ComputeModeConfig> = {
     systemPrompt: 'Engage in deep analysis. Consider multiple perspectives, edge cases, and provide comprehensive reasoning.',
     temperature: 0.7,
     maxTokens: 4000,
+    reasoning: true,
+  },
+  'full-think': {
+    mode: 'full-think',
+    systemPrompt: 'You are operating in maximum creativity mode with high temperature settings. Explore creative solutions, think outside the box, and provide diverse perspectives. Feel free to be innovative, imaginative, and explore multiple possibilities. Generate varied and creative responses while maintaining accuracy and helpfulness.',
+    temperature: 1.0,
+    maxTokens: 3000,
     reasoning: true,
   },
 };
@@ -197,9 +218,77 @@ function estimateModelCost(model: ModelInfo, tokens: number): number {
 }
 
 export interface ModelRequirement {
-  type?: 'text' | 'multimodal' | 'image' | 'code' | 'video';
-  capabilities?: ('text-generation' | 'image-analysis' | 'code-generation' | 'function-calling' | 'json-mode' | 'file-upload' | 'image-generation' | 'video-generation')[];
+  type?: 'text' | 'multimodal' | 'image' | 'code' | 'video' | 'audio' | 'embedding' | 'moderation';
+  capabilities?: string[];
   maxCost?: number;
   estimatedTokens?: number;
   quality?: 'fast' | 'balanced' | 'high';
+}
+
+// Abstract Base Provider Class
+export abstract class BaseProvider implements ModelProvider {
+  abstract name: string;
+  abstract models: ModelInfo[];
+
+  abstract generateText(request: GenerateRequest): Promise<GenerateResponse>;
+  abstract generateStream(request: GenerateRequest): AsyncIterable<GenerateResponse>;
+  abstract validateConfig(): Promise<boolean>;
+
+  getModels(): ModelInfo[] {
+    return this.models;
+  }
+
+  estimateCost(request: GenerateRequest): number {
+    const model = this.models.find(m => m.id === request.model);
+    if (!model) return 0;
+
+    const estimatedInputTokens = this.estimateInputTokens(request.messages);
+    const estimatedOutputTokens = request.maxTokens || 1000;
+
+    const inputCost = (estimatedInputTokens / 1000) * model.inputCostPer1kTokens;
+    const outputCost = (estimatedOutputTokens / 1000) * model.outputCostPer1kTokens;
+
+    return inputCost + outputCost;
+  }
+
+  protected estimateInputTokens(messages: Message[]): number {
+    return messages.reduce((total, message) => {
+      const content = typeof message.content === 'string' 
+        ? message.content 
+        : Array.isArray(message.content) 
+          ? message.content.map(c => c.text || '').join('')
+          : '';
+      return total + this.estimateTokens(content);
+    }, 0);
+  }
+
+  protected estimateTokens(text: string): number {
+    // Rough estimation: ~4 characters per token
+    return Math.ceil(text.length / 4);
+  }
+
+  protected createResponse(
+    content: string,
+    model: string,
+    usage: TokenUsage,
+    finishReason: 'stop' | 'length' | 'function_call' | 'content_filter' = 'stop',
+    functionCall?: FunctionCall
+  ): GenerateResponse {
+    return {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      content,
+      role: 'assistant',
+      model,
+      usage,
+      finishReason,
+      functionCall,
+      metadata: {
+        provider: this.name,
+        model,
+        latency: 0, // Will be calculated by caller
+        timestamp: new Date().toISOString(),
+        requestId: `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      }
+    };
+  }
 } 

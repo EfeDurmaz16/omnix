@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listGeneratedVideos, getGeneratedVideo, deleteGeneratedVideo, storeGeneratedVideo, clearAllGeneratedVideos } from '@/lib/gcp-storage';
+import fs, { promises as fsPromises } from 'fs';
+import path from 'path';
+
+// Define the video storage path
+const videoStoragePath = path.join(process.cwd(), 'video-storage.json');
 
 export async function GET(request: NextRequest) {
   try {
@@ -164,7 +169,6 @@ export async function POST(request: NextRequest) {
       
       try {
         // Load all videos from local storage
-        const fs = require('fs');
         const path = require('path');
         const localStoragePath = path.join(process.cwd(), 'video-storage.json');
         
@@ -245,8 +249,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const videoId = searchParams.get('id');
+    const body = await request.json();
+    const { videoId } = body;
 
     if (!videoId) {
       return NextResponse.json(
@@ -255,31 +259,47 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log(`🗑️ Deleting video: ${videoId}`);
-    const success = await deleteGeneratedVideo(videoId);
-    
-    if (!success) {
+    console.log('🗑️ Deleting video:', videoId);
+
+    // Read current videos
+    let videos: any[] = [];
+    try {
+      const data = await fsPromises.readFile(videoStoragePath, 'utf8');
+      videos = JSON.parse(data);
+    } catch (error) {
+      console.log('📂 No existing video storage file found');
       return NextResponse.json(
         { success: false, error: 'Video not found' },
         { status: 404 }
       );
     }
 
-    console.log('✅ Video deleted successfully');
+    // Find and remove the video
+    const initialLength = videos.length;
+    videos = videos.filter(video => video.id !== videoId);
+
+    if (videos.length === initialLength) {
+      return NextResponse.json(
+        { success: false, error: 'Video not found' },
+        { status: 404 }
+      );
+    }
+
+    // Write updated videos back to file
+    await fsPromises.writeFile(videoStoragePath, JSON.stringify(videos, null, 2));
+
+    console.log('✅ Video deleted successfully:', videoId);
+
     return NextResponse.json({
       success: true,
-      message: 'Video deleted successfully'
+      message: 'Video deleted successfully',
+      data: { deletedVideoId: videoId, remainingVideos: videos.length }
     });
 
   } catch (error) {
-    console.error('❌ Failed to delete video:', error);
-    
+    console.error('❌ Error deleting video:', error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to delete video',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { success: false, error: 'Failed to delete video' },
       { status: 500 }
     );
   }

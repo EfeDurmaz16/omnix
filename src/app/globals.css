@@ -4,529 +4,1143 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --radius: 0.75rem;
-  /* Light Mode Variables - Improved with Royal Blue/Purple/Orange Theme */
-  --background: #f1f5f9;
-  --foreground: #0f172a;
-  --card: rgba(71, 85, 105, 0.15);
-  --card-foreground: #0f172a;
-  --popover: rgba(71, 85, 105, 0.2);
-  --popover-foreground: #0f172a;
-  --primary: #1e40af;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(249, 115, 22, 0.12);
-  --secondary-foreground: #0f172a;
-  --muted: rgba(100, 116, 139, 0.08);
-  --muted-foreground: #334155;
-  --accent: rgba(126, 34, 206, 0.12);
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
-  --border: rgba(71, 85, 105, 0.25);
-  --input: rgba(100, 116, 139, 0.15);
-  --ring: rgba(30, 64, 175, 0.4);
-  --chart-1: #1e40af;
-  --chart-2: #f97316;
-  --chart-3: #7e22ce;
-  --chart-4: #334155;
-  --chart-5: #0f172a;
-  --sidebar: rgba(100, 116, 139, 0.12);
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #1e40af;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(30, 64, 175, 0.08);
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: rgba(71, 85, 105, 0.2);
-  --sidebar-ring: rgba(30, 64, 175, 0.4);
-}
+@layer base {
+  :root {
+    /* Aegean Theme as Default (Light replacement) */
+    --background: 210 100% 98%; /* Almost white with slight blue tint */
+    --foreground: 210 40% 15%; /* Deep blue-gray */
+    --card: 210 100% 99%;
+    --card-foreground: 210 40% 15%;
+    --popover: 210 100% 99%;
+    --popover-foreground: 210 40% 15%;
+    --primary: 210 100% 40%; /* Aegean Blue */
+    --primary-foreground: 210 100% 98%;
+    --secondary: 25 100% 95%; /* Light terracotta tint */
+    --secondary-foreground: 25 60% 20%;
+    --muted: 210 30% 94%;
+    --muted-foreground: 210 20% 45%;
+    --accent: 25 80% 60%; /* Terracotta */
+    --accent-foreground: 25 100% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 30% 85%;
+    --input: 210 30% 90%;
+    --ring: 210 100% 40%;
+    --chart-1: 210 100% 50%;
+    --chart-2: 25 80% 55%;
+    --chart-3: 195 100% 45%;
+    --chart-4: 35 85% 60%;
+    --chart-5: 180 80% 50%;
+    --radius: 0.5rem;
+  }
 
-.dark {
-  --background: #020617;
-  --foreground: #f1f5f9;
-  --card: rgba(20, 32, 54, 0.5);
-  --card-foreground: #f8fafc;
-  --popover: rgba(20, 32, 54, 0.7);
-  --popover-foreground: #f8fafc;
-  --primary: #64748b;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(30, 41, 59, 0.4);
-  --secondary-foreground: #f1f5f9;
-  --muted: rgba(30, 41, 59, 0.3);
-  --muted-foreground: #cbd5e1;
-  --accent: rgba(100, 116, 139, 0.2);
-  --accent-foreground: #f1f5f9;
-  --destructive: #ef4444;
-  --border: rgba(203, 213, 225, 0.15);
-  --input: rgba(30, 41, 59, 0.4);
-  --ring: rgba(100, 116, 139, 0.6);
-  --chart-1: #94a3b8;
-  --chart-2: #64748b;
-  --chart-3: #475569;
-  --chart-4: #334155;
-  --chart-5: #1e293b;
-  --sidebar: rgba(2, 6, 23, 0.9);
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #94a3b8;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(100, 116, 139, 0.15);
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: rgba(203, 213, 225, 0.1);
-  --sidebar-ring: rgba(100, 116, 139, 0.6);
+  /* Aegean Theme - Mediterranean inspired */
+  .aegean, .light {
+    /* Mediterranean Core Colors */
+    --background: #F8FAFC;
+    --foreground: #1E293B;              /* Darker text for better readability */
+    --card: #FFFFFF;
+    --card-foreground: #0F172A;         /* Much darker card text for better contrast */
+    --popover: #FFFFFF;
+    --popover-foreground: #0F172A;      /* Much darker popover text */
+    --primary: #004A7C;
+    --primary-foreground: #FFFFFF;
+    --secondary: #CC5500;
+    --secondary-foreground: #FFFFFF;
+    --muted: #F1F5F9;
+    --muted-foreground: #334155;        /* Much darker muted text */
+    --accent: #708238;
+    --accent-foreground: #FFFFFF;
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+    --border: #E2E8F0;
+    --input: #FFFFFF;
+    --ring: #004A7C;
+    --radius: 0.5rem;
+    
+    /* Aegean Custom Colors */
+    --aegean-deep: #003366;
+    --aegean-main: #004A7C;
+    --aegean-light: #0066B3;
+    --aegean-mist: #B3D9FF;
+    --terracotta: #CC5500;
+    --terracotta-light: #E67300;
+    --olive: #708238;
+    --olive-light: #8FA055;
+    --marble: #FAFAFA;
+    --mosaic-gold: #FFD700;
+    --mosaic-stone: #F5F5DC;
+    --olive-green: #708238;
+  }
+
+  /* Karadeniz Theme - Black Sea inspired (Dark replacement) */
+  .karadeniz, .dark {
+    /* Black Sea Core Colors */
+    --background: #0F172A;
+    --foreground: #F8FAFC;              /* Light text for dark background */
+    --card: #1E293B;
+    --card-foreground: #F1F5F9;         /* Very light card text */
+    --popover: #1E293B;
+    --popover-foreground: #F1F5F9;      /* Very light popover text */
+    --primary: #48BB78;
+    --primary-foreground: #0F172A;
+    --secondary: #2F5F2F;
+    --secondary-foreground: #F8FAFC;     /* Light text on secondary */
+    --muted: #334155;
+    --muted-foreground: #E2E8F0;        /* Very light muted text for contrast */
+    --accent: #8B6B47;
+    --accent-foreground: #F8FAFC;       /* Light text on accent */
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+    --border: #334155;
+    --input: #1E293B;
+    --ring: #48BB78;
+    --radius: 0.375rem;
+    
+    /* Karadeniz Custom Colors */
+    --blacksea-deep: #0A1628;
+    --blacksea-storm: #1A2B3F;
+    --blacksea-mist: #2C4F6B;
+    --forest-moss: #2F5F2F;
+    --forest-deep: #1B3B1B;
+    --hazelnut: #8B6B47;
+    --snow-peak: #F8F8FF;
+    --sea-foam: #87CEEB;
+    --storm-gray: #708090;
+    --deep-forest: #0B2818;
+  }
+
+  /* Göbekli Tepe - Ancient Anatolia Theme */
+  .gobeklitepe {
+    /* Ancient Stone Core Colors */
+    --background: #E8DCC6;
+    --foreground: #1C1C1C;
+    --card: #C19A6B;
+    --card-foreground: #1C1C1C;
+    --popover: #E8DCC6;
+    --popover-foreground: #1C1C1C;
+    --primary: #D4A574;
+    --primary-foreground: #1C1C1C;
+    --secondary: #CC7722;
+    --secondary-foreground: #1C1C1C;
+    --muted: #8B3A3A;
+    --muted-foreground: #3B3B3B;
+    --accent: #4B0082;
+    --accent-foreground: #E8DCC6;
+    --destructive: #8B3A3A;
+    --destructive-foreground: #E8DCC6;
+    --border: #C19A6B;
+    --input: #E8DCC6;
+    --ring: #D4A574;
+    --radius: 0.5rem;
+    
+    /* Göbekli Tepe Custom Colors */
+    --limestone: #E8DCC6;
+    --sandstone: #C19A6B;
+    --basalt: #3B3B3B;
+    --obsidian: #1C1C1C;
+    --temple-gold: #D4A574;
+    --ritual-red: #8B3A3A;
+    --sacred-ochre: #CC7722;
+    --dawn-pink: #E8B4B8;
+    --ancient-sky: #87CEEB;
+    --star-silver: #C0C0C0;
+    --cosmic-purple: #4B0082;
+  }
+
+  .gobeklitepe.dark {
+    /* Dark mode for Göbekli Tepe */
+    --background: #1C1C1C;
+    --foreground: #E8DCC6;
+    --card: #3B3B3B;
+    --card-foreground: #E8DCC6;
+    --popover: #1C1C1C;
+    --popover-foreground: #E8DCC6;
+    --primary: #D4A574;
+    --primary-foreground: #1C1C1C;
+    --secondary: #CC7722;
+    --secondary-foreground: #1C1C1C;
+    --muted: #C19A6B;
+    --muted-foreground: #E8DCC6;
+    --accent: #4B0082;
+    --accent-foreground: #E8DCC6;
+    --destructive: #8B3A3A;
+    --destructive-foreground: #E8DCC6;
+    --border: #D4A574;
+    --input: #3B3B3B;
+    --ring: #D4A574;
+  }
+
+  /* Ani (Merged Anatolian Heritage) - Now using sanddust, crimson, and earthy tones */
+  .ani {
+    --pastel-sanddust: #F2E8D5;        /* Pastel background */
+    --muted-crimson: #8B2635;          /* Deep crimson for contrast */
+    --ancient-ochre: #CC7722;          /* Warm ochre */
+    --stone-gray: #4A4A4A;             /* Much darker stone for readability */
+    --desert-beige: #F8F5F0;           /* Very light beige */
+    --copper: #B87333;                 /* Copper accents */
+    --pale-turquoise: #B8E6E6;         /* Added pale turquoise */
+    --dusty-blue: #D4E6F1;             /* Added dusty blue */
+    
+    --background: var(--pastel-sanddust);
+    --foreground: var(--stone-gray);
+    --card: rgba(248, 245, 240, 0.95);
+    --card-foreground: #2C2C2C;        /* Much darker card text for contrast */
+    --popover: var(--desert-beige);
+    --popover-foreground: #2C2C2C;
+    --primary: var(--muted-crimson);
+    --primary-foreground: var(--desert-beige);
+    --secondary: var(--ancient-ochre);
+    --secondary-foreground: var(--desert-beige);
+    --muted: var(--pale-turquoise);
+    --muted-foreground: #333333;       /* Darker muted text */
+    --accent: var(--dusty-blue);
+    --accent-foreground: #2C2C2C;
+    --destructive: #A0522D;
+    --destructive-foreground: var(--desert-beige);
+    --border: var(--pale-turquoise);
+    --input: var(--desert-beige);
+    --ring: var(--muted-crimson);
+    --radius: 0.5rem;
+  }
+  
+  .ani.dark {
+    --pastel-sanddust: #2A2520;        /* Dark pastel sanddust */
+    --muted-crimson: #6B1F2A;          /* Darker crimson */
+    --ancient-ochre: #8B5A1F;          /* Darker ochre */
+    --stone-gray: #8A9BA8;             /* Lighter stone for dark mode */
+    --desert-beige: #3D3425;           /* Dark beige */
+    --copper: #7A4F26;                 /* Darker copper */
+    --pale-turquoise: #2C4A4A;         /* Dark turquoise */
+    --dusty-blue: #2E3A47;             /* Dark dusty blue */
+    
+    --background: var(--pastel-sanddust);
+    --foreground: var(--stone-gray);
+    --card: rgba(61, 52, 37, 0.95);
+    --card-foreground: var(--stone-gray);
+    --popover: var(--desert-beige);
+    --popover-foreground: var(--stone-gray);
+    --primary: var(--muted-crimson);
+    --primary-foreground: #F5E6D3;
+    --secondary: var(--ancient-ochre);
+    --secondary-foreground: #F5E6D3;
+    --muted: var(--pale-turquoise);
+    --muted-foreground: #A0906D;
+    --accent: var(--dusty-blue);
+    --accent-foreground: #F5E6D3;
+    --destructive: #8B4513;
+    --destructive-foreground: #F5E6D3;
+    --border: var(--pale-turquoise);
+    --input: var(--desert-beige);
+    --ring: var(--muted-crimson);
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
 }
 
 @layer base {
   * {
     @apply border-border;
   }
-  
-  /* Light Mode Body - Light Slate Gray with Royal Blue/Purple/Orange */
   body {
-    @apply bg-background text-foreground font-mono;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 25%, #cbd5e1 50%, #f1f5f9 100%) !important;
-    background-attachment: fixed;
-    min-height: 100vh;
-    color: #0f172a !important;
-  }
-  
-  /* Dark Mode Body */
-  .dark body {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #0f172a 100%) !important;
-    background-attachment: fixed;
-    color: #f1f5f9 !important;
-  }
-  
-  /* Light Mode Text Visibility */
-  h1, h2, h3, h4, h5, h6 {
-    color: #0f172a !important;
-    font-weight: 600;
-  }
-  
-  p, span, div {
-    color: #1e293b !important;
-  }
-  
-  /* Dark Mode Text */
-  .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
-    color: #f1f5f9 !important;
-  }
-  
-  .dark p, .dark span, .dark div {
-    color: #e2e8f0 !important;
-  }
-  
-  /* Force theme switching */
-  html {
-    color-scheme: light;
-  }
-  
-  html.dark {
-    color-scheme: dark;
-  }
-  
-  /* Enhanced glassmorphic base */
-  .glass-base {
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  
-  /* Light Mode Navigation */
-  nav {
-    color: #0f172a !important;
-  }
-  
-  nav a, nav button, nav span {
-    color: #1e293b !important;
-  }
-  
-  nav .glass-morphism {
-    background: rgba(248, 250, 252, 0.85) !important;
-    border: 2px solid rgba(30, 64, 175, 0.4) !important;
-    backdrop-filter: blur(16px) !important;
-  }
-  
-  /* Dark Mode Navigation */
-  .dark nav {
-    color: #f1f5f9 !important;
-  }
-  
-  .dark nav a, .dark nav button, .dark nav span {
-    color: #e2e8f0 !important;
-  }
-  
-  .dark nav .glass-morphism {
-    background: rgba(30, 41, 59, 0.8) !important;
-    border: 2px solid rgba(148, 163, 184, 0.3) !important;
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Enhanced Glassmorphic Design Utilities */
-@layer utilities {
-  .bg-gradient-radial {
-    background: radial-gradient(circle, var(--tw-gradient-stops));
+/* Custom animations for the new landing page */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
   }
-  
-  .bg-gradient-conic {
-    background: conic-gradient(var(--tw-gradient-stops));
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
-  
-  .backdrop-blur-xs {
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+}
+
+@keyframes fade-in-right {
+  0% {
+    opacity: 0;
+    transform: translateX(30px);
   }
-  
-  .backdrop-blur-sm {
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+  100% {
+    opacity: 1;
+    transform: translateX(0);
   }
-  
-  .backdrop-blur-md {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+}
+
+@keyframes fade-in-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-30px);
   }
-  
-  .backdrop-blur-lg {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+  100% {
+    opacity: 1;
+    transform: translateX(0);
   }
-  
-  .backdrop-blur-xl {
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
   }
-  
-  .backdrop-blur-2xl {
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
   }
-  
-  .backdrop-blur-3xl {
-    backdrop-filter: blur(64px);
-    -webkit-backdrop-filter: blur(64px);
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+.animate-fade-in-right {
+  animation: fade-in-right 0.8s ease-out 0.2s forwards;
+}
+
+.animate-fade-in-left {
+  animation: fade-in-left 0.8s ease-out 0.2s forwards;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Typography improvements */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Glass morphism effects */
+.glass-morphism {
+  background: rgba(0, 102, 204, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 102, 204, 0.2);
+}
+
+.karadeniz .glass-morphism, .dark .glass-morphism {
+  background: rgba(72, 187, 120, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(72, 187, 120, 0.2);
+}
+
+.glass-morphism-light {
+  background: rgba(250, 250, 250, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 102, 204, 0.2);
+}
+
+.karadeniz .glass-morphism-light, .dark .glass-morphism-light {
+  background: rgba(30, 58, 95, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(72, 187, 120, 0.2);
+}
+
+.glass-morphism-heavy {
+  background: rgba(0, 102, 204, 0.15);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 102, 204, 0.3);
+}
+
+.karadeniz .glass-morphism-heavy, .dark .glass-morphism-heavy {
+  background: rgba(30, 58, 95, 0.3);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(72, 187, 120, 0.3);
+}
+
+/* Mosaic texture effects */
+.mosaic-pattern {
+  background-image: 
+    radial-gradient(circle at 20% 20%, var(--mosaic-gold) 2px, transparent 2px),
+    radial-gradient(circle at 80% 80%, var(--olive-green) 1.5px, transparent 1.5px),
+    radial-gradient(circle at 50% 50%, var(--mosaic-stone) 1px, transparent 1px);
+  background-size: 25px 25px, 30px 30px, 15px 15px;
+}
+
+.karadeniz .mosaic-pattern, .dark .mosaic-pattern {
+  background-image: 
+    radial-gradient(circle at 25% 25%, var(--sea-foam) 1px, transparent 1px),
+    radial-gradient(circle at 75% 75%, var(--storm-gray) 1px, transparent 1px),
+    radial-gradient(circle at 50% 10%, var(--deep-forest) 0.5px, transparent 0.5px);
+  background-size: 20px 20px, 15px 15px, 25px 25px;
+}
+
+/* Glow effects */
+.glow-slate {
+  box-shadow: 0 0 20px rgba(0, 102, 204, 0.3);
+}
+
+.karadeniz .glow-slate, .dark .glow-slate {
+  box-shadow: 0 0 20px rgba(72, 187, 120, 0.3);
+}
+
+.glow-accent {
+  box-shadow: 0 0 15px rgba(204, 102, 0, 0.4);
+}
+
+.karadeniz .glow-accent, .dark .glow-accent {
+  box-shadow: 0 0 15px rgba(72, 187, 120, 0.4);
+}
+
+.glow-purple {
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.glow-orange {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+}
+
+.glow-pink {
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+/* Button styles */
+.glass-button {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: 1px solid rgba(0, 102, 204, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 102, 204, 0.2);
+}
+
+.karadeniz .glass-button, .dark .glass-button {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border: 1px solid rgba(72, 187, 120, 0.3);
+  box-shadow: 0 4px 15px rgba(72, 187, 120, 0.2);
+}
+
+.glass-hover:hover {
+  background: rgba(0, 102, 204, 0.1);
+  border-color: rgba(0, 102, 204, 0.3);
+}
+
+.karadeniz .glass-hover:hover, .dark .glass-hover:hover {
+  background: rgba(72, 187, 120, 0.1);
+  border-color: rgba(72, 187, 120, 0.3);
+}
+
+/* Preserve original thinking mode colors */
+.thinking-mode-original {
+  /* Keep original gradient colors for thinking modes */
+}
+
+.thinking-mode-original:hover {
+  /* Keep original hover colors regardless of theme */
+  background: var(--original-hover-color) !important;
+}
+
+/* Modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 102, 204, 0.3);
+  border-radius: 3px;
+}
+
+.karadeniz ::-webkit-scrollbar-thumb, .dark ::-webkit-scrollbar-thumb {
+  background: rgba(72, 187, 120, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 102, 204, 0.5);
+}
+
+.karadeniz ::-webkit-scrollbar-thumb:hover, .dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(72, 187, 120, 0.5);
+}
+
+/* Gradient backgrounds */
+.bg-animated-gradient {
+  background: linear-gradient(-45deg, #1e293b, #0f172a, #1e1b4b, #312e81);
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
   }
-  
-  /* Light Mode Glass Morphism - Slate Gray with Royal Blue/Purple/Orange */
-  .glass-morphism {
-    backdrop-filter: blur(16px) saturate(150%);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
-    background: rgba(248, 250, 252, 0.75);
-    border: 1px solid rgba(71, 85, 105, 0.3);
-    box-shadow: 
-      0 4px 16px 0 rgba(30, 64, 175, 0.15),
-      0 2px 8px 0 rgba(249, 115, 22, 0.08),
-      0 1px 4px 0 rgba(126, 34, 206, 0.06),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
+  50% {
+    background-position: 100% 50%;
   }
-  
-  .glass-morphism-light {
-    backdrop-filter: blur(12px) saturate(120%);
-    -webkit-backdrop-filter: blur(12px) saturate(120%);
-    background: rgba(248, 250, 252, 0.6);
-    border: 1px solid rgba(71, 85, 105, 0.2);
-    box-shadow: 
-      0 2px 8px 0 rgba(30, 64, 175, 0.12),
-      0 1px 4px 0 rgba(126, 34, 206, 0.08),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
+  100% {
+    background-position: 0% 50%;
   }
-  
-  .glass-morphism-heavy {
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    background: rgba(248, 250, 252, 0.85);
-    border: 1px solid rgba(71, 85, 105, 0.4);
-    box-shadow: 
-      0 8px 24px 0 rgba(30, 64, 175, 0.2),
-      0 4px 12px 0 rgba(249, 115, 22, 0.12),
-      0 2px 6px 0 rgba(126, 34, 206, 0.1),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Floating particles effect */
+.floating-particles::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+    radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.1) 1px, transparent 1px),
+    radial-gradient(circle at 40% 40%, rgba(34, 197, 94, 0.1) 1px, transparent 1px);
+  background-size: 100px 100px, 120px 120px, 80px 80px;
+  animation: float 20s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
   }
-  
-  /* Dark Mode Glass Morphism */
-  .dark .glass-morphism {
-    background: rgba(30, 41, 59, 0.2);
-    border: 1px solid rgba(148, 163, 184, 0.1);
-    box-shadow: 
-      0 4px 16px 0 rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
+  33% {
+    transform: translateY(-10px) rotate(1deg);
   }
-  
-  .dark .glass-morphism-light {
-    background: rgba(51, 65, 85, 0.06);
-    border: 1px solid rgba(148, 163, 184, 0.08);
-    box-shadow: 
-      0 2px 8px 0 rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  66% {
+    transform: translateY(-5px) rotate(-1deg);
   }
-  
-  .dark .glass-morphism-heavy {
-    background: rgba(30, 41, 59, 0.3);
-    border: 1px solid rgba(148, 163, 184, 0.15);
-    box-shadow: 
-      0 8px 24px 0 rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
-  }
-  
-  /* Light Mode Text in Glass Elements */
-  .glass-morphism *, .glass-morphism-light *, .glass-morphism-heavy * {
-    color: #0f172a !important;
-  }
-  
-  .glass-morphism h1, .glass-morphism h2, .glass-morphism h3, 
-  .glass-morphism-light h1, .glass-morphism-light h2, .glass-morphism-light h3,
-  .glass-morphism-heavy h1, .glass-morphism-heavy h2, .glass-morphism-heavy h3 {
-    color: #0f172a !important;
-    font-weight: 600;
-  }
-  
-  /* Dark Mode Text in Glass Elements */
-  .dark .glass-morphism *, .dark .glass-morphism-light *, .dark .glass-morphism-heavy * {
-    color: #f1f5f9 !important;
-  }
-  
-  /* Glass Scrollbar - Light Mode */
-  .scrollbar-glass {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(71, 85, 105, 0.4) transparent;
-  }
-  
-  .scrollbar-glass::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  
-  .scrollbar-glass::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 10px;
-  }
-  
-  .scrollbar-glass::-webkit-scrollbar-thumb {
-    background: rgba(71, 85, 105, 0.4);
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-  
-  .scrollbar-glass::-webkit-scrollbar-thumb:hover {
-    background: rgba(71, 85, 105, 0.6);
-  }
-  
-  /* Dark Mode Scrollbar */
-  .dark .scrollbar-glass {
-    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
-  }
-  
-  .dark .scrollbar-glass::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.3);
-  }
-  
-  .dark .scrollbar-glass::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.4);
-  }
-  
-  /* Light Mode Glow Effects - Royal Blue/Purple/Orange */
-  .glow-royal {
-    box-shadow: 
-      0 0 8px rgba(30, 64, 175, 0.3),
-      0 0 16px rgba(30, 64, 175, 0.15);
-  }
-  
-  .glow-purple {
-    box-shadow: 
-      0 0 8px rgba(126, 34, 206, 0.4),
-      0 0 16px rgba(126, 34, 206, 0.2);
-  }
-  
-  .glow-orange {
-    box-shadow: 
-      0 0 8px rgba(249, 115, 22, 0.4),
-      0 0 16px rgba(249, 115, 22, 0.2);
-  }
-  
-  .glow-slate {
-    box-shadow: 
-      0 0 8px rgba(71, 85, 105, 0.3),
-      0 0 16px rgba(71, 85, 105, 0.15);
-  }
-  
-  .glow-accent {
-    box-shadow: 
-      0 0 8px rgba(126, 34, 206, 0.3),
-      0 0 16px rgba(30, 64, 175, 0.15);
-  }
-  
-  /* Dark Mode Glow Effects */
-  .dark .glow-royal {
-    box-shadow: 
-      0 0 8px rgba(100, 116, 139, 0.2),
-      0 0 16px rgba(100, 116, 139, 0.1);
-  }
-  
-  .dark .glow-purple {
-    box-shadow: 
-      0 0 8px rgba(71, 85, 105, 0.3),
-      0 0 16px rgba(71, 85, 105, 0.15);
-  }
-  
-  .dark .glow-orange {
-    box-shadow: 
-      0 0 8px rgba(71, 85, 105, 0.3),
-      0 0 16px rgba(71, 85, 105, 0.15);
-  }
-  
-  .dark .glow-slate {
-    box-shadow: 
-      0 0 8px rgba(100, 116, 139, 0.2),
-      0 0 16px rgba(100, 116, 139, 0.1);
-  }
-  
-  .dark .glow-accent {
-    box-shadow: 
-      0 0 8px rgba(71, 85, 105, 0.3),
-      0 0 16px rgba(71, 85, 105, 0.15);
-  }
-  
-  /* Light Mode Animated Gradient Background */
-  .bg-animated-gradient {
-    background: linear-gradient(-45deg, #f8fafc, #e2e8f0, #cbd5e1, #94a3b8);
-    background-size: 400% 400%;
-    animation: gradient-shift 20s ease infinite;
-  }
-  
-  .dark .bg-animated-gradient {
-    background: linear-gradient(-45deg, #0f172a, #1e293b, #334155, #475569);
-    background-size: 400% 400%;
-    animation: gradient-shift 20s ease infinite;
-  }
-  
-  @keyframes gradient-shift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
-  
-  /* Light Mode Floating Particles - Slate with Royal/Purple/Orange */
+}
+
+/* Glow effects */
+.glow-purple {
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+.glow-orange {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+}
+
+.glow-pink {
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+/* Hover effects for cards */
+.hover-lift {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading spinner */
+.loading-spinner {
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  border-radius: 50%;
+  border-top: 3px solid #3b82f6;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Enhanced button styles */
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-lg transition-all duration-200;
+  box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 6px 20px 0 rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Improved focus states for accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
   .floating-particles::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image: 
-      radial-gradient(circle at 20% 50%, rgba(30, 64, 175, 0.12) 1px, transparent 1px),
-      radial-gradient(circle at 80% 20%, rgba(126, 34, 206, 0.1) 1px, transparent 1px),
-      radial-gradient(circle at 40% 80%, rgba(249, 115, 22, 0.08) 1px, transparent 1px);
-    background-size: 120px 120px, 100px 100px, 140px 140px;
-    animation: float 25s ease-in-out infinite;
-    pointer-events: none;
+    display: none;
   }
   
-  /* Dark Mode Floating Particles */
-  .dark .floating-particles::before {
-    background-image: 
-      radial-gradient(circle at 20% 50%, rgba(100, 116, 139, 0.1) 1px, transparent 1px),
-      radial-gradient(circle at 80% 20%, rgba(71, 85, 105, 0.1) 1px, transparent 1px),
-      radial-gradient(circle at 40% 80%, rgba(51, 65, 85, 0.08) 1px, transparent 1px);
+  .bg-animated-gradient {
+    animation: none;
+    background: #0f172a;
   }
-  
-  @keyframes float {
-    0%, 100% { transform: translateY(0px) rotate(0deg); }
-    33% { transform: translateY(-8px) rotate(0.5deg); }
-    66% { transform: translateY(-4px) rotate(-0.5deg); }
-  }
-  
-  /* Enhanced Interactive States - Light Mode */
-  .glass-focus {
-    @apply focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40;
-  }
-  
-  .glass-hover {
-    @apply hover:bg-slate-200/10 hover:border-slate-400/20 transition-all duration-300;
-  }
-  
-  .glass-button {
-    @apply glass-morphism-light hover:glass-morphism transition-all duration-300;
-    color: #0f172a !important;
-  }
-  
-  .glass-card {
-    @apply glass-morphism rounded-2xl p-6 hover:glass-morphism-heavy transition-all duration-300;
-  }
-  
-  .glass-input {
-    @apply glass-morphism-light rounded-xl px-4 py-3 focus:glass-morphism;
-    color: #0f172a !important;
-  }
-  
-  .glass-input::placeholder {
-    color: #64748b !important;
-  }
-  
-  /* Dark Mode Interactive States */
-  .dark .glass-focus {
-    @apply focus:ring-2 focus:ring-slate-400/30 focus:border-slate-400/30;
-  }
-  
-  .dark .glass-hover {
-    @apply hover:bg-slate-400/5 hover:border-slate-400/15 transition-all duration-300;
-  }
-  
-  .dark .glass-button {
-    color: #f1f5f9 !important;
-  }
-  
-  .dark .glass-input {
-    color: #f1f5f9 !important;
-  }
-  
-  .dark .glass-input::placeholder {
-    color: #94a3b8 !important;
-  }
+}
 
-  /* Custom Scrollbar Styles */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(100, 116, 139, 0.4) rgba(51, 65, 85, 0.2);
-  }
+/* Enhanced Aegean (Mediterranean) animations */
+@keyframes aegean-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
 
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+@keyframes mosaic-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-3px) rotate(0.5deg); }
+  66% { transform: translateY(-1px) rotate(-0.5deg); }
+}
 
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: rgba(51, 65, 85, 0.2);
-    border-radius: 3px;
-  }
+@keyframes olive-breeze {
+  0%, 100% { transform: translateX(0px); }
+  50% { transform: translateX(2px); }
+}
 
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(100, 116, 139, 0.4);
-    border-radius: 3px;
-    transition: background-color 0.2s ease;
-  }
+.aegean .animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(0, 102, 204, 0.15), transparent);
+  background-size: 200% 100%;
+  animation: aegean-shimmer 3s infinite;
+}
 
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.6);
-  }
+.aegean .mosaic-float {
+  animation: mosaic-float 8s ease-in-out infinite;
+}
 
-  .scrollbar-track-slate-800 {
-    scrollbar-color: rgba(100, 116, 139, 0.4) rgba(30, 41, 59, 0.5);
-  }
+.aegean .olive-breeze {
+  animation: olive-breeze 6s ease-in-out infinite;
+}
 
-  .scrollbar-track-slate-800::-webkit-scrollbar-track {
-    background: rgba(30, 41, 59, 0.5);
-  }
+/* Enhanced Karadeniz (Black Sea) animations */
+@keyframes storm-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
 
-  .scrollbar-thumb-slate-600 {
-    scrollbar-color: rgba(100, 116, 139, 0.4) rgba(30, 41, 59, 0.5);
-  }
+@keyframes sea-wave {
+  0%, 100% { transform: translateY(0px) scaleY(1); }
+  50% { transform: translateY(-2px) scaleY(0.98); }
+}
 
-  .scrollbar-thumb-slate-600::-webkit-scrollbar-thumb {
-    background: rgba(100, 116, 139, 0.4);
-  }
+.karadeniz .storm-pulse, .dark .storm-pulse {
+  animation: storm-pulse 4s ease-in-out infinite;
+}
 
-  .scrollbar-thumb-slate-500::-webkit-scrollbar-thumb {
-    background: rgba(100, 116, 139, 0.6);
+.karadeniz .sea-wave, .dark .sea-wave {
+  animation: sea-wave 5s ease-in-out infinite;
+}
+
+/* Olive green accents for Aegean theme */
+.aegean .olive-accent {
+  border-left: 3px solid var(--olive-green);
+}
+
+.aegean .olive-glow {
+  box-shadow: 0 0 10px rgba(139, 157, 59, 0.3);
+}
+
+/* Fade animations for both themes */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out;
+}
+
+.animate-fade-in-right {
+  animation: fade-in-right 0.8s ease-out;
+}
+
+/* Thinking mode specific styles */
+.thinking-mode-flash:not(.active) {
+  background: transparent;
+  color: inherit;
+}
+
+.thinking-mode-flash.active,
+.thinking-mode-flash:not(.active):hover {
+  background: linear-gradient(to right, #facc15, #f97316) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+
+.thinking-mode-think:not(.active) {
+  background: transparent;
+  color: inherit;
+}
+
+.thinking-mode-think.active,
+.thinking-mode-think:not(.active):hover {
+  background: linear-gradient(to right, #60a5fa, #a855f7) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.3);
+}
+
+.thinking-mode-ultra-think:not(.active) {
+  background: transparent;
+  color: inherit;
+}
+
+.thinking-mode-ultra-think.active,
+.thinking-mode-ultra-think:not(.active):hover {
+  background: linear-gradient(to right, #a855f7, #ec4899) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+}
+
+.thinking-mode-full-think:not(.active) {
+  background: transparent;
+  color: inherit;
+}
+
+.thinking-mode-full-think.active,
+.thinking-mode-full-think:not(.active):hover {
+  background: linear-gradient(to right, #f87171, #ea580c) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.thinking-mode.active {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Göbekli Tepe - Ancient Anatolia Theme */
+.gobeklitepe {
+  /* Ancient Stone Core Colors */
+  --background: #E8DCC6;
+  --foreground: #1C1C1C;
+  --card: #C19A6B;
+  --card-foreground: #1C1C1C;
+  --popover: #E8DCC6;
+  --popover-foreground: #1C1C1C;
+  --primary: #D4A574;
+  --primary-foreground: #1C1C1C;
+  --secondary: #CC7722;
+  --secondary-foreground: #1C1C1C;
+  --muted: #8B3A3A;
+  --muted-foreground: #3B3B3B;
+  --accent: #4B0082;
+  --accent-foreground: #E8DCC6;
+  --destructive: #8B3A3A;
+  --destructive-foreground: #E8DCC6;
+  --border: #C19A6B;
+  --input: #E8DCC6;
+  --ring: #D4A574;
+  --radius: 0.5rem;
+  
+  /* Göbekli Tepe Custom Colors */
+  --limestone: #E8DCC6;
+  --sandstone: #C19A6B;
+  --basalt: #3B3B3B;
+  --obsidian: #1C1C1C;
+  --temple-gold: #D4A574;
+  --ritual-red: #8B3A3A;
+  --sacred-ochre: #CC7722;
+  --dawn-pink: #E8B4B8;
+  --ancient-sky: #87CEEB;
+  --star-silver: #C0C0C0;
+  --cosmic-purple: #4B0082;
+}
+
+.gobeklitepe.dark {
+  /* Dark mode for Göbekli Tepe */
+  --background: #1C1C1C;
+  --foreground: #E8DCC6;
+  --card: #3B3B3B;
+  --card-foreground: #E8DCC6;
+  --popover: #1C1C1C;
+  --popover-foreground: #E8DCC6;
+  --primary: #D4A574;
+  --primary-foreground: #1C1C1C;
+  --secondary: #CC7722;
+  --secondary-foreground: #1C1C1C;
+  --muted: #C19A6B;
+  --muted-foreground: #E8DCC6;
+  --accent: #4B0082;
+  --accent-foreground: #E8DCC6;
+  --destructive: #8B3A3A;
+  --destructive-foreground: #E8DCC6;
+  --border: #D4A574;
+  --input: #3B3B3B;
+  --ring: #D4A574;
+}
+
+/* Ani - Medieval Silk Road Theme */
+.ani {
+  /* Armenian Stone Core Colors */
+  --background: #8B8680;
+  --foreground: #1C1C1C;
+  --card: #A0522D;
+  --card-foreground: #FFFFFF;
+  --popover: #8B8680;
+  --popover-foreground: #1C1C1C;
+  --primary: #DC143C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F4C430;
+  --secondary-foreground: #1C1C1C;
+  --muted: #704214;
+  --muted-foreground: #FFFFFF;
+  --accent: #6B3AA0;
+  --accent-foreground: #FFFFFF;
+  --destructive: #8B4513;
+  --destructive-foreground: #FFFFFF;
+  --border: #A0522D;
+  --input: #8B8680;
+  --ring: #DC143C;
+  --radius: 0.375rem;
+  
+  /* Ani Custom Colors */
+  --ani-volcanic: #4A4A4A;
+  --ani-brick: #A0522D;
+  --ani-rust: #8B4513;
+  --cathedral-stone: #8B8680;
+  --silk-crimson: #DC143C;
+  --merchant-purple: #6B3AA0;
+  --saffron: #F4C430;
+  --jade-green: #00A86B;
+  --caravan-brown: #704214;
+  --spice-orange: #FF7F50;
+  --persian-blue: #1C39BB;
+}
+
+.ani.dark {
+  /* Dark mode for Ani */
+  --background: #4A4A4A;
+  --foreground: #8B8680;
+  --card: #704214;
+  --card-foreground: #F4C430;
+  --popover: #4A4A4A;
+  --popover-foreground: #8B8680;
+  --primary: #DC143C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #6B3AA0;
+  --secondary-foreground: #FFFFFF;
+  --muted: #A0522D;
+  --muted-foreground: #8B8680;
+  --accent: #F4C430;
+  --accent-foreground: #4A4A4A;
+  --destructive: #8B4513;
+  --destructive-foreground: #FFFFFF;
+  --border: #DC143C;
+  --input: #704214;
+  --ring: #DC143C;
+}
+
+/* Göbekli Tepe Animations */
+@keyframes ancient-glow {
+  0%, 100% { 
+    box-shadow: 0 0 10px rgba(212, 165, 116, 0.3);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(212, 165, 116, 0.6), 0 0 30px rgba(75, 0, 130, 0.3);
+    transform: scale(1.01);
+  }
+}
+
+@keyframes stone-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes cosmic-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-5px) rotate(1deg); }
+  66% { transform: translateY(-2px) rotate(-1deg); }
+}
+
+.gobeklitepe .ancient-glow {
+  animation: ancient-glow 6s ease-in-out infinite;
+}
+
+.gobeklitepe .stone-shift {
+  background: linear-gradient(45deg, var(--limestone), var(--sandstone), var(--temple-gold));
+  background-size: 300% 300%;
+  animation: stone-shift 8s ease infinite;
+}
+
+.gobeklitepe .cosmic-float {
+  animation: cosmic-float 10s ease-in-out infinite;
+}
+
+/* Ani (Silk Road) Animations */
+@keyframes silk-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes caravan-march {
+  0%, 100% { transform: translateX(0px); }
+  25% { transform: translateX(2px); }
+  75% { transform: translateX(-2px); }
+}
+
+@keyframes spice-glow {
+  0%, 100% { 
+    box-shadow: 0 0 10px rgba(244, 196, 48, 0.3);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(244, 196, 48, 0.6), 0 0 30px rgba(220, 20, 60, 0.4);
+  }
+}
+
+.ani .silk-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(244, 196, 48, 0.2), transparent);
+  background-size: 200% 100%;
+  animation: silk-shimmer 3s infinite;
+}
+
+.ani .caravan-march {
+  animation: caravan-march 4s ease-in-out infinite;
+}
+
+.ani .spice-glow {
+  animation: spice-glow 5s ease-in-out infinite;
+}
+
+/* Theme-specific utility classes for cultural styling */
+
+/* Aegean Theme Utilities */
+.aegean .cultural-primary {
+  background: var(--aegean-main);
+  color: var(--marble);
+}
+
+.aegean .cultural-secondary {
+  background: var(--terracotta);
+  color: var(--marble);
+}
+
+.aegean .cultural-accent {
+  background: var(--olive);
+  color: var(--marble);
+}
+
+.aegean .cultural-bg {
+  background: linear-gradient(135deg, var(--background), var(--aegean-mist));
+}
+
+.aegean .cultural-card {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+
+.aegean .cultural-hover:hover {
+  background: var(--terracotta);
+  color: var(--marble);
+  transform: scale(1.02);
+}
+
+/* Improve header visibility in Aegean */
+.aegean h1, .aegean h2, .aegean h3, .aegean h4, .aegean h5, .aegean h6 {
+  color: var(--aegean-deep) !important;
+  font-weight: 700;
+}
+
+.aegean .cultural-text-primary {
+  color: var(--aegean-deep) !important;
+}
+
+/* Karadeniz Theme Utilities */
+.karadeniz .cultural-primary {
+  background: var(--blacksea-mist);
+  color: var(--snow-peak);
+}
+
+.karadeniz .cultural-secondary {
+  background: var(--forest-moss);
+  color: var(--snow-peak);
+}
+
+.karadeniz .cultural-accent {
+  background: var(--hazelnut);
+  color: var(--snow-peak);
+}
+
+.karadeniz .cultural-bg {
+  background: linear-gradient(135deg, var(--background), var(--blacksea-storm));
+}
+
+.karadeniz .cultural-card {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(15px);
+}
+
+.karadeniz .cultural-hover:hover {
+  background: var(--forest-moss);
+  color: var(--snow-peak);
+  transform: scale(1.02);
+}
+
+/* Improve header visibility in Karadeniz */
+.karadeniz h1, .karadeniz h2, .karadeniz h3, .karadeniz h4, .karadeniz h5, .karadeniz h6 {
+  color: var(--snow-peak) !important;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.karadeniz .cultural-text-primary {
+  color: var(--snow-peak) !important;
+}
+
+/* Göbekli Tepe Theme Utilities */
+.gobeklitepe .cultural-primary {
+  background: var(--temple-gold);
+  color: var(--obsidian);
+}
+
+.gobeklitepe .cultural-secondary {
+  background: var(--sacred-ochre);
+  color: var(--limestone);
+}
+
+.gobeklitepe .cultural-accent {
+  background: var(--cosmic-purple);
+  color: var(--limestone);
+}
+
+.gobeklitepe .cultural-bg {
+  background: linear-gradient(135deg, var(--limestone), var(--sandstone));
+}
+
+.gobeklitepe .cultural-card {
+  background: rgba(232, 220, 198, 0.9);
+  border: 1px solid var(--temple-gold);
+  backdrop-filter: blur(8px);
+}
+
+.gobeklitepe .cultural-hover:hover {
+  background: var(--temple-gold);
+  color: var(--obsidian);
+  transform: scale(1.02);
+  box-shadow: 0 0 20px rgba(212, 165, 116, 0.4);
+}
+
+
+
+/* Universal cultural styling */
+.cultural-text-primary {
+  color: var(--foreground) !important;
+}
+
+.cultural-text-accent {
+  color: var(--accent-foreground) !important;
+}
+
+.cultural-border {
+  border-color: var(--border) !important;
+}
+
+.cultural-gradient-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.cultural-gradient-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.1;
+  z-index: -1;
+}
+
+/* Fix for chat input area background theming */
+.cultural-bg .border-t.border-border.bg-background {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+}
+
+.cultural-bg .p-4.space-y-3 {
+  background: var(--card) !important;
+  border-radius: 0.5rem;
+}
+
+/* Ensure chat input gets cultural theming */
+div[id^="radix-"] .border-t.border-border.bg-background {
+  background: var(--card) !important;
+}
+
+div[id^="radix-"] .p-4.space-y-3 {
+  background: var(--card) !important;
 }

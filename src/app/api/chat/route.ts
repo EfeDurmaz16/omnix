@@ -13,7 +13,7 @@ interface ChatRequest {
   }>;
   model: string;
   sessionId?: string;
-  mode?: 'flash' | 'think' | 'ultra-think';
+  mode?: 'flash' | 'think' | 'ultra-think' | 'full-think';
   files?: Array<{
     name: string;
     type: string;
@@ -104,10 +104,54 @@ export async function POST(req: NextRequest) {
 
     // Process file attachments if any
     let processedMessages = [...messages];
+    let attachedImages: any[] = [];
+    
     if (files && files.length > 0) {
-      const fileContext = files.map(file => `[Attached file: ${file.name} (${file.type})]`).join('\n');
+      console.log('📎 Processing attached files:', files.length);
+      
       const lastMessage = processedMessages[processedMessages.length - 1];
-      lastMessage.content = `${fileContext}\n\n${lastMessage.content}`;
+      let messageContent = lastMessage.content;
+      
+      // Process different file types
+      files.forEach((file: any) => {
+        console.log('📄 Processing file:', file.name, file.type);
+        
+        if (file.type === 'image' && file.content) {
+          // Collect images separately for vision model processing
+          attachedImages.push({
+            name: file.name,
+            content: file.content,
+            mimeType: file.mimeType || 'image/jpeg'
+          });
+          console.log('🖼️ Image collected for vision processing:', file.name);
+          
+          // Add image reference to message content
+          const hasVisionCapability = model.includes('gpt-4') || model.includes('claude') || model.includes('gemini') || model.includes('vision');
+          if (hasVisionCapability) {
+            messageContent = `[Image: ${file.name} - Vision analysis enabled]\n${messageContent}`;
+          } else {
+            messageContent = `[Image attached: ${file.name} - Note: This model doesn't support image analysis]\n${messageContent}`;
+          }
+        } else if (file.type === 'text' && file.content) {
+          // For text files, include the actual content
+          console.log('📄 Adding text file content:', file.name);
+          messageContent = `[Text File: ${file.name}]\n${file.content}\n\n${messageContent}`;
+        } else if (file.type === 'pdf' && file.content) {
+          // For PDFs, include the extracted text content
+          console.log('📑 Adding PDF content:', file.name, file.content.length, 'characters');
+          messageContent = `${file.content}\n\n${messageContent}`;
+        } else if (file.type === 'document' && file.content) {
+          // For Word documents
+          console.log('📋 Adding document content:', file.name);
+          messageContent = `${file.content}\n\n${messageContent}`;
+        } else {
+          // For other file types
+          messageContent = `[File: ${file.name}] (${file.type})\n${messageContent}`;
+        }
+      });
+      
+      lastMessage.content = messageContent;
+      console.log('✅ Files processed and added to message context');
     }
 
     // Create the request for our model router
@@ -121,7 +165,8 @@ export async function POST(req: NextRequest) {
       sessionId: sessionId || `session_${Date.now()}`,
       mode: mode || 'think',
       temperature: 0.7,
-      maxTokens: mode === 'flash' ? 1000 : mode === 'ultra-think' ? 4000 : 2000
+      maxTokens: mode === 'flash' ? 1000 : mode === 'ultra-think' ? 4000 : mode === 'full-think' ? 3000 : 2000,
+      attachedImages: attachedImages.length > 0 ? attachedImages : undefined
     };
 
     console.log('Routing request to model:', model);

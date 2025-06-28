@@ -144,7 +144,7 @@ export function PricingSection() {
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
             Choose Your
             <br />
-            <span className="bg-gradient-to-r from-slate-400 to-slate-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-slate-400 to-slate-600 bg-clip-text ">
               Perfect Plan
             </span>
           </h2>

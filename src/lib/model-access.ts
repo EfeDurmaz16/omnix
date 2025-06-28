@@ -9,27 +9,15 @@ export interface PlanAccess {
 
 export const PLAN_MODEL_ACCESS: Record<string, PlanAccess> = {
   demo: {
-    text: [
-      'gpt-3.5-turbo', 
-      'gpt-4o-mini', 
-      'gpt-4-turbo',
-      'gemini-2.0-flash-001',
-      'claude-sonnet-4-20250514',
-      'claude-opus-4-20250514',
-      'claude-3-7-sonnet-20250219',
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-      'llama-4-scout-17b-16e-instruct-maas',
-      'llama-4-maverick-17b-128e-instruct-maas'
-    ],
-    image: [],
-    video: [],
-    maxTokens: 2000,
-    dailyLimit: 100,
+    text: ['all'], // access to all text models for development
+    image: ['all'], // access to all image models for development  
+    video: ['all'], // access to all video models for development
+    maxTokens: 8000,
+    dailyLimit: 10000,
     features: [
-      'Demo access to text models',
-      'Extended conversation history',
-      'Standard response speed'
+      'Demo access to ALL models for development',
+      'Unlimited conversation history',
+      'Highest priority processing'
     ]
   },
   free: {
@@ -37,6 +25,10 @@ export const PLAN_MODEL_ACCESS: Record<string, PlanAccess> = {
       'gpt-3.5-turbo', 
       'gpt-4o-mini', 
       'gpt-4-turbo',
+      // Limited o3 access for free users
+      'o3-mini',
+      'o1-mini',
+      'gpt-4.1-nano',
       'gemini-2.0-flash-001', 
       'claude-3-5-haiku-20241022',
       'llama-4-scout-17b-16e-instruct-maas'
@@ -58,6 +50,28 @@ export const PLAN_MODEL_ACCESS: Record<string, PlanAccess> = {
       'gpt-4o-mini', 
       'gpt-4-turbo',
       'gpt-3.5-turbo',
+      // New OpenAI Models - o3 Series
+      'o3',
+      'o3-2025-04-16',
+      'o3-mini',
+      'o3-mini-2025-01-31',
+      'o3-pro',
+      'o3-pro-2025-06-10',
+      'o4-mini',
+      'o4-mini-2025-04-16',
+      // New OpenAI Models - o1 Series
+      'o1',
+      'o1-2024-12-17',
+      'o1-mini',
+      'o1-pro',
+      'o1-pro-2025-03-19',
+      'o1-preview',
+      // New OpenAI Models - GPT-4.1 Series
+      'gpt-4.1',
+      'gpt-4.1-2025-04-14',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
+      'gpt-4.1-nano-2025-04-14',
       'claude-sonnet-4-20250514',
       'claude-opus-4-20250514',
       'claude-3-7-sonnet-20250219',

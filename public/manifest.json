@@ -1,27 +1,25 @@
 {
-  "name": "Omnix AI - Unified AI Platform",
-  "short_name": "Omnix AI",
-  "description": "Access multiple AI models through one unified platform. Chat, generate images, and create videos with cutting-edge AI technology.",
+  "name": "Aspendos AI - Unified AI Platform",
+  "short_name": "Aspendos AI",
+  "description": "Access GPT-4, Claude, Gemini, Imagen, Veo, and more in one unified AI platform",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#8b5cf6",
+  "background_color": "#0066CC",
+  "theme_color": "#0066CC",
   "orientation": "portrait-primary",
   "categories": ["productivity", "utilities", "education"],
   "lang": "en",
   "dir": "ltr",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable any"
+      "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "icon-512.png", 
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable any"
+      "type": "image/png"
     },
     {
       "src": "/icon-192.png",
