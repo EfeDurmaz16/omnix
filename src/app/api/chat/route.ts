@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { routeRequest, validateModelAccess } from '@/lib/model-router';
+import { routeRequest, validateModelAccess, getModelRouter } from '@/lib/model-router';
 import { GenerateRequest } from '@/lib/providers/base';
+import { contextManager } from '@/lib/context/AdvancedContextManager';
 
 // Rate limiting store (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -13,6 +14,7 @@ interface ChatRequest {
   }>;
   model: string;
   sessionId?: string;
+  conversationId?: string;
   mode?: 'flash' | 'think' | 'ultra-think' | 'full-think';
   files?: Array<{
     name: string;
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body: ChatRequest = await req.json();
-    const { messages, model, sessionId, mode, files } = body;
+    const { messages, model, sessionId, conversationId, mode, files } = body;
 
     // Input validation
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -169,12 +171,50 @@ export async function POST(req: NextRequest) {
       attachedImages: attachedImages.length > 0 ? attachedImages : undefined
     };
 
-    console.log('Routing request to model:', model);
+    console.log('🧠 Using RAG-enhanced conversation context');
+    
+    // Get or create conversation context with RAG
+    const context = await contextManager.getOrCreateContext(
+      userId,
+      conversationId,
+      model
+    );
+
+    // Add user message to context (triggers memory extraction)
+    const userMessage = processedMessages[processedMessages.length - 1];
+    if (userMessage.role === 'user') {
+      await contextManager.addMessage(context.id, {
+        role: 'user',
+        content: userMessage.content,
+        model: model
+      });
+    }
+
+    // Get RAG-enhanced context for the model
+    const enhancedMessages = await contextManager.getContextForModel(context.id);
+
+    // Create enhanced request with RAG context
+    const enhancedRequest: GenerateRequest = {
+      ...generateRequest,
+      messages: enhancedMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+    };
+
+    console.log('Routing request to model with RAG context:', model);
     
     // Use our model router to generate the response
-    const aiResponse = await routeRequest(generateRequest);
+    const aiResponse = await routeRequest(enhancedRequest);
 
-    console.log('Model router response successful');
+    // Add assistant response to context
+    await contextManager.addMessage(context.id, {
+      role: 'assistant',
+      content: aiResponse.content,
+      model: model
+    });
+
+    console.log('Model router response successful with RAG enhancement');
 
     // Create response compatible with existing frontend
     const response = {
@@ -187,7 +227,13 @@ export async function POST(req: NextRequest) {
       tokens: aiResponse.usage.totalTokens,
       cost: aiResponse.usage.estimatedCost,
       sessionId: generateRequest.sessionId,
-      metadata: aiResponse.metadata
+      conversationId: context.id,
+      memoryEnhanced: true,
+      metadata: {
+        ...aiResponse.metadata,
+        ragEnabled: true,
+        contextId: context.id
+      }
     };
 
     return NextResponse.json(response);

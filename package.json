@@ -19,6 +19,7 @@
     "@anthropic-ai/sdk": "^0.54.0",
     "@anthropic-ai/vertex-sdk": "^0.11.4",
     "@clerk/nextjs": "^6.22.0",
+    "@google-cloud/aiplatform": "^4.2.0",
     "@google-cloud/firestore": "^7.11.2",
     "@google-cloud/storage": "^7.16.0",
     "@google-cloud/vertexai": "^1.9.0",

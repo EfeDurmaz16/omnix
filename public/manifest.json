@@ -1,91 +1,117 @@
 {
-  "name": "Aspendos AI - Unified AI Platform",
-  "short_name": "Aspendos AI",
-  "description": "Access GPT-4, Claude, Gemini, Imagen, Veo, and more in one unified AI platform",
-  "start_url": "/",
+  "name": "OmniX - AI Platform",
+  "short_name": "OmniX",
+  "description": "Advanced multi-model AI platform with RAG capabilities and autonomous agents",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
   "display": "standalone",
-  "background_color": "#0066CC",
-  "theme_color": "#0066CC",
   "orientation": "portrait-primary",
-  "categories": ["productivity", "utilities", "education"],
-  "lang": "en",
-  "dir": "ltr",
+  "scope": "/",
+  "start_url": "/",
+  "categories": ["productivity", "business", "education"],
+  "lang": "en-US",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/aspendos-icon.svg",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
     },
     {
-      "src": "icon-512.png", 
+      "src": "/aspendos-icon.svg",
       "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshot-mobile.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "/screenshot-desktop.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "form_factor": "wide"
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
     }
   ],
   "shortcuts": [
     {
-      "name": "Chat",
+      "name": "New Chat",
       "short_name": "Chat",
       "description": "Start a new AI conversation",
-      "url": "/",
+      "url": "/dashboard?new=true",
       "icons": [
         {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
+          "src": "/aspendos-icon.svg",
+          "sizes": "96x96"
         }
       ]
     },
     {
-      "name": "Create Image",
-      "short_name": "Image",
-      "description": "Generate AI images",
-      "url": "/dashboard?tab=image",
+      "name": "AI Agents",
+      "short_name": "Agents",
+      "description": "Manage your AI agents",
+      "url": "/agents",
       "icons": [
         {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
+          "src": "/aspendos-icon.svg",
+          "sizes": "96x96"
         }
       ]
     },
     {
-      "name": "Create Video",
-      "short_name": "Video",
-      "description": "Generate AI videos",
-      "url": "/dashboard?tab=video",
+      "name": "Models",
+      "short_name": "Models",
+      "description": "Browse available AI models",
+      "url": "/models",
       "icons": [
         {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
+          "src": "/aspendos-icon.svg",
+          "sizes": "96x96"
         }
       ]
     }
   ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-chat.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "platform": "wide",
+      "label": "Chat interface on desktop"
+    },
+    {
+      "src": "/screenshots/mobile-chat.png", 
+      "sizes": "375x812",
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "Chat interface on mobile"
+    }
+  ],
   "related_applications": [],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "display_override": ["window-controls-overlay", "standalone"],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": ["text/*", "image/*", "application/pdf"]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/file-handler",
+      "accept": {
+        "text/plain": [".txt"],
+        "text/markdown": [".md"],
+        "application/pdf": [".pdf"],
+        "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+      }
+    }
+  ]
 } 
