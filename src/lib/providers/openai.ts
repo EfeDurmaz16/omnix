@@ -732,7 +732,7 @@ export class OpenAIProvider implements ModelProvider {
       ]
     },
     {
-      id: 'tts-1-hd',
+      id: 'gpt-4o-mini-tts',
       name: 'TTS-1 HD',
       provider: 'openai',
       type: 'audio',

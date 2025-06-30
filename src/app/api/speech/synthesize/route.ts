@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // Call OpenAI TTS API
     const mp3 = await openai.audio.speech.create({
-      model: 'tts-1-hd', // Higher quality model
+      model: 'gpt-4o-mini-tts', // Higher quality model
       voice: voice as 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer',
       input: text,
       speed: speed, // 0.25 to 4.0

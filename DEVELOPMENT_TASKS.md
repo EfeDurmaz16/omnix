@@ -126,7 +126,7 @@ Subtasks:
 └── 0.5.4: Add voice response controls (play/pause/stop) (0 min)
 
 Features:
-- High-quality TTS-1-HD voice synthesis
+- High-quality gpt-4o-mini-tts voice synthesis
 - Multiple voice options (alloy, echo, fable, onyx, nova, shimmer)
 - Adjustable speech speed and tone
 - Auto-read new responses option
