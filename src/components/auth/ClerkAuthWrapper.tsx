@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useUser } from '@clerk/nextjs';
 import { User, UsageStats } from '@/lib/types';
 import { mockApi } from '@/lib/mock-api';
+import { enhancedCreditManager } from '@/lib/credits/EnhancedCreditManager';
 
 interface AuthContextType {
   user: User | null;
@@ -49,11 +50,36 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     if (clerkUser && !user) {
       console.log('🔄 Initializing user data from Clerk...');
       
-      // Get saved credits from localStorage
+      // Store user ID in sessionStorage for reliable access
+      sessionStorage.setItem('clerk-user-id', clerkUser.id);
+      console.log('💾 Stored user ID in sessionStorage:', clerkUser.id);
+      
+      // Initialize user in database
+      enhancedCreditManager.initializeUser({
+        clerkId: clerkUser.id,
+        email: clerkUser.emailAddresses[0]?.emailAddress || '',
+        name: clerkUser.fullName || clerkUser.firstName || 'User',
+        avatar: clerkUser.imageUrl
+      }).catch(error => {
+        console.warn('Failed to initialize user in database:', error);
+      });
+      
+      // Get credits using enhanced credit manager
+      enhancedCreditManager.getCredits(clerkUser.id).then(credits => {
+        console.log('💰 Credits from enhanced manager:', credits);
+        
+        // Update user state with latest credits
+        setUser(prev => prev ? { ...prev, credits } : prev);
+        setUsageStats(prev => prev ? { ...prev, remainingCredits: credits } : prev);
+      }).catch(error => {
+        console.warn('Failed to get credits from enhanced manager:', error);
+      });
+      
+      // Use fallback credits for immediate UI update
       const savedCredits = localStorage.getItem(`aspendos_credits_${clerkUser.id}`);
       const credits = savedCredits ? parseInt(savedCredits) : 1500;
       
-      console.log('💰 Found saved credits:', credits);
+      console.log('💰 Fallback credits from localStorage:', credits);
       
       const userData: User = {
         id: clerkUser.id,
@@ -119,22 +145,57 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const addCredits = (amount: number) => {
     console.log('💰 addCredits called with:', amount);
     console.log('💰 Current state - user:', !!user, 'usageStats:', !!usageStats);
+    console.log('💰 Clerk user:', !!clerkUser, 'isLoaded:', isLoaded);
     
     if (!user || !usageStats) {
       console.error('❌ Cannot add credits: user or usageStats is null', { 
         user: !!user, 
         usageStats: !!usageStats,
+        clerkUser: !!clerkUser,
+        isLoaded,
         userObj: user,
         usageStatsObj: usageStats 
       });
       
-      // Try to reload user data if missing
-      if (clerkUser && !user) {
-        console.log('🔄 Attempting to reload user data...');
-        // Trigger useEffect to reload user data
-        window.location.reload();
+      // If clerkUser exists but our user state doesn't, try to initialize it
+      if (clerkUser && isLoaded && !user) {
+        console.log('🔄 Initializing user state for addCredits...');
+        
+        // Get saved credits from localStorage
+        const savedCredits = localStorage.getItem(`aspendos_credits_${clerkUser.id}`);
+        const credits = savedCredits ? parseInt(savedCredits) : 1500;
+        
+        const userData: User = {
+          id: clerkUser.id,
+          email: clerkUser.emailAddresses[0]?.emailAddress || '',
+          name: clerkUser.fullName || clerkUser.firstName || 'User',
+          plan: 'free',
+          credits: credits + amount, // Add the new credits immediately
+          createdAt: clerkUser.createdAt || new Date(),
+          updatedAt: new Date()
+        };
+
+        const usageData: UsageStats = {
+          totalTokens: 0,
+          textTokens: 0,
+          imageGenerations: 0,
+          videoGenerations: 0,
+          remainingCredits: credits + amount,
+          monthlyUsage: 0,
+          lastReset: new Date()
+        };
+
+        setUser(userData);
+        setUsageStats(usageData);
+        
+        // Save the new credit amount
+        localStorage.setItem(`aspendos_credits_${clerkUser.id}`, (credits + amount).toString());
+        
+        console.log('✅ User initialized with added credits:', userData);
+        return;
       }
-      return;
+      
+      throw new Error('Cannot add credits: Auth context not ready');
     }
 
     console.log('💰 Current credits:', user.credits, 'remainingCredits:', usageStats.remainingCredits);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, 
@@ -12,12 +12,18 @@ import {
   MoreHorizontal,
   Zap,
   Clock,
-  Brain
+  Brain,
+  Square,
+  Edit3,
+  Check,
+  X
 } from 'lucide-react';
 import { VoiceControls } from './VoiceControls';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { format } from 'date-fns';
 
 interface Message {
@@ -34,6 +40,10 @@ interface MessagesContainerProps {
   onModelSwitch: (messageIndex: number, newModel: string) => void;
   isLoading: boolean;
   isThinking?: boolean;
+  isStreaming?: boolean;
+  streamingMessage?: string;
+  onStopGeneration?: () => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
 }
 
 export function MessagesContainer({ 
@@ -41,7 +51,11 @@ export function MessagesContainer({
   selectedModel, 
   onModelSwitch, 
   isLoading,
-  isThinking = false
+  isThinking = false,
+  isStreaming = false,
+  streamingMessage = '',
+  onStopGeneration,
+  onEditMessage
 }: MessagesContainerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,13 +124,15 @@ export function MessagesContainer({
             onCopy={() => copyToClipboard(message.content)}
             onModelSwitch={onModelSwitch}
             selectedModel={selectedModel}
+            onEdit={onEditMessage}
           />
         ))}
       </AnimatePresence>
 
       {/* Loading indicator */}
       {isThinking && <ThinkingMessage selectedModel={selectedModel} />}
-      {isLoading && !isThinking && <LoadingMessage selectedModel={selectedModel} />}
+      {isStreaming && <StreamingMessage selectedModel={selectedModel} streamingMessage={streamingMessage} onStop={onStopGeneration} />}
+      {isLoading && !isThinking && !isStreaming && <LoadingMessage selectedModel={selectedModel} />}
 
       <div ref={messagesEndRef} />
     </div>
@@ -129,6 +145,7 @@ interface MessageBubbleProps {
   onCopy: () => void;
   onModelSwitch: (messageIndex: number, newModel: string) => void;
   selectedModel: string;
+  onEdit?: (messageId: string, newContent: string) => void;
 }
 
 function MessageBubble({ 
@@ -136,9 +153,24 @@ function MessageBubble({
   index, 
   onCopy, 
   onModelSwitch, 
-  selectedModel 
+  selectedModel,
+  onEdit
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+
+  const handleSaveEdit = () => {
+    if (onEdit && editContent.trim()) {
+      onEdit(message.id, editContent.trim());
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditContent(message.content);
+    setIsEditing(false);
+  };
 
   return (
     <motion.div
@@ -184,17 +216,118 @@ function MessageBubble({
             : 'bg-muted mr-12'
           }
         `}>
-          {isUser ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
+          {isEditing ? (
+            /* Edit Mode */
+            <div className="space-y-3">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className={`w-full min-h-[100px] p-3 rounded border resize-none ${
+                  isUser 
+                    ? 'bg-primary-foreground text-primary border-primary-foreground/20' 
+                    : 'bg-background text-foreground border-border'
+                }`}
+                placeholder="Edit your message..."
+                autoFocus
+              />
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEdit}
+                  className="h-8 px-3"
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleSaveEdit}
+                  className="h-8 px-3"
+                  disabled={!editContent.trim()}
+                >
+                  <Check className="w-3 h-3 mr-1" />
+                  Save & Send
+                </Button>
+              </div>
+            </div>
           ) : (
+            /* Normal Display Mode */
             <div className="prose prose-sm max-w-none dark:prose-invert">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              <ReactMarkdown
+                components={{
+                  code: ({ node, inline, className, children, ...props }) => {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const language = match ? match[1] : '';
+                    
+                    return !inline && language ? (
+                      <div className="relative">
+                        {/* Language label */}
+                        <div className="flex items-center justify-between bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
+                          <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-300 uppercase">
+                            {language}
+                          </span>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
+                            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                            title="Copy code"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                        <SyntaxHighlighter
+                          style={document.documentElement.classList.contains('dark') ? oneDark : oneLight}
+                          language={language}
+                          PreTag="div"
+                          className="!rounded-t-none rounded-b-lg !bg-gray-100 dark:!bg-gray-800 !border !border-gray-300 dark:!border-gray-600 !border-t-0 !mt-0"
+                          {...props}
+                        >
+                          {String(children).replace(/\n$/, '')}
+                        </SyntaxHighlighter>
+                      </div>
+                    ) : (
+                      <code className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-300 dark:border-gray-600" {...props}>
+                        {children}
+                      </code>
+                    );
+                  }
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
             </div>
           )}
         </div>
 
         {/* Action Buttons */}
-        {!isUser && (
+        {isUser ? (
+          /* User Message Actions */
+          <div className="flex items-center gap-2 mt-2 flex-wrap justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCopy}
+              className="h-8 px-2 hover:bg-muted"
+              title="Copy message"
+            >
+              <Copy className="w-3 h-3" />
+            </Button>
+            
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                className="h-8 px-2 hover:bg-muted"
+                title="Edit and resend"
+              >
+                <Edit3 className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
+        ) : (
+          /* AI Message Actions */
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             {/* Voice Controls */}
             <VoiceControls 
@@ -332,6 +465,99 @@ function LoadingMessage({ selectedModel }: { selectedModel: string }) {
             <span className="text-sm text-muted-foreground">
               AI is generating a response...
             </span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function StreamingMessage({ 
+  selectedModel, 
+  streamingMessage, 
+  onStop 
+}: { 
+  selectedModel: string; 
+  streamingMessage: string; 
+  onStop?: () => void; 
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex gap-3"
+    >
+      {/* Avatar */}
+      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+        <Bot className="w-4 h-4 text-muted-foreground" />
+      </div>
+
+      {/* Streaming Content */}
+      <div className="flex-1 max-w-3xl">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm font-medium">{selectedModel}</span>
+          <Badge variant="outline" className="text-xs">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1" />
+            Streaming...
+          </Badge>
+          {onStop && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onStop}
+              className="h-6 px-2 text-xs hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+            >
+              <Square className="w-3 h-3 mr-1" />
+              Stop
+            </Button>
+          )}
+        </div>
+
+        <div className="bg-muted rounded-lg p-4 mr-12">
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <ReactMarkdown
+              components={{
+                code: ({ node, inline, className, children, ...props }) => {
+                  const match = /language-(\w+)/.exec(className || '');
+                  const language = match ? match[1] : '';
+                  
+                  return !inline && language ? (
+                    <div className="relative">
+                      {/* Language label */}
+                      <div className="flex items-center justify-between bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
+                        <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-300 uppercase">
+                          {language}
+                        </span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                          title="Copy code"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <SyntaxHighlighter
+                        style={document.documentElement.classList.contains('dark') ? oneDark : oneLight}
+                        language={language}
+                        PreTag="div"
+                        className="!rounded-t-none rounded-b-lg !bg-gray-100 dark:!bg-gray-800 !border !border-gray-300 dark:!border-gray-600 !border-t-0 !mt-0"
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    </div>
+                  ) : (
+                    <code className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-300 dark:border-gray-600" {...props}>
+                      {children}
+                    </code>
+                  );
+                }
+              }}
+            >
+              {streamingMessage}
+            </ReactMarkdown>
+            {/* Typing cursor */}
+            <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
           </div>
         </div>
       </div>

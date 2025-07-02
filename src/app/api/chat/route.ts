@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { routeRequest, validateModelAccess, getModelRouter } from '@/lib/model-router';
+import { routeRequest, validateModelAccess } from '@/lib/model-router';
 import { GenerateRequest } from '@/lib/providers/base';
 import { contextManager } from '@/lib/context/AdvancedContextManager';
 
@@ -16,10 +16,13 @@ interface ChatRequest {
   sessionId?: string;
   conversationId?: string;
   mode?: 'flash' | 'think' | 'ultra-think' | 'full-think';
+  stream?: boolean;
   files?: Array<{
     name: string;
     type: string;
     url: string;
+    content?: string;
+    mimeType?: string;
   }>;
 }
 
@@ -37,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body: ChatRequest = await req.json();
-    const { messages, model, sessionId, conversationId, mode, files } = body;
+    const { messages, model, sessionId, conversationId, mode, files, stream = false } = body;
 
     // Input validation
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -105,8 +108,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Process file attachments if any
-    let processedMessages = [...messages];
-    let attachedImages: any[] = [];
+    const processedMessages = [...messages];
+    const attachedImages: Array<{name: string; type: string; url: string; content?: string; mimeType?: string}> = [];
     
     if (files && files.length > 0) {
       console.log('📎 Processing attached files:', files.length);
@@ -115,13 +118,15 @@ export async function POST(req: NextRequest) {
       let messageContent = lastMessage.content;
       
       // Process different file types
-      files.forEach((file: any) => {
+      files.forEach((file) => {
         console.log('📄 Processing file:', file.name, file.type);
         
         if (file.type === 'image' && file.content) {
           // Collect images separately for vision model processing
           attachedImages.push({
             name: file.name,
+            type: 'image',
+            url: file.url || '',
             content: file.content,
             mimeType: file.mimeType || 'image/jpeg'
           });
@@ -168,32 +173,75 @@ export async function POST(req: NextRequest) {
       mode: mode || 'think',
       temperature: 0.7,
       maxTokens: mode === 'flash' ? 1000 : mode === 'ultra-think' ? 4000 : mode === 'full-think' ? 3000 : 2000,
-      attachedImages: attachedImages.length > 0 ? attachedImages : undefined
+      attachedImages: attachedImages.filter(img => img.content).map(img => ({
+        name: img.name,
+        content: img.content!,
+        mimeType: img.mimeType!
+      }))
     };
 
-    console.log('🧠 Using RAG-enhanced conversation context');
+    console.log('🧠 Using optimized conversation context');
     
-    // Get or create conversation context with RAG
-    const context = await contextManager.getOrCreateContext(
-      userId,
-      conversationId,
-      model
-    );
+    // Quick mode: Skip heavy RAG operations for faster response
+    const useQuickMode = mode === 'flash' || req.nextUrl.searchParams.get('quick') === 'true';
+    
+    let context;
+    let enhancedMessages = processedMessages;
+    
+    if (useQuickMode) {
+      // Fast path: minimal context processing
+      console.log('⚡ Quick mode: skipping heavy RAG operations');
+      const contextId = conversationId || `quick_${Date.now()}`;
+      context = { id: contextId };
+    } else {
+      // Full RAG processing (with timeout)
+      try {
+        const contextPromise = contextManager.getOrCreateContext(
+          userId,
+          conversationId,
+          model,
+          false // full RAG mode
+        );
+        
+        // Add timeout to prevent hanging
+        context = await Promise.race([
+          contextPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Context creation timeout')), 5000)
+          )
+        ]) as any;
 
-    // Add user message to context (triggers memory extraction)
-    const userMessage = processedMessages[processedMessages.length - 1];
-    if (userMessage.role === 'user') {
-      await contextManager.addMessage(context.id, {
-        role: 'user',
-        content: userMessage.content,
-        model: model
-      });
+        // Add user message to context (non-blocking)
+        const userMessage = processedMessages[processedMessages.length - 1];
+        if (userMessage.role === 'user') {
+          // Don't await this - let it run in background
+          contextManager.addMessage(context.id, {
+            role: 'user',
+            content: userMessage.content,
+            model: model
+          }).catch(error => console.warn('Background message add failed:', error));
+        }
+
+        // Get enhanced context with timeout
+        const enhancedPromise = contextManager.getContextForModel(context.id);
+        enhancedMessages = await Promise.race([
+          enhancedPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Context enhancement timeout')), 3000)
+          )
+        ]) as any;
+        
+        console.log('✅ RAG context enhanced with', enhancedMessages.length, 'messages');
+      } catch (error) {
+        console.warn('⚠️ RAG enhancement failed, using basic context:', error);
+        // Fallback to basic context
+        const contextId = conversationId || `fallback_${Date.now()}`;
+        context = { id: contextId };
+        enhancedMessages = processedMessages;
+      }
     }
 
-    // Get RAG-enhanced context for the model
-    const enhancedMessages = await contextManager.getContextForModel(context.id);
-
-    // Create enhanced request with RAG context
+    // Create enhanced request
     const enhancedRequest: GenerateRequest = {
       ...generateRequest,
       messages: enhancedMessages.map(msg => ({
@@ -204,39 +252,94 @@ export async function POST(req: NextRequest) {
 
     console.log('Routing request to model with RAG context:', model);
     
-    // Use our model router to generate the response
-    const aiResponse = await routeRequest(enhancedRequest);
+    if (stream) {
+      // Handle streaming response
+      console.log('🌊 Streaming response requested');
+      
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        async start(controller) {
+          try {
+            // Use our model router to generate the response
+            const aiResponse = await routeRequest(enhancedRequest);
+            
+            // Stream the response in larger chunks for better performance
+            const chunkSize = 20; // words per chunk
+            const words = aiResponse.content.split(' ');
+            
+            for (let i = 0; i < words.length; i += chunkSize) {
+              const chunk = words.slice(i, i + chunkSize).join(' ');
+              const separator = i + chunkSize < words.length ? ' ' : '';
+              
+              // Send chunk
+              controller.enqueue(encoder.encode(chunk + separator));
+              
+              // Small delay only for visual streaming effect (much faster)
+              if (i + chunkSize < words.length) {
+                await new Promise(resolve => setTimeout(resolve, 10));
+              }
+            }
+            
+            // Add assistant response to context after streaming (non-blocking)
+            if (!useQuickMode && context) {
+              contextManager.addMessage(context.id, {
+                role: 'assistant',
+                content: aiResponse.content,
+                model: model
+              }).catch(error => console.warn('Background context update failed:', error));
+            }
+            
+            controller.close();
+          } catch (error) {
+            console.error('Streaming error:', error);
+            controller.error(error);
+          }
+        }
+      });
 
-    // Add assistant response to context
-    await contextManager.addMessage(context.id, {
-      role: 'assistant',
-      content: aiResponse.content,
-      model: model
-    });
+      return new Response(readable, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Transfer-Encoding': 'chunked',
+        },
+      });
+    } else {
+      // Handle regular JSON response
+      const aiResponse = await routeRequest(enhancedRequest);
 
-    console.log('Model router response successful with RAG enhancement');
-
-    // Create response compatible with existing frontend
-    const response = {
-      id: aiResponse.id,
-      role: 'assistant' as const,
-      message: aiResponse.content, // Frontend expects 'message' field
-      content: aiResponse.content,
-      timestamp: new Date().toISOString(),
-      model: aiResponse.model,
-      tokens: aiResponse.usage.totalTokens,
-      cost: aiResponse.usage.estimatedCost,
-      sessionId: generateRequest.sessionId,
-      conversationId: context.id,
-      memoryEnhanced: true,
-      metadata: {
-        ...aiResponse.metadata,
-        ragEnabled: true,
-        contextId: context.id
+      // Add assistant response to context (non-blocking)
+      if (!useQuickMode && context) {
+        contextManager.addMessage(context.id, {
+          role: 'assistant',
+          content: aiResponse.content,
+          model: model
+        }).catch(error => console.warn('Background context update failed:', error));
       }
-    };
 
-    return NextResponse.json(response);
+      console.log('Model router response successful');
+
+      // Create response compatible with existing frontend
+      const response = {
+        id: aiResponse.id,
+        role: 'assistant' as const,
+        message: aiResponse.content, // Frontend expects 'message' field
+        content: aiResponse.content,
+        timestamp: new Date().toISOString(),
+        model: aiResponse.model,
+        tokens: aiResponse.usage.totalTokens,
+        cost: aiResponse.usage.estimatedCost,
+        sessionId: generateRequest.sessionId,
+        conversationId: context.id,
+        memoryEnhanced: !useQuickMode,
+        metadata: {
+          ...aiResponse.metadata,
+          ragEnabled: !useQuickMode,
+          contextId: context.id
+        }
+      };
+
+      return NextResponse.json(response);
+    }
 
   } catch (error) {
     console.error('Chat API Error:', error);
@@ -253,7 +356,7 @@ export async function POST(req: NextRequest) {
     
     // Check if it's a ProviderError with specific status code
     if (error && typeof error === 'object' && 'statusCode' in error && 'name' in error && error.name === 'ProviderError') {
-      const providerError = error as any;
+      const providerError = error as {statusCode?: number; message?: string};
       statusCode = providerError.statusCode || 500;
       
       // Use specific error messages based on status code

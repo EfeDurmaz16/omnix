@@ -8,10 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Download, Eye, Sparkles, Trash2 } from 'lucide-react';
+import { Loader2, Download, Eye, Sparkles, Trash2, Edit3, Save } from 'lucide-react';
 import { AI_MODELS } from '@/lib/constants';
 import { mockApi } from '@/lib/mock-api';
 import { GenerationResult } from '@/lib/types';
+import ImageEditor from '@/components/images/ImageEditor';
+import { StoredImage } from '@/lib/storage/CloudStorageService';
+import ImageVersionViewer from '@/components/images/ImageVersionViewer';
 
 export function ImageGenerator() {
   const { updateCredits } = useAuth();
@@ -24,8 +27,11 @@ export function ImageGenerator() {
   const [lastError, setLastError] = useState<string>('');
   const [imageModels, setImageModels] = useState<any[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
+  const [editingImage, setEditingImage] = useState<GenerationResult | null>(null);
+  const [savingToGallery, setSavingToGallery] = useState<string | null>(null);
+  const [autoSaveToGallery, setAutoSaveToGallery] = useState(true);
 
-  // Load available image models from API
+  // Load available image models and saved images from API
   useEffect(() => {
     const fetchImageModels = async () => {
       try {
@@ -51,7 +57,39 @@ export function ImageGenerator() {
       }
     };
 
+    const loadSavedImages = async () => {
+      try {
+        console.log('🔄 Loading saved images from storage...');
+        const response = await fetch('/api/images');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.images && data.images.length > 0) {
+            // Convert StoredImage[] to GenerationResult[] for display
+            const savedImages: GenerationResult[] = data.images.map((img: any) => ({
+              id: img.id,
+              type: 'image' as const,
+              content: img.editPrompt ? `Edited: ${img.editPrompt}` : `Generated with ${img.model}`,
+              url: img.url,
+              model: img.model,
+              prompt: img.editPrompt || img.prompt,
+              userId: img.userId,
+              tokensUsed: 10,
+              createdAt: new Date(img.createdAt),
+              // Include parent relationship for proper versioning
+              parentId: img.parentId
+            } as GenerationResult & { parentId?: string }));
+            
+            setGeneratedImages(savedImages);
+            console.log('✅ Loaded saved images:', savedImages.length);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load saved images:', error);
+      }
+    };
+
     fetchImageModels();
+    loadSavedImages();
   }, []);
 
   // Check if model is actually working or just a placeholder
@@ -125,7 +163,8 @@ export function ImageGenerator() {
           prompt: prompt,
           model: selectedModel,
           size: selectedSize,
-          quality: selectedModel === 'dall-e-3' ? selectedQuality : undefined
+          quality: selectedModel === 'dall-e-3' ? selectedQuality : undefined,
+          saveToGallery: autoSaveToGallery
         }),
       });
 
@@ -176,13 +215,24 @@ export function ImageGenerator() {
 
         console.log('🎯 Adding image to gallery:', result);
         setGeneratedImages(prev => {
+          // Avoid duplicates if image already exists
+          const exists = prev.find(img => img.id === result.id);
+          if (exists) {
+            console.log('📸 Image already exists in gallery, not adding duplicate');
+            return prev;
+          }
           const newImages = [result, ...prev];
           console.log('📸 Updated images array:', newImages.length, 'images');
           return newImages;
         });
         updateCredits(10);
         
-        console.log('✅ Image successfully added to gallery');
+        // Show success message based on auto-save setting
+        if (data.data.savedToGallery) {
+          console.log('✅ Image generated and saved to gallery - ready for editing!');
+        } else {
+          console.log('✅ Image generated successfully - use Save button to add to gallery');
+        }
       } else {
         console.error('❌ Invalid response format:', data);
         throw new Error('Invalid response format');
@@ -219,10 +269,152 @@ export function ImageGenerator() {
     alert('🗑️ Image deleted successfully!');
   };
 
+  const handleSaveToGallery = async (image: GenerationResult) => {
+    setSavingToGallery(image.id);
+    try {
+      const response = await fetch('/api/images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'store-generated',
+          prompt: image.prompt,
+          model: image.model,
+          imageUrl: image.url,
+          metadata: {
+            size: '1024x1024',
+            generatedAt: image.createdAt
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert('✅ Image saved to gallery! You can now edit it from the gallery.');
+      } else {
+        throw new Error('Failed to save image');
+      }
+    } catch (error) {
+      console.error('Failed to save image to gallery:', error);
+      alert('❌ Failed to save image to gallery. Please try again.');
+    } finally {
+      setSavingToGallery(null);
+    }
+  };
+
+  // Convert GenerationResult to StoredImage for editing
+  const convertToStoredImage = (image: GenerationResult): StoredImage => {
+    return {
+      id: image.id,
+      userId: image.userId || 'current-user',
+      prompt: image.prompt || '',
+      model: image.model || 'dall-e-3',
+      url: image.url || '',
+      thumbnailUrl: image.url,
+      width: 1024,
+      height: 1024,
+      size: undefined,
+      metadata: {},
+      isPublic: false,
+      tags: [],
+      parentId: undefined,
+      editPrompt: undefined,
+      editOperation: undefined,
+      version: 1,
+      createdAt: image.createdAt || new Date(),
+      updatedAt: image.createdAt || new Date()
+    };
+  };
+
+  const handleEditImage = (image: GenerationResult) => {
+    const storedImage = convertToStoredImage(image);
+    setEditingImage(image);
+  };
+
+  // Group images by their base/parent relationship for versioning
+  const groupImagesByBase = () => {
+    const imageGroups = new Map<string, { base: GenerationResult; versions: GenerationResult[] }>();
+    
+    // First pass: identify base images and create groups
+    generatedImages.forEach(image => {
+      const imageWithParent = image as GenerationResult & { parentId?: string };
+      const isEditedVersion = imageWithParent.parentId || (image.content && image.content.includes('Edited with'));
+      
+      if (!isEditedVersion && image && image.id && image.url) {
+        // This is a base image with valid data
+        if (!imageGroups.has(image.id)) {
+          imageGroups.set(image.id, {
+            base: image,
+            versions: []
+          });
+        }
+      }
+    });
+    
+    // Second pass: add edited versions to their respective groups
+    generatedImages.forEach(image => {
+      const imageWithParent = image as GenerationResult & { parentId?: string };
+      const parentId = imageWithParent.parentId;
+      
+      if (parentId && imageGroups.has(parentId)) {
+        imageGroups.get(parentId)!.versions.push(image);
+      } else if (image.content && image.content.includes('Edited with') && !parentId) {
+        // Fallback for older edited images without proper parentId
+        const potentialBaseId = getOriginalImageId(image);
+        if (imageGroups.has(potentialBaseId)) {
+          imageGroups.get(potentialBaseId)!.versions.push(image);
+        } else {
+          // Create a new group for orphaned edited images
+          if (!imageGroups.has(image.id)) {
+            imageGroups.set(image.id, {
+              base: image,
+              versions: []
+            });
+          }
+        }
+      }
+    });
+    
+    // Sort versions within each group by creation time
+    imageGroups.forEach(group => {
+      group.versions.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+    
+    return Array.from(imageGroups.values())
+      .sort((a, b) => {
+        // Sort by most recent activity (either base creation or latest version)
+        const aLatest = a.versions.length > 0 ? 
+          Math.max(new Date(a.base.createdAt).getTime(), new Date(a.versions[a.versions.length - 1].createdAt).getTime()) :
+          new Date(a.base.createdAt).getTime();
+        const bLatest = b.versions.length > 0 ?
+          Math.max(new Date(b.base.createdAt).getTime(), new Date(b.versions[b.versions.length - 1].createdAt).getTime()) :
+          new Date(b.base.createdAt).getTime();
+        return bLatest - aLatest;
+      });
+  };
+
+  // Helper function to extract original image ID from edited images
+  const getOriginalImageId = (image: GenerationResult): string => {
+    // This would need to be enhanced based on how you store parent relationships
+    // For now, using a simple heuristic
+    return image.id.split('-edit-')[0] || image.id;
+  };
+
+  // Convert GenerationResult to ImageVersion format
+  const convertToImageVersion = (image: GenerationResult, versionNumber: number) => ({
+    id: image.id,
+    url: image.url,
+    prompt: image.prompt,
+    editPrompt: image.content && image.content.includes('Edited with') ? 
+      image.prompt : undefined,
+    model: image.model,
+    createdAt: image.createdAt,
+    version: versionNumber
+  });
+
   return (
     <div className="space-y-6">
       {/* Generation Form */}
-      <Card>
+      <Card className="cultural-card">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Sparkles className="h-5 w-5" />
@@ -231,7 +423,7 @@ export function ImageGenerator() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Prompt</label>
+            <label className="text-sm font-medium cultural-text-primary">Prompt</label>
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -243,38 +435,38 @@ export function ImageGenerator() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Model Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Model</label>
-              <Select value={selectedModel} onValueChange={handleModelChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {imageModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex items-center space-x-2">
-                        <span>{model.name}</span>
-                        {isModelWorking(model.id) ? (
-                          <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                            ✅ Working
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800">
-                            🚧 Placeholder
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className="text-xs">
-                          10 credits
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                    <label className="text-sm font-medium cultural-text-primary">Model</label>
+                    <Select value={selectedModel} onValueChange={handleModelChange}>
+                      <SelectTrigger className="cultural-card">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="cultural-card">
+                        {imageModels.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            <div className="flex items-center space-x-2">
+                              <span>{model.name}</span>
+                              {isModelWorking(model.id) ? (
+                                <Badge variant="default">
+                                  ✅ Working
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">
+                                  🚧 Placeholder
+                                </Badge>
+                              )}
+                              <Badge variant="outline">
+                                10 credits
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
             {/* Size Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Size</label>
+              <label className="text-sm font-medium cultural-text-primary">Size</label>
               <Select value={selectedSize} onValueChange={setSelectedSize}>
                 <SelectTrigger>
                   <SelectValue />
@@ -292,7 +484,7 @@ export function ImageGenerator() {
             {/* Quality Selection (DALL-E 3 only) */}
             {selectedModel === 'dall-e-3' && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Quality</label>
+                <label className="text-sm font-medium cultural-text-primary">Quality</label>
                 <Select value={selectedQuality} onValueChange={setSelectedQuality}>
                   <SelectTrigger>
                     <SelectValue />
@@ -315,6 +507,20 @@ export function ImageGenerator() {
               </p>
             </div>
           )}
+
+          {/* Auto-save option */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="autoSaveToGallery"
+              checked={autoSaveToGallery}
+              onChange={(e) => setAutoSaveToGallery(e.target.checked)}
+              className="rounded"
+            />
+            <label htmlFor="autoSaveToGallery" className="text-sm text-muted-foreground">
+              Automatically save to gallery (enables editing)
+            </label>
+          </div>
 
           <div className="flex justify-end space-x-2">
             {/* Debug button - remove this after testing */}
@@ -361,88 +567,52 @@ export function ImageGenerator() {
         </CardContent>
       </Card>
 
-      {/* Generated Images Grid */}
+      {/* Generated Images Grid with Versioning */}
       {generatedImages.length > 0 && (
-        <Card>
+        <Card className="cultural-card">
           <CardHeader>
-            <CardTitle>Generated Images</CardTitle>
+            <CardTitle className="cultural-text-primary">Generated Images</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {generatedImages.map((image) => (
-                <div key={image.id} className="group relative">
-                  <div className="aspect-square overflow-hidden rounded-lg border bg-muted">
-                    <img
-                      src={image.url}
-                      alt={image.prompt}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                  </div>
-                  
-                  {/* Overlay with actions */}
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center space-x-2">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button size="icon" variant="secondary">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl">
-                        <DialogTitle>Generated Image Preview</DialogTitle>
-                        <div className="space-y-4">
-                          <img
-                            src={image.url}
-                            alt={image.prompt}
-                            className="w-full rounded-lg"
-                          />
-                          <div>
-                            <h3 className="font-medium">Prompt</h3>
-                            <p className="text-sm text-muted-foreground">{image.prompt}</p>
-                            <div className="flex items-center justify-between mt-2">
-                              <Badge variant="outline">{AI_MODELS.find(m => m.id === image.model)?.name}</Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {new Date(image.createdAt).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      onClick={() => handleDownload(image.url!, image.prompt)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      onClick={() => handleDeleteImage(image.id)}
-                      title="Delete image"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-
-                  {/* Prompt preview */}
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {image.prompt}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
-                      <Badge variant="outline" className="text-xs">
-                        {AI_MODELS.find(m => m.id === image.model)?.name}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(image.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {groupImagesByBase()
+                .filter(group => group.base && group.base.id && group.base.url) // Filter out invalid groups
+                .map((imageGroup) => {
+                const versions = imageGroup.versions
+                  .filter(version => version && version.id && version.url) // Filter out invalid versions
+                  .map((version, index) => 
+                    convertToImageVersion(version, index + 2)
+                  );
+                
+                return (
+                  <ImageVersionViewer
+                    key={imageGroup.base.id}
+                    baseImage={imageGroup.base}
+                    versions={versions}
+                    onEdit={(version) => {
+                      // Find the GenerationResult that matches this version
+                      const imageToEdit = version.version === 1 ? 
+                        imageGroup.base : 
+                        imageGroup.versions[version.version - 2];
+                      handleEditImage(imageToEdit);
+                    }}
+                    onDownload={(version) => {
+                      handleDownload(version.url, version.prompt);
+                    }}
+                    onDelete={(versionId) => {
+                      handleDeleteImage(versionId);
+                    }}
+                    onSaveToGallery={(version) => {
+                      // Find the GenerationResult that matches this version
+                      const imageToSave = version.version === 1 ? 
+                        imageGroup.base : 
+                        imageGroup.versions[version.version - 2];
+                      handleSaveToGallery(imageToSave);
+                    }}
+                    isSaving={savingToGallery === imageGroup.base.id}
+                  />
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -450,15 +620,52 @@ export function ImageGenerator() {
 
       {/* Empty State */}
       {generatedImages.length === 0 && !loading && (
-        <Card>
+        <Card className="cultural-card">
           <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">
+            <div className="text-center cultural-text-muted">
               <Sparkles className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">No images generated yet</p>
               <p className="text-sm">Create your first AI-generated image above.</p>
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Image Editor Modal */}
+      {editingImage && (
+        <ImageEditor
+          image={convertToStoredImage(editingImage)}
+          onClose={() => setEditingImage(null)}
+          onSave={(editedImage) => {
+            // Convert the StoredImage back to GenerationResult for display
+            const newGenerationResult: GenerationResult = {
+              id: editedImage.id,
+              type: 'image',
+              content: `Edited with ${editedImage.model}`,
+              url: editedImage.url,
+              model: editedImage.model,
+              prompt: editedImage.editPrompt || editedImage.prompt,
+              userId: editedImage.userId,
+              tokensUsed: 10, // Default token usage for edits
+              createdAt: editedImage.createdAt,
+              // Add parent relationship for versioning
+              parentId: editedImage.parentId
+            } as GenerationResult & { parentId?: string };
+            
+            // Add the edited image to the gallery (avoid duplicates)
+            setGeneratedImages(prev => {
+              const exists = prev.find(img => img.id === newGenerationResult.id);
+              if (exists) {
+                return prev; // Don't add if already exists
+              }
+              return [newGenerationResult, ...prev];
+            });
+            setEditingImage(null);
+            
+            console.log('✅ Edited image added to gallery:', newGenerationResult);
+            alert('✅ Image edited successfully! The new version has been added to your gallery.');
+          }}
+        />
       )}
     </div>
   );

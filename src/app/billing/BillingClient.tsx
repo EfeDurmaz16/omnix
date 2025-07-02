@@ -2,14 +2,50 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
-import { STRIPE_PRICE_IDS } from '../../../stripe-prices.generated';
+import { enhancedCreditManager } from '@/lib/credits/EnhancedCreditManager';
+// Import with try-catch to handle potential module loading issues
+let STRIPE_PRICE_IDS: any = {};
+try {
+  const stripeModule = require('../../../stripe-prices.generated');
+  STRIPE_PRICE_IDS = stripeModule.STRIPE_PRICE_IDS || {};
+} catch (error) {
+  console.warn('Failed to load Stripe price IDs:', error);
+  // Fallback price IDs
+  STRIPE_PRICE_IDS = {
+    student_monthly: 'price_fallback_student_monthly',
+    pro_monthly: 'price_fallback_pro_monthly',
+    team_monthly: 'price_fallback_team_monthly',
+    enterprise_monthly: 'price_fallback_enterprise_monthly',
+    credits_5: 'price_fallback_credits_5',
+    credits_15: 'price_fallback_credits_15',
+    credits_40: 'price_fallback_credits_40',
+    credits_100: 'price_fallback_credits_100',
+  };
+}
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Crown, Zap, Users, Building2, CreditCard, DollarSign } from 'lucide-react';
 
 export default function BillingClient() {
-  const { user, addCredits, usageStats } = useAuth();
+  // Add safety check for useAuth hook
+  let authContext;
+  try {
+    authContext = useAuth();
+  } catch (error) {
+    console.error('Auth context error:', error);
+    // Return loading state if auth context fails
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading billing information...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  const { user, addCredits, usageStats } = authContext;
   const [currentPlan, setCurrentPlan] = useState<string>('pro'); // Default plan
   const [loading, setLoading] = useState<string | null>(null);
 
@@ -37,41 +73,91 @@ export default function BillingClient() {
     }
   }, []);
 
-  const handleCreditPurchaseSuccess = () => {
+  const handleCreditPurchaseSuccess = async () => {
     // Get the actual credit amount from localStorage
     const pendingCredits = localStorage.getItem('pendingCreditPurchase');
     const creditAmount = pendingCredits ? parseInt(pendingCredits) : 100;
     
     console.log('🎉 Credit purchase success! Adding credits:', creditAmount);
-    console.log('🎉 Current auth state:', { user: !!user, usageStats: !!usageStats });
+    console.log('🔍 Current user context:', { user: !!user, userId: user?.id });
+    
+    // Store user ID in sessionStorage if available
+    if (user?.id) {
+      sessionStorage.setItem('clerk-user-id', user.id);
+      console.log('💾 Stored user ID in sessionStorage:', user.id);
+    }
     
     // Clear the pending purchase
     localStorage.removeItem('pendingCreditPurchase');
     
-    // Show success message
-    alert(`🎉 Credits purchased successfully! ${creditAmount} credits have been added to your account.`);
-    
-    // Multiple attempts to ensure user context is ready
-    const attemptCreditAddition = (attempts = 0) => {
-      if (attempts > 10) {
-        console.error('❌ Failed to add credits after 10 attempts');
-        alert('Credits purchased but there was an issue adding them. Please refresh the page.');
-        return;
+    try {
+      // Use the enhanced credit manager for reliable credit addition
+      console.log('💳 Using EnhancedCreditManager for reliable credit addition...');
+      const success = await enhancedCreditManager.handleStripePurchase(creditAmount);
+      
+      if (success) {
+        console.log('✅ Credits added successfully via CreditManager');
+        alert(`🎉 Credits purchased successfully! ${creditAmount} credits have been added to your account.`);
+        
+        // Try to also update the auth context if available
+        if (user && usageStats && addCredits) {
+          console.log('🔄 Also updating auth context...');
+          try {
+            addCredits(creditAmount);
+          } catch (error) {
+            console.warn('Could not update auth context, but credits were added via CreditManager:', error);
+          }
+        }
+        
+        // Refresh the page to ensure UI is updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        
+      } else {
+        console.error('❌ EnhancedCreditManager failed to add credits');
+        throw new Error('EnhancedCreditManager failed');
       }
       
-      if (user && usageStats) {
-        console.log(`🕐 Attempt ${attempts + 1}: Adding credits now`);
-        addCredits(creditAmount);
+    } catch (error) {
+      console.error('❌ Error in credit addition:', error);
+      
+      // Ultimate fallback - direct localStorage manipulation
+      console.log('🚨 Using ultimate fallback...');
+      let userId = null;
+      
+      // Try to get user ID from any source
+      if (typeof window !== 'undefined' && (window as any).Clerk?.user?.id) {
+        userId = (window as any).Clerk.user.id;
+      } else if (user?.id) {
+        userId = user.id;
       } else {
-        console.log(`🕐 Attempt ${attempts + 1}: User context not ready, retrying...`);
-        setTimeout(() => attemptCreditAddition(attempts + 1), 500);
+        // Look for existing credit entries in localStorage
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith('aspendos_credits_')) {
+            userId = key.replace('aspendos_credits_', '');
+            break;
+          }
+        }
       }
-    };
-    
-    // Start the credit addition process
-    attemptCreditAddition();
-    
-    console.log('✅ Credits addition process started');
+      
+      if (userId) {
+        const currentCredits = parseInt(localStorage.getItem(`aspendos_credits_${userId}`) || '1500');
+        const newCredits = currentCredits + creditAmount;
+        localStorage.setItem(`aspendos_credits_${userId}`, newCredits.toString());
+        
+        console.log('💾 Ultimate fallback success:', currentCredits, '→', newCredits);
+        alert(`✅ Credits purchased! Added ${creditAmount} credits. Please refresh the page to see the update.`);
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        console.error('❌ Could not determine user ID for credit addition');
+        alert(`❌ Credits purchased but could not be added automatically. Please contact support with your purchase details. Credit amount: ${creditAmount}`);
+      }
+    }
   };
 
   const plans = [
@@ -212,12 +298,12 @@ export default function BillingClient() {
     try {
       setLoading(`credits-${amount}`);
       
-      // Map amount to priceId and credit amount
+      // Map amount to priceId and credit amount (INCLUDING BONUS)
       const creditPackages = [
-        { amount: 5, priceId: STRIPE_PRICE_IDS.credits_5, credits: 100 },
-        { amount: 15, priceId: STRIPE_PRICE_IDS.credits_15, credits: 350 },
-        { amount: 40, priceId: STRIPE_PRICE_IDS.credits_40, credits: 1000 },
-        { amount: 100, priceId: STRIPE_PRICE_IDS.credits_100, credits: 2500 }
+        { amount: 5, priceId: STRIPE_PRICE_IDS.credits_5, credits: 100, bonus: 0 },
+        { amount: 15, priceId: STRIPE_PRICE_IDS.credits_15, credits: 350, bonus: 50 },
+        { amount: 40, priceId: STRIPE_PRICE_IDS.credits_40, credits: 1000, bonus: 200 },
+        { amount: 100, priceId: STRIPE_PRICE_IDS.credits_100, credits: 2500, bonus: 500 }
       ];
       
       const package_ = creditPackages.find(p => p.amount === amount);
@@ -225,8 +311,10 @@ export default function BillingClient() {
         throw new Error('Invalid credit amount');
       }
       
-      // Store the credit amount for when the user returns from Stripe
-      localStorage.setItem('pendingCreditPurchase', package_.credits.toString());
+      // Store the TOTAL credit amount (base + bonus) for when the user returns from Stripe
+      const totalCredits = package_.credits + package_.bonus;
+      localStorage.setItem('pendingCreditPurchase', totalCredits.toString());
+      console.log(`💰 Storing pending purchase: ${package_.credits} base + ${package_.bonus} bonus = ${totalCredits} total credits`);
       
       // Call the real Stripe checkout API for credits
       const response = await fetch('/api/billing/create-checkout', {
@@ -410,7 +498,7 @@ export default function BillingClient() {
                 <div className="text-sm text-muted-foreground">
                   {pack.credits} credits
                   {pack.bonus > 0 && (
-                    <div className="cultural-text-accent font-medium">
+                    <div className="font-bold text-foreground opacity-90">
                       +{pack.bonus} bonus!
                     </div>
                   )}

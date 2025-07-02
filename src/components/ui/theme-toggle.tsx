@@ -28,7 +28,7 @@ export function ThemeToggle() {
           <span className="hidden sm:inline">{currentTheme?.name}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-48 cultural-card">
         {availableThemes.map((themeOption) => {
           const Icon = themeOption.icon;
           return (

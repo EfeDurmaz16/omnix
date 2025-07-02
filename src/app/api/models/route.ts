@@ -115,6 +115,136 @@ export async function GET() {
             { type: 'image-analysis' as const, supported: true },
             { type: 'function-calling' as const, supported: true }
           ]
+        },
+        // Image generation models
+        {
+          id: 'dall-e-3',
+          name: 'DALL-E 3',
+          provider: 'openai',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.04,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'high-quality-generation' as const, supported: true }
+          ]
+        },
+        {
+          id: 'dall-e-2',
+          name: 'DALL-E 2',
+          provider: 'openai',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.02,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true }
+          ]
+        },
+        {
+          id: 'gpt-image-1',
+          name: 'GPT-Image-1',
+          provider: 'openai',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.05,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'image-editing' as const, supported: true },
+            { type: 'inpainting' as const, supported: true },
+            { type: 'outpainting' as const, supported: true }
+          ]
+        },
+        {
+          id: 'gpt-4-vision',
+          name: 'GPT-4 Vision',
+          provider: 'openai',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.01,
+          outputCostPer1kTokens: 0.03,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'image-analysis' as const, supported: true },
+            { type: 'image-editing' as const, supported: true }
+          ]
+        },
+        {
+          id: 'midjourney-v6',
+          name: 'Midjourney v6',
+          provider: 'midjourney',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.05,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'artistic-generation' as const, supported: true },
+            { type: 'style-transfer' as const, supported: true }
+          ]
+        },
+        {
+          id: 'midjourney-v5.2',
+          name: 'Midjourney v5.2',
+          provider: 'midjourney',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.04,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'artistic-generation' as const, supported: true }
+          ]
+        },
+        {
+          id: 'midjourney-niji',
+          name: 'Midjourney Niji (Anime)',
+          provider: 'midjourney',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.045,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'anime-generation' as const, supported: true }
+          ]
+        },
+        {
+          id: 'stable-diffusion-xl',
+          name: 'Stable Diffusion XL',
+          provider: 'stability',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.03,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'high-resolution' as const, supported: true }
+          ]
+        },
+        {
+          id: 'stable-diffusion-3',
+          name: 'Stable Diffusion 3',
+          provider: 'stability',
+          type: 'image' as const,
+          contextWindow: 4000,
+          inputCostPer1kTokens: 0.035,
+          outputCostPer1kTokens: 0,
+          maxTokens: 0,
+          capabilities: [
+            { type: 'image-generation' as const, supported: true },
+            { type: 'text-rendering' as const, supported: true }
+          ]
         }
       ];
       

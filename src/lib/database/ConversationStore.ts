@@ -55,19 +55,24 @@ export class ConversationStore {
    */
   async storeConversation(context: ConversationContext): Promise<void> {
     try {
+      const metadata: any = {
+        currentModel: context.metadata.currentModel,
+        startedAt: context.metadata.startedAt.toISOString(),
+        lastActivity: context.metadata.lastActivity.toISOString(),
+        tokenCount: context.metadata.tokenCount,
+        messageCount: context.messages.length,
+      };
+      
+      if (context.metadata.summary !== undefined) {
+        metadata.summary = context.metadata.summary;
+      }
+
       const storedConversation: StoredConversation = {
         id: context.id,
         userId: context.userId,
         title: context.title,
         messages: context.messages.map(this.messageToStored),
-        metadata: {
-          currentModel: context.metadata.currentModel,
-          startedAt: context.metadata.startedAt.toISOString(),
-          lastActivity: context.metadata.lastActivity.toISOString(),
-          tokenCount: context.metadata.tokenCount,
-          summary: context.metadata.summary,
-          messageCount: context.messages.length,
-        },
+        metadata,
         settings: context.settings,
         createdAt: context.metadata.startedAt.toISOString(),
         updatedAt: new Date().toISOString(),
@@ -102,7 +107,7 @@ export class ConversationStore {
   }
 
   /**
-   * Get all conversations for a user with pagination
+   * Get all conversations for a user with pagination (OPTIMIZED)
    */
   async getUserConversations(
     userId: string, 
@@ -113,52 +118,52 @@ export class ConversationStore {
     total: number;
     hasMore: boolean;
   }> {
+    const startTime = performance.now();
+    
     try {
-      // Get total count
-      const countQuery = await this.db
+      // Skip count query for better performance - estimate from actual results
+      console.log(`🔍 Fetching conversations for user ${userId} (limit: ${limit}, offset: ${offset})`);
+
+      // Get conversations with a slightly higher limit to check if there are more
+      const query = this.db
         .collection(this.COLLECTION)
         .where('userId', '==', userId)
-        .count()
-        .get();
-      
-      const total = countQuery.data().count;
-
-      // Get conversations with pagination
-      let query = this.db
-        .collection(this.COLLECTION)
-        .where('userId', '==', userId)
-        .orderBy('metadata.lastActivity', 'desc')
-        .limit(limit);
-
-      if (offset > 0) {
-        // For offset-based pagination, we need to use startAfter with a document
-        const offsetQuery = await this.db
-          .collection(this.COLLECTION)
-          .where('userId', '==', userId)
-          .orderBy('metadata.lastActivity', 'desc')
-          .limit(offset)
-          .get();
-        
-        if (!offsetQuery.empty) {
-          const lastDoc = offsetQuery.docs[offsetQuery.docs.length - 1];
-          query = query.startAfter(lastDoc);
-        }
-      }
+        .limit(limit + 1); // Get one extra to check hasMore
 
       const querySnapshot = await query.get();
       
-      const conversations = querySnapshot.docs.map(doc => {
+      const fetchTime = performance.now() - startTime;
+      console.log(`📄 Fetched ${querySnapshot.docs.length} documents in ${fetchTime.toFixed(2)}ms`);
+      
+      // Sort in memory by lastActivity (most recent first)
+      const sortedDocs = querySnapshot.docs.sort((a, b) => {
+        const aData = a.data() as StoredConversation;
+        const bData = b.data() as StoredConversation;
+        const aTime = new Date(aData.metadata?.lastActivity || 0).getTime();
+        const bTime = new Date(bData.metadata?.lastActivity || 0).getTime();
+        return bTime - aTime;
+      });
+
+      // Apply pagination and check if there are more results
+      const hasMore = sortedDocs.length > limit;
+      const paginatedDocs = sortedDocs.slice(offset, offset + limit);
+      
+      const conversations = paginatedDocs.map(doc => {
         const data = doc.data() as StoredConversation;
         return this.storedToContext(data);
       });
 
+      const totalTime = performance.now() - startTime;
+      console.log(`✅ Conversation query completed in ${totalTime.toFixed(2)}ms: ${conversations.length} conversations`);
+
       return {
         conversations,
-        total,
-        hasMore: offset + conversations.length < total
+        total: hasMore ? limit + 1 : conversations.length, // Estimate total
+        hasMore
       };
     } catch (error) {
-      console.error('Failed to get user conversations:', error);
+      const totalTime = performance.now() - startTime;
+      console.error(`❌ Conversation query failed after ${totalTime.toFixed(2)}ms:`, error);
       return { conversations: [], total: 0, hasMore: false };
     }
   }
@@ -366,15 +371,27 @@ export class ConversationStore {
    * Convert context format to stored format
    */
   private messageToStored(message: ContextMessage): StoredMessage {
-    return {
+    const stored: any = {
       id: message.id,
       role: message.role,
       content: message.content,
       timestamp: message.timestamp.toISOString(),
-      model: message.model,
-      tokenCount: message.tokenCount,
-      metadata: message.metadata,
     };
+    
+    // Only include model if it's defined (Firestore doesn't accept undefined)
+    if (message.model !== undefined) {
+      stored.model = message.model;
+    }
+    
+    if (message.tokenCount !== undefined) {
+      stored.tokenCount = message.tokenCount;
+    }
+    
+    if (message.metadata !== undefined) {
+      stored.metadata = message.metadata;
+    }
+    
+    return stored;
   }
 
   /**

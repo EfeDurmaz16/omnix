@@ -87,6 +87,26 @@ export class ModelRouter {
         console.warn('⚠️ WAVESPEED_API_KEY not set, Wavespeed models unavailable');
       }
 
+      // Initialize Stable Diffusion provider
+      try {
+        const { StableDiffusionProvider } = await import('./providers/stable-diffusion');
+        const sdProvider = new StableDiffusionProvider();
+        this.providers.set('stability', sdProvider);
+        console.log('✅ Stable Diffusion provider initialized');
+      } catch (error) {
+        console.warn('⚠️ Stable Diffusion provider failed to initialize:', error);
+      }
+
+      // Initialize Midjourney provider
+      try {
+        const { MidjourneyProvider } = await import('./providers/midjourney');
+        const mjProvider = new MidjourneyProvider();
+        this.providers.set('midjourney', mjProvider);
+        console.log('✅ Midjourney provider initialized');
+      } catch (error) {
+        console.warn('⚠️ Midjourney provider failed to initialize:', error);
+      }
+
       // Note: Azure OpenAI provider removed - using OpenAI direct API instead
 
       // TODO: Initialize other providers
@@ -229,6 +249,8 @@ export class ModelRouter {
     model: string;
     size?: string;
     quality?: string;
+    sourceImage?: string; // Base64 data URL or URL of source image for image-to-image
+    editType?: 'variation' | 'inpaint' | 'outpaint';
   }): Promise<{
     id: string;
     url: string;

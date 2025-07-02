@@ -90,10 +90,10 @@ export async function POST(request: NextRequest) {
       url: session.url,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Stripe checkout error:', error);
     return NextResponse.json(
-      { error: 'Failed to create checkout session', details: error.message },
+      { error: 'Failed to create checkout session', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

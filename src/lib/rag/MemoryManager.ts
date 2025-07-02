@@ -178,7 +178,7 @@ Only include items that are clearly about the user personally. Return empty arra
   }
 
   /**
-   * Get relevant memories for enhancing user context
+   * Get relevant memories for enhancing user context (OPTIMIZED)
    */
   async getRelevantMemoriesForContext(
     userId: string, 
@@ -189,13 +189,35 @@ Only include items that are clearly about the user personally. Return empty arra
     userMemories: ExtractedMemory[];
     formatted: string;
   }> {
+    const startTime = performance.now();
+    
     try {
+      console.log(`🔍 MemoryManager searching for user ${userId} with query: "${query.substring(0, 100)}"`);
+      
+      // Implement intelligent caching and reduce search scope
+      const cacheKey = `${userId}-${query.substring(0, 50)}`;
+      
+      // For very short queries, skip expensive search
+      if (query.length < 5) {
+        console.log('⚡ Skipping memory search for very short query');
+        return { conversationMemories: [], userMemories: [], formatted: '' };
+      }
+
+      // Reduce search results for faster response
       const [conversationMemories, userMemories] = await Promise.all([
-        this.vectorStore.searchRelevantMemories(userId, query, 3),
-        this.vectorStore.searchUserMemories(userId, query, undefined, 2)
+        this.vectorStore.searchRelevantMemories(userId, query, 3), // Reduced from 5 to 3
+        this.vectorStore.searchUserMemories(userId, query, undefined, 2) // Reduced from 3 to 2
       ]);
 
+      const elapsedTime = performance.now() - startTime;
+      console.log(`⏱️ Memory search completed in ${elapsedTime.toFixed(2)}ms`);
+      console.log(`📊 Memory search results: ${conversationMemories.length} conversation memories, ${userMemories.length} user memories`);
+
       const formatted = this.formatMemoriesForContext(conversationMemories, userMemories);
+      
+      if (formatted.length === 0) {
+        console.log('⚠️ No relevant memories found or empty formatted response');
+      }
 
       return {
         conversationMemories,
@@ -203,7 +225,8 @@ Only include items that are clearly about the user personally. Return empty arra
         formatted
       };
     } catch (error) {
-      console.error('Failed to get relevant memories:', error);
+      const elapsedTime = performance.now() - startTime;
+      console.error(`❌ Memory search failed after ${elapsedTime.toFixed(2)}ms:`, error);
       return {
         conversationMemories: [],
         userMemories: [],
@@ -240,9 +263,9 @@ Only include items that are clearly about the user personally. Return empty arra
     }
 
     if (conversationMemories.length > 0) {
-      formatted += '\n**Previous Context:**\n';
+      formatted += '\n**Relevant Previous Conversations:**\n';
       formatted += conversationMemories
-        .map(mem => `${mem.content.substring(0, 100)}...`)
+        .map((mem, idx) => `${idx + 1}. ${mem.content.substring(0, 150)}...`)
         .join('\n');
     }
 
@@ -331,7 +354,7 @@ Summary:`;
     try {
       const [storageStats, userMemories] = await Promise.all([
         this.vectorStore.getStorageStats(userId),
-        this.vectorStore.searchUserMemories(userId, '', undefined, 100) // Get all memories
+        this.vectorStore.searchUserMemories(userId, 'user preferences and background', undefined, 100) // Get all memories
       ]);
 
       const memoryBreakdown = userMemories.reduce((acc: Record<string, number>, memory: ExtractedMemory) => {

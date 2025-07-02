@@ -37,25 +37,25 @@
   /* Aegean Theme - Mediterranean inspired */
   .aegean, .light {
     /* Mediterranean Core Colors */
-    --background: #F8FAFC;
-    --foreground: #1E293B;              /* Darker text for better readability */
+    --background: #FAFBFC;
+    --foreground: #0A0F1C;              /* Even darker text for maximum contrast */
     --card: #FFFFFF;
-    --card-foreground: #0F172A;         /* Much darker card text for better contrast */
+    --card-foreground: #0A0F1C;         /* Even darker card text for maximum contrast */
     --popover: #FFFFFF;
-    --popover-foreground: #0F172A;      /* Much darker popover text */
-    --primary: #004A7C;
+    --popover-foreground: #0A0F1C;      /* Even darker popover text */
+    --primary: #003D6B;
     --primary-foreground: #FFFFFF;
-    --secondary: #CC5500;
+    --secondary: #B8490B;
     --secondary-foreground: #FFFFFF;
-    --muted: #F1F5F9;
-    --muted-foreground: #334155;        /* Much darker muted text */
-    --accent: #708238;
+    --muted: #F0F4F8;
+    --muted-foreground: #1A252F;        /* Much darker muted text for better visibility */
+    --accent: #5D6F2D;
     --accent-foreground: #FFFFFF;
-    --destructive: #EF4444;
+    --destructive: #DC2626;
     --destructive-foreground: #FFFFFF;
-    --border: #E2E8F0;
+    --border: #B0BEC5;                  /* Darker border for better visibility */
     --input: #FFFFFF;
-    --ring: #004A7C;
+    --ring: #003D6B;
     --radius: 0.5rem;
     
     /* Aegean Custom Colors */
@@ -76,25 +76,25 @@
   /* Karadeniz Theme - Black Sea inspired (Dark replacement) */
   .karadeniz, .dark {
     /* Black Sea Core Colors */
-    --background: #0F172A;
-    --foreground: #F8FAFC;              /* Light text for dark background */
-    --card: #1E293B;
-    --card-foreground: #F1F5F9;         /* Very light card text */
-    --popover: #1E293B;
-    --popover-foreground: #F1F5F9;      /* Very light popover text */
-    --primary: #48BB78;
-    --primary-foreground: #0F172A;
-    --secondary: #2F5F2F;
-    --secondary-foreground: #F8FAFC;     /* Light text on secondary */
+    --background: #0B1426;
+    --foreground: #FFFFFF;              /* Pure white text for maximum contrast */
+    --card: #1E2A3B;
+    --card-foreground: #FFFFFF;         /* Pure white card text for maximum contrast */
+    --popover: #1E2A3B;
+    --popover-foreground: #FFFFFF;      /* Pure white popover text */
+    --primary: #4ADE80;
+    --primary-foreground: #0B1426;
+    --secondary: #34D399;
+    --secondary-foreground: #0B1426;     /* Dark text on light secondary */
     --muted: #334155;
-    --muted-foreground: #E2E8F0;        /* Very light muted text for contrast */
-    --accent: #8B6B47;
-    --accent-foreground: #F8FAFC;       /* Light text on accent */
-    --destructive: #EF4444;
-    --destructive-foreground: #FFFFFF;
-    --border: #334155;
-    --input: #1E293B;
-    --ring: #48BB78;
+    --muted-foreground: #F1F5F9;        /* Near-white muted text for maximum contrast */
+    --accent: #A78BFA;
+    --accent-foreground: #0B1426;       /* Dark text on light accent */
+    --destructive: #F87171;
+    --destructive-foreground: #0B1426;
+    --border: #475569;                  /* Much lighter border for better visibility */
+    --input: #334155;                   /* Lighter input background */
+    --ring: #4ADE80;
     --radius: 0.375rem;
     
     /* Karadeniz Custom Colors */
@@ -1010,12 +1010,97 @@ textarea:focus-visible {
 
 /* Improve header visibility in Aegean */
 .aegean h1, .aegean h2, .aegean h3, .aegean h4, .aegean h5, .aegean h6 {
-  color: var(--aegean-deep) !important;
+  color: #0A0F1C !important;
   font-weight: 700;
+  text-shadow: none;
 }
 
 .aegean .cultural-text-primary {
-  color: var(--aegean-deep) !important;
+  color: #0A0F1C !important;
+}
+
+/* Better text contrast in Aegean */
+.aegean .text-gray-600,
+.aegean .text-gray-700,
+.aegean .text-gray-500,
+.aegean .text-gray-400 {
+  color: #1A252F !important;
+}
+
+.aegean .text-muted-foreground {
+  color: #1A252F !important;
+}
+
+.aegean .cultural-text-muted {
+  color: #1A252F !important;
+}
+
+/* Better contrast for landing page elements in Aegean */
+.aegean .text-white {
+  color: #0A0F1C !important;
+}
+
+.aegean .text-muted-foreground {
+  color: #1A252F !important;
+}
+
+.aegean .text-gray-300 {
+  color: #1A252F !important;
+}
+
+.aegean .text-gray-400 {
+  color: #1A252F !important;
+}
+
+.aegean .text-blue-400 {
+  color: #003D6B !important;
+}
+
+.aegean .bg-gray-800 {
+  background-color: #FFFFFF !important;
+}
+
+.aegean .bg-gray-700\/50 {
+  background-color: rgba(240, 244, 248, 0.9) !important;
+}
+
+.aegean .border-gray-700,
+.aegean .border-gray-600 {
+  border-color: #B0BEC5 !important;
+}
+
+/* Improve button visibility in Aegean */
+.aegean .bg-gray-700:hover {
+  background-color: #F0F4F8 !important;
+}
+
+.aegean .hover\:bg-gray-600:hover {
+  background-color: #E2E8F0 !important;
+}
+
+.aegean .bg-blue-600\/20 {
+  background-color: rgba(0, 61, 107, 0.1) !important;
+}
+
+.aegean .text-blue-400 {
+  color: #003D6B !important;
+}
+
+.aegean .border-blue-600\/30 {
+  border-color: rgba(0, 61, 107, 0.2) !important;
+}
+
+/* Fix landing page card backgrounds */
+.aegean .cultural-card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid #B0BEC5 !important;
+  color: #0A0F1C !important;
+}
+
+.aegean .cultural-accent {
+  background: rgba(240, 244, 248, 0.9) !important;
+  border: 1px solid #B0BEC5 !important;
+  color: #0A0F1C !important;
 }
 
 /* Karadeniz Theme Utilities */
@@ -1052,13 +1137,35 @@ textarea:focus-visible {
 
 /* Improve header visibility in Karadeniz */
 .karadeniz h1, .karadeniz h2, .karadeniz h3, .karadeniz h4, .karadeniz h5, .karadeniz h6 {
-  color: var(--snow-peak) !important;
+  color: #F8FAFC !important;
   font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .karadeniz .cultural-text-primary {
-  color: var(--snow-peak) !important;
+  color: #F8FAFC !important;
+}
+
+/* Better visibility for Karadeniz components */
+.karadeniz .border-l-blue-500 {
+  border-left-color: #4ADE80 !important;
+}
+
+.karadeniz .bg-gray-100 {
+  background-color: #2A3441 !important;
+}
+
+.karadeniz .bg-gray-700\/50 {
+  background-color: #1A2332 !important;
+}
+
+.karadeniz .text-gray-400 {
+  color: #E2E8F0 !important;
+}
+
+.karadeniz .border-gray-700,
+.karadeniz .border-gray-600 {
+  border-color: #3B4B5C !important;
 }
 
 /* Göbekli Tepe Theme Utilities */
@@ -1101,12 +1208,25 @@ textarea:focus-visible {
   color: var(--foreground) !important;
 }
 
+.cultural-text-muted {
+  color: var(--muted-foreground) !important;
+}
+
 .cultural-text-accent {
   color: var(--accent-foreground) !important;
 }
 
 .cultural-border {
   border-color: var(--border) !important;
+}
+
+.cultural-primary {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+.cultural-primary-hover:hover {
+  opacity: 0.9;
 }
 
 .cultural-gradient-bg {
@@ -1143,4 +1263,216 @@ div[id^="radix-"] .border-t.border-border.bg-background {
 
 div[id^="radix-"] .p-4.space-y-3 {
   background: var(--card) !important;
+}
+
+/* Fix form field focus and z-index issues */
+.cultural-card input,
+.cultural-card textarea,
+.cultural-card select {
+  position: relative;
+  z-index: 10;
+  background-color: var(--input) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.cultural-card input:focus,
+.cultural-card textarea:focus,
+.cultural-card select:focus {
+  z-index: 20;
+  outline: none;
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 2px var(--ring) !important;
+}
+
+/* Ensure agent form inputs are properly themed */
+.karadeniz input,
+.karadeniz textarea,
+.karadeniz select {
+  background-color: var(--input) !important;
+  color: var(--foreground) !important;
+  border-color: var(--border) !important;
+}
+
+.karadeniz select option {
+  background-color: var(--card) !important;
+  color: var(--card-foreground) !important;
+}
+
+/* Improve Karadeniz theme component visibility */
+.karadeniz .cultural-card {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  box-shadow: 0 4px 6px -1px rgba(255, 255, 255, 0.15) !important;
+}
+
+.karadeniz .cultural-text-primary {
+  color: var(--foreground) !important;
+}
+
+.karadeniz .cultural-text-muted {
+  color: var(--muted-foreground) !important;
+}
+
+.karadeniz .cultural-bg {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.karadeniz .cultural-border {
+  border-color: var(--border) !important;
+}
+
+.karadeniz .cultural-hover:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: var(--primary) !important;
+}
+
+.karadeniz .bg-blue-100 {
+  background-color: #2A3441 !important;
+}
+
+.karadeniz .text-blue-600 {
+  color: #4ADE80 !important;
+}
+
+.karadeniz .text-green-600 {
+  color: #34D399 !important;
+}
+
+.karadeniz .text-gray-600,
+.karadeniz .text-gray-700,
+.karadeniz .text-gray-500,
+.karadeniz .text-gray-400 {
+  color: #E2E8F0 !important;
+}
+
+.karadeniz .text-gray-900 {
+  color: var(--foreground) !important;
+}
+
+/* Dashboard specific Karadeniz improvements */
+.karadeniz .bg-slate-800\/50 {
+  background-color: rgba(30, 42, 59, 0.9) !important;
+  border-color: var(--border) !important;
+}
+
+.karadeniz .text-slate-300,
+.karadeniz .text-slate-400,
+.karadeniz .text-slate-500 {
+  color: var(--muted-foreground) !important;
+}
+
+.karadeniz .text-white {
+  color: var(--foreground) !important;
+}
+
+.karadeniz .border-slate-700\/50,
+.karadeniz .border-slate-600\/50,
+.karadeniz .border-slate-500\/50 {
+  border-color: var(--border) !important;
+}
+
+.karadeniz .bg-slate-900\/50 {
+  background-color: rgba(11, 20, 38, 0.95) !important;
+}
+
+.karadeniz .backdrop-blur-xl {
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Fix tab triggers and buttons in Karadeniz */
+.karadeniz [data-state="active"] {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+.karadeniz .bg-gradient-to-r {
+  background: linear-gradient(to right, var(--primary), var(--accent)) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* Fix select items in Karadeniz */
+.karadeniz .text-slate-400 {
+  color: var(--muted-foreground) !important;
+}
+
+.karadeniz .bg-green-500\/20 {
+  background-color: rgba(74, 222, 128, 0.2) !important;
+}
+
+.karadeniz .text-green-400 {
+  color: #4ADE80 !important;
+}
+
+.karadeniz .border-green-500\/30 {
+  border-color: rgba(74, 222, 128, 0.3) !important;
+}
+
+/* Fix input and textarea in Karadeniz */
+.karadeniz .bg-slate-800\/50 {
+  background-color: var(--input) !important;
+  color: var(--foreground) !important;
+}
+
+.karadeniz .placeholder-slate-400::placeholder {
+  color: var(--muted-foreground) !important;
+  opacity: 0.7;
+}
+
+/* Better card backgrounds in Karadeniz */
+.karadeniz .bg-gray-800 {
+  background-color: #1A2332 !important;
+}
+
+.karadeniz .bg-gray-800\/50 {
+  background-color: rgba(26, 35, 50, 0.8) !important;
+}
+
+/* Improve Karadeniz button visibility */
+.karadeniz .bg-green-100 {
+  background-color: #2A3441 !important;
+}
+
+.karadeniz .bg-gray-700 {
+  background-color: #2A3441 !important;
+}
+
+/* Enhanced code and pre block styling */
+.prose code {
+  @apply bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-300 dark:border-gray-600;
+  font-weight: 500;
+}
+
+.prose pre {
+  @apply bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg;
+  padding: 1rem;
+}
+
+.prose pre code {
+  @apply bg-transparent border-0 p-0 text-gray-800 dark:text-gray-200;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Karadeniz theme overrides for code */
+.karadeniz .prose code {
+  @apply bg-slate-700 text-emerald-300 border-slate-600;
+}
+
+.karadeniz .prose pre {
+  @apply bg-slate-800 border-slate-700;
+}
+
+.karadeniz .prose pre code {
+  @apply text-slate-100;
+}
+
+/* Code block language labels for Karadeniz */
+.karadeniz .bg-gray-200 {
+  @apply bg-slate-700 !important;
+}
+
+.karadeniz .text-gray-600 {
+  @apply text-emerald-300 !important;
 }

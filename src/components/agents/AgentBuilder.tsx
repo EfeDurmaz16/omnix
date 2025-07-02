@@ -30,9 +30,8 @@ import {
   AgentConfig, 
   AgentCapability, 
   AgentPersonality, 
-  AGENT_TEMPLATES,
-  agentFramework 
-} from '@/lib/agents/AgentFramework';
+  AGENT_TEMPLATES
+} from '@/types/agent';
 
 interface AgentBuilderProps {
   onAgentCreated?: (agent: AgentConfig) => void;
@@ -73,8 +72,10 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
   const loadUserAgents = async () => {
     try {
       setLoading(true);
-      const userAgents = await agentFramework.getUserAgents('current-user');
-      setAgents(userAgents);
+      // TODO: Replace with actual API call
+      // const userAgents = await fetch('/api/agents').then(r => r.json());
+      // For now, just use empty array
+      setAgents([]);
     } catch (error) {
       console.error('Failed to load agents:', error);
     } finally {
@@ -90,7 +91,15 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
 
     try {
       setLoading(true);
-      const agent = await agentFramework.createAgent('current-user', agentForm as any);
+      // TODO: Replace with actual API call
+      // const agent = await fetch('/api/agents', { method: 'POST', body: JSON.stringify(agentForm) });
+      const agent: AgentConfig = {
+        id: `agent_${Date.now()}`,
+        ...agentForm,
+        isActive: false,
+        createdAt: new Date(),
+        usageCount: 0
+      } as AgentConfig;
       setAgents(prev => [agent, ...prev]);
       setIsCreating(false);
       setAgentForm({
@@ -136,7 +145,8 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
     try {
       const agent = agents.find(a => a.id === agentId);
       if (agent) {
-        await agentFramework.updateAgent(agentId, { isActive: !agent.isActive });
+        // TODO: Replace with actual API call
+        // await fetch(`/api/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify({ isActive: !agent.isActive }) });
         setAgents(prev => prev.map(a => 
           a.id === agentId ? { ...a, isActive: !a.isActive } : a
         ));
@@ -149,7 +159,8 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
   const handleDeleteAgent = async (agentId: string) => {
     if (confirm('Are you sure you want to delete this agent?')) {
       try {
-        await agentFramework.deactivateAgent(agentId);
+        // TODO: Replace with actual API call
+        // await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
         setAgents(prev => prev.filter(a => a.id !== agentId));
       } catch (error) {
         console.error('Failed to delete agent:', error);
@@ -213,13 +224,13 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700">Total Cost</p>
-            <p className="text-sm text-gray-600">${agent.totalCost.toFixed(2)}</p>
+            <p className="text-sm text-gray-600">${(agent.totalCost || 0).toFixed(2)}</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
-          {agent.capabilities.slice(0, 3).map(cap => (
-            <Badge key={cap.id} variant="outline" className="text-xs">
+          {agent.capabilities.slice(0, 3).map((cap, index) => (
+            <Badge key={cap.id || `${cap.type}-${index}`} variant="outline" className="text-xs">
               {cap.name}
             </Badge>
           ))}
@@ -271,7 +282,7 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
           <div className="mb-4">
             <Label htmlFor="template">Start from Template (Optional)</Label>
             <select
-              className="w-full p-2 border rounded-md"
+              className="w-full p-2 border rounded-md cultural-card cultural-border cultural-text-primary bg-input focus:ring-2 focus:ring-ring"
               value={selectedTemplate}
               onChange={(e) => {
                 setSelectedTemplate(e.target.value);
@@ -329,7 +340,7 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
             <Label htmlFor="communicationStyle">Communication Style</Label>
             <select
               id="communicationStyle"
-              className="w-full p-2 border rounded-md"
+              className="w-full p-2 border rounded-md cultural-card cultural-border cultural-text-primary bg-input focus:ring-2 focus:ring-ring"
               value={agentForm.personality?.communicationStyle || 'casual'}
               onChange={(e) => setAgentForm(prev => ({
                 ...prev,
@@ -373,7 +384,7 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
               <Label htmlFor="preferredModel">Preferred Model</Label>
               <select
                 id="preferredModel"
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-md cultural-card cultural-border cultural-text-primary bg-input focus:ring-2 focus:ring-ring"
                 value={agentForm.preferredModel}
                 onChange={(e) => setAgentForm(prev => ({ ...prev, preferredModel: e.target.value }))}
               >
@@ -387,7 +398,7 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
               <Label htmlFor="fallbackModel">Fallback Model</Label>
               <select
                 id="fallbackModel"
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-md cultural-card cultural-border cultural-text-primary bg-input focus:ring-2 focus:ring-ring"
                 value={agentForm.fallbackModel}
                 onChange={(e) => setAgentForm(prev => ({ ...prev, fallbackModel: e.target.value }))}
               >
@@ -501,8 +512,8 @@ export function AgentBuilder({ onAgentCreated }: AgentBuilderProps) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {template.capabilities?.slice(0, 2).map(cap => (
-                    <Badge key={cap.id} variant="outline" className="text-xs">
+                  {template.capabilities?.slice(0, 2).map((cap, index) => (
+                    <Badge key={cap.id || `${cap.type}-${index}`} variant="outline" className="text-xs">
                       {cap.name}
                     </Badge>
                   ))}

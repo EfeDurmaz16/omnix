@@ -375,16 +375,16 @@ export function VideoGenerator() {
   return (
     <div className="space-y-6">
       {/* Generation Form */}
-      <Card>
+      <Card className="cultural-card">
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
+          <CardTitle className="flex items-center space-x-2 cultural-text-primary">
             <Video className="h-5 w-5" />
             <span>Generate Videos</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Prompt</label>
+            <label className="text-sm font-medium cultural-text-primary">Prompt</label>
             <Textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -399,7 +399,7 @@ export function VideoGenerator() {
           {/* Image URL input for image-to-video models */}
           {selectedModel === 'seedance-v1-pro-i2v-720p' && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">
+              <label className="text-sm font-medium cultural-text-primary">
                 Image URL <span className="text-red-500">*</span>
               </label>
               <Textarea
@@ -557,12 +557,12 @@ export function VideoGenerator() {
 
       {/* Loading State */}
       {loading && (
-        <Card>
+        <Card className="cultural-card">
           <CardContent className="py-12">
             <div className="text-center">
               <Loader2 className="mx-auto h-12 w-12 animate-spin mb-4 text-primary" />
-              <h3 className="text-lg font-medium mb-2">Generating your video...</h3>
-              <p className="text-sm text-muted-foreground">
+              <h3 className="text-lg font-medium mb-2 cultural-text-primary">Generating your video...</h3>
+              <p className="text-sm cultural-text-muted">
                 This may take 15-30 seconds. Video generation requires significant processing power.
               </p>
             </div>
@@ -572,9 +572,9 @@ export function VideoGenerator() {
 
       {/* Generated Videos Grid */}
       {generatedVideos.length > 0 && (
-        <Card>
+        <Card className="cultural-card">
           <CardHeader>
-            <CardTitle>Generated Videos</CardTitle>
+            <CardTitle className="cultural-text-primary">Generated Videos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -705,9 +705,9 @@ export function VideoGenerator() {
 
       {/* Empty State */}
       {generatedVideos.length === 0 && !loading && (
-        <Card>
+        <Card className="cultural-card">
           <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">
+            <div className="text-center cultural-text-muted">
               <Video className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p className="text-lg font-medium">No videos generated yet</p>
               <p className="text-sm">Create your first AI-generated video above.</p>

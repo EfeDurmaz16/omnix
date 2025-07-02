@@ -1,0 +1,191 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  avatar    String?
+  plan      Plan     @default(FREE)
+  credits   Int      @default(1500)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  transactions    CreditTransaction[]
+  conversations   Conversation[]
+  images          Image[]
+  videos          Video[]
+  apiUsage        ApiUsage[]
+  subscriptions   Subscription[]
+
+  @@map("users")
+}
+
+model CreditTransaction {
+  id          String            @id @default(cuid())
+  userId      String
+  amount      Int               // Positive for additions, negative for deductions
+  type        TransactionType
+  description String
+  metadata    Json?             // Additional data (e.g., API call details, purchase info)
+  createdAt   DateTime          @default(now())
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_transactions")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  model     String   // Model used for this conversation
+  messages  Json     // Array of messages
+  metadata  Json?    // Additional conversation data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("conversations")
+}
+
+model Image {
+  id          String     @id @default(cuid())
+  userId      String
+  prompt      String
+  model       String     // Image model used (DALL-E, Midjourney, etc.)
+  url         String     // Storage URL
+  thumbnailUrl String?   // Thumbnail URL
+  width       Int?
+  height      Int?
+  size        Int?       // File size in bytes
+  metadata    Json?      // Generation parameters, style, etc.
+  isPublic    Boolean    @default(false)
+  tags        String[]   @default([])
+  parentId    String?    // Reference to original image if this is an edited version
+  editPrompt  String?    // Prompt used for editing this version
+  editOperation Json?    // Details of the edit operation performed
+  version     Int        @default(1) // Version number (1 = original, 2+ = edited versions)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent Image? @relation("ImageVersions", fields: [parentId], references: [id], onDelete: Cascade)
+  versions Image[] @relation("ImageVersions")
+
+  @@map("images")
+}
+
+model Video {
+  id          String     @id @default(cuid())
+  userId      String
+  prompt      String
+  model       String     // Video model used (Veo, Seedance, etc.)
+  url         String     // Storage URL
+  thumbnailUrl String?   // Video thumbnail
+  duration    Int?       // Duration in seconds
+  width       Int?
+  height      Int?
+  size        Int?       // File size in bytes
+  status      VideoStatus @default(PROCESSING)
+  metadata    Json?      // Generation parameters
+  isPublic    Boolean    @default(false)
+  tags        String[]   @default([])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("videos")
+}
+
+model ApiUsage {
+  id              String   @id @default(cuid())
+  userId          String
+  model           String   // Model used
+  provider        String   // openai, anthropic, google, etc.
+  inputTokens     Int
+  outputTokens    Int
+  totalTokens     Int
+  cost            Float    // Cost in USD
+  requestType     String   // chat, completion, image, video, etc.
+  endpoint        String   // API endpoint used
+  responseTime    Int?     // Response time in milliseconds
+  metadata        Json?    // Additional usage data
+  createdAt       DateTime @default(now())
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_usage")
+}
+
+model Subscription {
+  id                   String            @id @default(cuid())
+  userId               String
+  stripeCustomerId     String?
+  stripeSubscriptionId String?           @unique
+  stripePriceId        String?
+  plan                 Plan
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean           @default(false)
+  metadata             Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// Enums
+enum Plan {
+  FREE
+  PRO
+  ULTRA
+  ENTERPRISE
+}
+
+enum TransactionType {
+  PURCHASE
+  USAGE
+  REFUND
+  BONUS
+  ADJUSTMENT
+}
+
+enum VideoStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  UNPAID
+}

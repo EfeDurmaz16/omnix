@@ -49,7 +49,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen cultural-bg text-white font-mono">
+    <div className="min-h-screen cultural-bg cultural-text-primary font-mono">
       {/* Header */}
       <header className="fixed top-0 w-full cultural-card backdrop-blur-sm border-b cultural-border z-50">
         <div className="container mx-auto px-6 py-4">
@@ -60,10 +60,10 @@ export default function HomePage() {
                 <span className="text-xl font-bold cultural-text-primary">Aspendos</span>
               </Link>
               <nav className="hidden md:flex space-x-6 text-sm">
-                <Link href="#product" className="text-muted-foreground hover:text-primary transition-colors">Product</Link>
-                <Link href="/billing" className="text-muted-foreground hover:text-primary transition-colors">Billing</Link>
-                <Link href="/themes" className="text-muted-foreground hover:text-primary transition-colors">Themes</Link>
-                <Link href="#docs" className="text-muted-foreground hover:text-primary transition-colors">Docs</Link>
+                <Link href="#product" className="cultural-text-muted hover:text-primary transition-colors">Product</Link>
+                <Link href="/billing" className="cultural-text-muted hover:text-primary transition-colors">Billing</Link>
+                <Link href="/themes" className="cultural-text-muted hover:text-primary transition-colors">Themes</Link>
+                <Link href="#docs" className="cultural-text-muted hover:text-primary transition-colors">Docs</Link>
               </nav>
             </div>
             <div className="flex items-center space-x-4">
@@ -77,7 +77,7 @@ export default function HomePage() {
               ) : (
                 <>
                   <Link href="/login">
-                    <Button variant="ghost" className="text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" className="cultural-text-muted hover:text-primary">
                       Login
                     </Button>
                   </Link>
@@ -113,14 +113,14 @@ export default function HomePage() {
               aspendos.ai
             </h1>
             
-            <p className="text-xl md:text-2xl text-foreground mb-8 max-w-3xl mx-auto">
+            <p className="text-xl md:text-2xl cultural-text-primary mb-8 max-w-3xl mx-auto">
               Where ancient wisdom meets cutting-edge AI. Switch between 150+ models, retain infinite context, 
               and build with voice-native multimodal capabilities.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Link href={user ? "/dashboard" : "/signup"}>
-                <Button size="lg" className="cultural-primary cultural-hover text-white px-8 py-4 text-lg transition-all duration-300">
+                <Button size="lg" className="cultural-primary cultural-hover px-8 py-4 text-lg transition-all duration-300">
                   {user ? "Launch Dashboard" : "Start Building"}
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
@@ -141,18 +141,18 @@ export default function HomePage() {
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="text-center cultural-accent p-4 rounded-lg cultural-hover transition-all duration-300">
                   <Brain className="w-8 h-8 mx-auto mb-3 text-primary" />
-                  <h3 className="font-semibold mb-2">150+ AI Models</h3>
-                  <p className="text-sm text-muted-foreground">GPT-4, Claude, Gemini, Veo & more</p>
+                  <h3 className="font-semibold mb-2 cultural-text-primary">150+ AI Models</h3>
+                  <p className="text-sm cultural-text-muted/50">GPT-4, Claude, Gemini, Veo & more</p>
                 </div>
                 <div className="text-center cultural-accent p-4 rounded-lg cultural-hover transition-all duration-300">
                   <Infinity className="w-8 h-8 mx-auto mb-3 text-accent" />
-                  <h3 className="font-semibold mb-2">Infinite Context</h3>
-                  <p className="text-sm text-muted-foreground">Never lose conversation history</p>
+                  <h3 className="font-semibold mb-2 cultural-text-primary">Infinite Context</h3>
+                  <p className="text-sm cultural-text-muted/50">Never lose conversation history</p>
                 </div>
                 <div className="text-center cultural-accent p-4 rounded-lg cultural-hover transition-all duration-300">
                   <Mic className="w-8 h-8 mx-auto mb-3 text-primary" />
-                  <h3 className="font-semibold mb-2">Voice Native</h3>
-                  <p className="text-sm text-muted-foreground">Speech-to-speech AI interactions</p>
+                  <h3 className="font-semibold mb-2 cultural-text-primary">Voice Native</h3>
+                  <p className="text-sm cultural-text-muted/50">Speech-to-speech AI interactions</p>
                 </div>
               </div>
             </motion.div>
@@ -168,7 +168,7 @@ export default function HomePage() {
             <div className="space-y-4">
               <div className="cultural-card rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm text-muted-foreground">Available Models</span>
+                  <span className="text-sm cultural-text-muted">Available Models</span>
                   <Badge className="cultural-accent">
                     12 Active
                   </Badge>
@@ -189,7 +189,7 @@ export default function HomePage() {
                     } cultural-hover transition-all duration-300`}>
                       <div className="flex items-center space-x-2">
                         <model.icon className="w-4 h-4" />
-                        <span className="text-sm">{model.name}</span>
+                        <span className="text-sm cultural-text-primary">{model.name}</span>
                       </div>
                     </div>
                   ))}
@@ -204,7 +204,7 @@ export default function HomePage() {
                 <h2 className="text-4xl font-bold cultural-text-primary">
                   Switch Between 150+ AI Models Instantly
                 </h2>
-                <p className="text-lg text-muted-foreground">
+                <p className="text-lg cultural-text-muted">
                   Access GPT-4, Claude, Gemini, DALL-E, Veo, and dozens more AI models 
                   with a single click. No API management, no complex integrations.
                 </p>
@@ -214,22 +214,22 @@ export default function HomePage() {
                 <div className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-accent mt-1" />
                   <div>
-                    <h4 className="font-semibold">Unified Interface</h4>
-                    <p className="text-muted-foreground">One interface for all AI models</p>
+                    <h4 className="font-semibold cultural-text-primary">Unified Interface</h4>
+                    <p className="cultural-text-muted">One interface for all AI models</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-accent mt-1" />
                   <div>
-                    <h4 className="font-semibold">Instant Switching</h4>
-                    <p className="text-muted-foreground">Change models mid-conversation</p>
+                    <h4 className="font-semibold cultural-text-primary">Instant Switching</h4>
+                    <p className="cultural-text-muted">Change models mid-conversation</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-accent mt-1" />
                   <div>
-                    <h4 className="font-semibold">Cost Optimization</h4>
-                    <p className="text-muted-foreground">Automatically use the most cost-effective model</p>
+                    <h4 className="font-semibold cultural-text-primary">Cost Optimization</h4>
+                    <p className="cultural-text-muted">Automatically use the most cost-effective model</p>
                   </div>
                 </div>
               </div>
@@ -249,12 +249,12 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Text Left */}
             <div className="space-y-6">
-              <h2 className="text-4xl font-bold">
+              <h2 className="text-4xl font-bold cultural-text-primary">
                 Your Conversations,
                 <br />
-                <span className="text-blue-400">Your Control</span>
+                <span className="text-accent">Your Control</span>
               </h2>
-              <p className="text-lg text-gray-300 leading-relaxed">
+              <p className="text-lg cultural-text-muted leading-relaxed">
                 All chats are saved securely. Import previous chats, export as markdown or JSON, and keep your AI dialogue consistent across devices.
               </p>
               <div className="space-y-3">
@@ -275,15 +275,15 @@ export default function HomePage() {
 
             {/* Visual Right */}
             <div className="space-y-4">
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+              <div className="cultural-card rounded-lg cultural-border p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm text-gray-400">Chat History</span>
+                  <span className="text-sm cultural-text-muted">Chat History</span>
                   <div className="flex space-x-2">
-                    <Button size="sm" variant="outline" className="border-gray-600 text-gray-300">
+                    <Button size="sm" variant="outline" className="cultural-border cultural-text-primary">
                       <Upload className="w-4 h-4 mr-1" />
                       Import
                     </Button>
-                    <Button size="sm" variant="outline" className="border-gray-600 text-gray-300">
+                    <Button size="sm" variant="outline" className="cultural-border cultural-text-primary">
                       <Download className="w-4 h-4 mr-1" />
                       Export
                     </Button>
@@ -295,11 +295,11 @@ export default function HomePage() {
                     { title: "Code Review with Claude", time: "Yesterday", messages: 15 },
                     { title: "Video Script Planning", time: "3 days ago", messages: 31 }
                   ].map((chat, index) => (
-                    <div key={index} className="bg-gray-700/50 rounded p-3">
+                    <div key={index} className="cultural-card rounded p-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="text-sm font-medium">{chat.title}</h4>
-                          <p className="text-xs text-gray-400">{chat.time} • {chat.messages} messages</p>
+                          <h4 className="text-sm font-medium cultural-text-primary">{chat.title}</h4>
+                          <p className="text-xs cultural-text-muted">{chat.time} • {chat.messages} messages</p>
                         </div>
                         <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30 text-xs">
                           Saved
@@ -315,31 +315,31 @@ export default function HomePage() {
       </section>
 
       {/* Feature Section 3: Multimodal Inputs */}
-      <section className="py-16 px-6 bg-gray-800/50">
+      <section className="py-16 px-6 cultural-bg">
         <div className="container mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Visual Left */}
             <div className="space-y-4">
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+              <div className="cultural-card rounded-lg cultural-border p-6">
                 <div className="mb-4">
-                  <span className="text-sm text-gray-400">Input Methods</span>
+                  <span className="text-sm cultural-text-muted">Input Methods</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+                  <div className="cultural-card rounded-lg p-4 text-center">
                     <FileText className="w-8 h-8 mx-auto mb-2 text-blue-400" />
-                    <span className="text-sm">PDF Upload</span>
+                    <span className="text-sm cultural-text-primary">PDF Upload</span>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+                  <div className="cultural-card rounded-lg p-4 text-center">
                     <Image className="w-8 h-8 mx-auto mb-2 text-green-400" />
-                    <span className="text-sm">Image Analysis</span>
+                    <span className="text-sm cultural-text-primary">Image Analysis</span>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+                  <div className="cultural-card rounded-lg p-4 text-center">
                     <Mic className="w-8 h-8 mx-auto mb-2 text-purple-400" />
-                    <span className="text-sm">Voice Input</span>
+                    <span className="text-sm cultural-text-primary">Voice Input</span>
                   </div>
-                  <div className="bg-gray-700/50 rounded-lg p-4 text-center">
+                  <div className="cultural-card rounded-lg p-4 text-center">
                     <Code className="w-8 h-8 mx-auto mb-2 text-orange-400" />
-                    <span className="text-sm">Code Snippets</span>
+                    <span className="text-sm cultural-text-primary">Code Snippets</span>
                   </div>
                 </div>
                 <div className="mt-4 p-3 bg-blue-600/20 rounded border border-blue-600/30">
@@ -353,12 +353,12 @@ export default function HomePage() {
 
             {/* Text Right */}
             <div className="space-y-6">
-              <h2 className="text-4xl font-bold">
+              <h2 className="text-4xl font-bold cultural-text-primary">
                 Talk, Type,
                 <br />
-                <span className="text-blue-400">Upload</span>
+                <span className="text-accent">Upload</span>
               </h2>
-              <p className="text-lg text-gray-300 leading-relaxed">
+              <p className="text-lg cultural-text-muted leading-relaxed">
                 Upload files, images, code snippets, or just speak. Get context-aware responses using the best model for the task.
               </p>
               <div className="space-y-3">
@@ -386,12 +386,12 @@ export default function HomePage() {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Text Left */}
             <div className="space-y-6">
-              <h2 className="text-4xl font-bold">
+              <h2 className="text-4xl font-bold cultural-text-primary">
                 See It
                 <br />
-                <span className="text-blue-400">In Action</span>
+                <span className="text-accent">In Action</span>
               </h2>
-              <p className="text-lg text-gray-300 leading-relaxed">
+              <p className="text-lg cultural-text-muted leading-relaxed">
                 Watch how quickly you can generate a blog post, design a logo, or summarize a research paper using multiple AIs in one place.
               </p>
               <div className="space-y-3">
@@ -419,13 +419,13 @@ export default function HomePage() {
                   { title: "Video Creation", subtitle: "Veo 2.0", icon: Video, color: "purple" },
                   { title: "Code Review", subtitle: "Claude + GPT-4", icon: Code, color: "orange" }
                 ].map((demo, index) => (
-                  <Card key={index} className="bg-gray-800 border-gray-700 hover:border-gray-600 transition-colors cursor-pointer">
+                  <Card key={index} className="cultural-card cultural-border hover:opacity-80 transition-colors cursor-pointer">
                     <CardContent className="p-4 text-center">
                       <div className={`w-12 h-12 mx-auto mb-3 rounded-lg bg-${demo.color}-600/20 flex items-center justify-center`}>
                         <demo.icon className={`w-6 h-6 text-${demo.color}-400`} />
                       </div>
-                      <h4 className="font-medium mb-1">{demo.title}</h4>
-                      <p className="text-xs text-gray-400">{demo.subtitle}</p>
+                      <h4 className="font-medium mb-1 cultural-text-primary">{demo.title}</h4>
+                      <p className="text-xs cultural-text-muted">{demo.subtitle}</p>
                       <Button size="sm" variant="ghost" className="mt-2 w-full">
                         <Play className="w-3 h-3 mr-1" />
                         Watch
@@ -440,14 +440,14 @@ export default function HomePage() {
       </section>
 
       {/* Feature Section 5: Personal Agents (Coming Soon) */}
-      <section className="py-16 px-6 bg-gray-800/50">
+      <section className="py-16 px-6 cultural-bg">
         <div className="container mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Visual Left */}
             <div className="space-y-4">
-              <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+              <div className="cultural-card rounded-lg cultural-border p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm text-gray-400">Agent Builder</span>
+                  <span className="text-sm cultural-text-muted">Agent Builder</span>
                   <Badge className="bg-purple-600/20 text-purple-400 border-purple-600/30">
                     Coming Soon
                   </Badge>
@@ -459,14 +459,14 @@ export default function HomePage() {
                     { name: "Content Wizard", desc: "Multi-platform content creator", icon: Sparkles },
                     { name: "Research Assistant", desc: "Academic paper analyzer", icon: FileText }
                   ].map((agent, index) => (
-                    <div key={index} className="bg-gray-700/50 rounded p-3 opacity-75">
+                    <div key={index} className="cultural-card cultural-border rounded p-3">
                       <div className="flex items-center space-x-3">
-                        <agent.icon className="w-5 h-5 text-purple-400" />
+                        <agent.icon className="w-5 h-5 cultural-text-accent" />
                         <div>
-                          <h4 className="text-sm font-medium">{agent.name}</h4>
-                          <p className="text-xs text-gray-400">{agent.desc}</p>
+                          <h4 className="text-sm font-medium cultural-text-primary">{agent.name}</h4>
+                          <p className="text-xs cultural-text-muted">{agent.desc}</p>
                         </div>
-                        <Settings className="w-4 h-4 text-gray-500 ml-auto" />
+                        <Settings className="w-4 h-4 cultural-text-muted ml-auto" />
                       </div>
                     </div>
                   ))}
@@ -476,12 +476,12 @@ export default function HomePage() {
 
             {/* Text Right */}
             <div className="space-y-6">
-              <h2 className="text-4xl font-bold">
+              <h2 className="text-4xl font-bold cultural-text-primary">
                 Personal AI Agents
                 <br />
-                <span className="text-purple-400">(Coming Soon)</span>
+                <span className="text-accent">(Coming Soon)</span>
               </h2>
-              <p className="text-lg text-gray-300 leading-relaxed">
+              <p className="text-lg cultural-text-muted leading-relaxed">
                 Build your own learning buddy, finance advisor, content wizard, or researcher. Customizable workflows with multiple model support.
               </p>
               <div className="space-y-3">
@@ -511,10 +511,10 @@ export default function HomePage() {
       <section className="py-16 px-6 bg-gradient-to-br from-blue-900/20 to-purple-900/20">
         <div className="container mx-auto text-center">
           <div className="max-w-4xl mx-auto space-y-8">
-            <h2 className="text-4xl lg:text-5xl font-bold">
+            <h2 className="text-4xl lg:text-5xl font-bold cultural-text-primary">
               Join the Future of
               <br />
-              <span className="text-blue-400">Multimodal AI</span>
+              <span className="text-accent">Multimodal AI</span>
             </h2>
             
             {/* Simple Pricing Grid */}
@@ -542,19 +542,19 @@ export default function HomePage() {
                   popular: false
                 }
               ].map((plan, index) => (
-                <Card key={index} className={`relative bg-gray-800 border-gray-700 ${plan.popular ? 'ring-2 ring-blue-500' : ''}`}>
+                <Card key={index} className={`relative cultural-card cultural-border ${plan.popular ? 'ring-2 ring-blue-500' : ''}`}>
                   {plan.popular && (
                     <Badge className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white">
                       Most Popular
                     </Badge>
                   )}
                   <CardContent className="p-6 text-center">
-                    <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
+                    <h3 className="text-xl font-bold mb-2 cultural-text-primary">{plan.name}</h3>
                     <div className="text-3xl font-bold mb-4">
                       {plan.price}
-                      <span className="text-sm text-gray-400">/month</span>
+                      <span className="text-sm cultural-text-muted">/month</span>
                     </div>
-                    <ul className="space-y-2 mb-6 text-sm text-gray-300">
+                    <ul className="space-y-2 mb-6 text-sm cultural-text-muted">
                       {plan.features.map((feature, fIndex) => (
                         <li key={fIndex} className="flex items-center justify-center">
                           <Check className="w-4 h-4 mr-2 text-green-400" />
@@ -574,12 +574,12 @@ export default function HomePage() {
 
             {/* Social Proof */}
             <div className="mt-12 space-y-4">
-              <p className="text-gray-400">Trusted by developers worldwide</p>
-              <div className="flex justify-center items-center space-x-8 opacity-60">
+              <p className="cultural-text-muted">Trusted by developers worldwide</p>
+              <div className="flex justify-center items-center space-x-8">
                 {["500+", "10K+", "50+"].map((stat, index) => (
                   <div key={index} className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{stat}</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-2xl font-bold cultural-text-primary">{stat}</div>
+                    <div className="text-xs cultural-text-muted">
                       {index === 0 ? "Companies" : index === 1 ? "Developers" : "Countries"}
                     </div>
                   </div>
@@ -590,12 +590,12 @@ export default function HomePage() {
             {/* Final CTA */}
             <div className="mt-12">
               <Link href={user ? "/dashboard" : "/signup"}>
-                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-4 text-lg">
+                <Button size="lg" className="cultural-primary cultural-primary-hover px-12 py-4 text-lg">
                   {user ? "Go to Dashboard" : "Start Building Today"}
                   <ArrowRight className="ml-3 w-5 h-5" />
                 </Button>
               </Link>
-              <p className="mt-4 text-sm text-gray-400">
+              <p className="mt-4 text-sm cultural-text-muted">
                 No credit card required • 5 free messages daily • Upgrade anytime
               </p>
             </div>
@@ -604,16 +604,16 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 border-t border-gray-800 py-8 px-6">
+      <footer className="cultural-card border-t cultural-border py-8 px-6">
         <div className="container mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="text-gray-400 text-sm">
+            <div className="cultural-text-muted text-sm">
               © 2024 Aspendos. All rights reserved.
             </div>
             <div className="flex space-x-6 mt-4 md:mt-0">
-              <Link href="/privacy" className="text-gray-400 hover:text-white text-sm">Privacy</Link>
-              <Link href="/terms" className="text-gray-400 hover:text-white text-sm">Terms</Link>
-              <Link href="/contact" className="text-gray-400 hover:text-white text-sm">Contact</Link>
+              <Link href="/privacy" className="cultural-text-muted hover:cultural-text-primary text-sm">Privacy</Link>
+              <Link href="/terms" className="cultural-text-muted hover:cultural-text-primary text-sm">Terms</Link>
+              <Link href="/contact" className="cultural-text-muted hover:cultural-text-primary text-sm">Contact</Link>
             </div>
           </div>
         </div>

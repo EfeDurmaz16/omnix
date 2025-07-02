@@ -20,6 +20,7 @@ interface Conversation {
 }
 
 // This would be replaced with actual database operations
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const mockConversations: Conversation[] = [
   {
     id: 'conv_1',

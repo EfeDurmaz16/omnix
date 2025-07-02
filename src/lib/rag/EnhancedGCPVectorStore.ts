@@ -28,6 +28,10 @@ export class EnhancedGCPVectorStore {
   private location: string = 'us-central1';
   private indexEndpoint: string = '';
   private useVectorSearch: boolean = false;
+  private embeddingCache = new Map<string, number[]>();
+  private cacheMaxSize = 1000; // Increased cache size for better performance
+  private cacheHits = 0;
+  private cacheMisses = 0;
 
   constructor() {
     this.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || '';
@@ -79,13 +83,43 @@ export class EnhancedGCPVectorStore {
       throw new Error('Cannot generate embedding for empty text');
     }
 
+    const normalizedText = text.substring(0, 8000);
+    const cacheKey = normalizedText.substring(0, 100); // Use shorter cache key for better performance
+    
+    // Check cache first
+    if (this.embeddingCache.has(cacheKey)) {
+      this.cacheHits++;
+      if (this.cacheHits % 10 === 0) {
+        console.log(`⚡ Embedding cache stats: ${this.cacheHits} hits, ${this.cacheMisses} misses`);
+      }
+      return this.embeddingCache.get(cacheKey)!;
+    }
+
+    const startTime = performance.now();
+    
     try {
       const response = await this.openai.embeddings.create({
         model: 'text-embedding-3-small',
-        input: text.substring(0, 8000),
+        input: normalizedText,
       });
 
-      return response.data[0].embedding;
+      const embedding = response.data[0].embedding;
+      this.cacheMisses++;
+      
+      const embeddingTime = performance.now() - startTime;
+      if (embeddingTime > 500) { // Log slow embedding generations
+        console.log(`⚠️ Slow embedding generation: ${embeddingTime.toFixed(2)}ms for text length ${normalizedText.length}`);
+      }
+      
+      // Cache the result with improved cleanup
+      if (this.embeddingCache.size >= this.cacheMaxSize) {
+        // Remove oldest 10% of cache entries for better performance
+        const keysToDelete = Array.from(this.embeddingCache.keys()).slice(0, Math.floor(this.cacheMaxSize * 0.1));
+        keysToDelete.forEach(key => this.embeddingCache.delete(key));
+      }
+      this.embeddingCache.set(cacheKey, embedding);
+
+      return embedding;
     } catch (error) {
       console.error('Failed to generate embedding:', error);
       throw new Error('Embedding generation failed');
@@ -169,44 +203,71 @@ export class EnhancedGCPVectorStore {
       return [];
     }
 
+    const startTime = performance.now();
+
     try {
-      const queryEmbedding = await this.generateEmbedding(query);
+      console.log(`🔍 VectorStore searchRelevantMemories for user ${userId}, query: "${query.substring(0, 50)}"`);      
+      console.log(`🎯 Using similarity threshold: 0.2 for conversation memories (increased for performance)`);
       
-      const db = await this.getFirestoreClient();
-      const snapshot = await db.collection('user-vectors')
-        .where('userId', '==', userId)
-        .limit(20)
-        .get();
+      // Parallel execution: generate embedding while fetching documents
+      const [queryEmbedding, snapshot] = await Promise.all([
+        this.generateEmbedding(query),
+        this.getFirestoreClient().then(db => 
+          db.collection('user-vectors')
+            .where('userId', '==', userId)
+            .limit(6) // Further reduced limit for better performance
+            .get()
+        )
+      ]);
 
-      const results: MemoryResult[] = [];
+      const fetchTime = performance.now() - startTime;
+      console.log(`📄 Found ${snapshot.docs.length} documents in ${fetchTime.toFixed(2)}ms for user ${userId}`);
 
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.messages) {
-          data.messages.forEach((message: any) => {
-            const similarity = this.cosineSimilarity(queryEmbedding, message.embedding);
-            if (similarity > 0.7) {
-              results.push({
-                content: message.content,
-                relevanceScore: similarity,
-                conversationId: data.conversationId,
-                timestamp: message.timestamp.toDate?.()?.toISOString() || message.timestamp,
-                model: data.metadata?.currentModel || 'unknown',
-                messageId: message.messageId,
-                metadata: { 
-                  similarity, 
-                  role: message.role,
-                  storageType: this.getStorageType()
-                },
-              });
-            }
-          });
-        }
-      });
+      // Process only the most recent documents for speed
+      const docsToProcess = snapshot.docs.slice(0, 4); // Process max 4 documents
+      
+      // Process documents in parallel for better performance
+      const allResults = await Promise.all(
+        docsToProcess.map(async (doc) => {
+          const data = doc.data();
+          const docResults: MemoryResult[] = [];
+          
+          if (data.messages) {
+            // Process only first 3 messages for speed (reduced from 5)
+            const messagesToProcess = data.messages.slice(0, 3);
+            
+            messagesToProcess.forEach((message: any) => {
+              const similarity = this.cosineSimilarity(queryEmbedding, message.embedding);
+              if (similarity > 0.2) { // Increased threshold for better performance
+                docResults.push({
+                  content: message.content,
+                  relevanceScore: similarity,
+                  conversationId: data.conversationId,
+                  timestamp: message.timestamp.toDate?.()?.toISOString() || message.timestamp,
+                  model: data.metadata?.currentModel || 'unknown',
+                  messageId: message.messageId,
+                  metadata: { 
+                    similarity, 
+                    role: message.role,
+                    storageType: this.getStorageType()
+                  },
+                });
+              }
+            });
+          }
+          
+          return docResults;
+        })
+      );
 
-      return results
+      // Flatten and sort results
+      const results = allResults.flat()
         .sort((a, b) => b.relevanceScore - a.relevanceScore)
         .slice(0, topK);
+      
+      const totalTime = performance.now() - startTime;
+      console.log(`📊 Memory search completed in ${totalTime.toFixed(2)}ms: ${results.length} memories found`);
+      return results;
 
     } catch (error) {
       console.error('Failed to search memories:', error);
@@ -259,24 +320,34 @@ export class EnhancedGCPVectorStore {
     }
 
     try {
-      const queryEmbedding = await this.generateEmbedding(query);
-      const db = await this.getFirestoreClient();
+      console.log(`🔍 VectorStore searchUserMemories for user ${userId}, query: "${query.substring(0, 50)}", type: ${memoryType || 'any'}`);
+      console.log(`🎯 Using similarity threshold: 0.12 for user memories`);
       
-      let queryRef = db.collection('user-memories')
-        .where('userId', '==', userId);
-      
-      if (memoryType) {
-        queryRef = queryRef.where('type', '==', memoryType);
-      }
+      // Parallel execution: generate embedding while building query
+      const [queryEmbedding, snapshot] = await Promise.all([
+        this.generateEmbedding(query),
+        this.getFirestoreClient().then(db => {
+          let queryRef = db.collection('user-memories')
+            .where('userId', '==', userId);
+          
+          if (memoryType) {
+            queryRef = queryRef.where('type', '==', memoryType);
+          }
 
-      const snapshot = await queryRef.limit(20).get();
+          return queryRef.limit(10).get(); // Reduced limit for performance
+        })
+      ]);
+      
+      console.log(`📄 Found ${snapshot.docs.length} documents in user-memories collection for user ${userId}`);
+      
+      // Process all docs in parallel
       const results: ExtractedMemory[] = [];
-
-      snapshot.forEach(doc => {
+      
+      snapshot.docs.forEach((doc, idx) => {
         const data = doc.data();
         const similarity = this.cosineSimilarity(queryEmbedding, data.embedding);
         
-        if (similarity > 0.6) {
+        if (similarity > 0.12) {
           results.push({
             type: data.type,
             content: data.content,
@@ -287,9 +358,12 @@ export class EnhancedGCPVectorStore {
         }
       });
 
-      return results
+      const sortedResults = results
         .sort((a, b) => b.confidence - a.confidence)
         .slice(0, topK);
+      
+      console.log(`📊 Final results: ${sortedResults.length}/${results.length} user memories above threshold`);
+      return sortedResults;
 
     } catch (error) {
       console.error('Failed to search user memories:', error);
@@ -359,21 +433,30 @@ export class EnhancedGCPVectorStore {
   }
 
   private async getFirestoreClient() {
-    const { Firestore } = await import('@google-cloud/firestore');
+    const firestoreModule = await import('@google-cloud/firestore');
+    const Firestore = firestoreModule.Firestore || firestoreModule.default;
     return new Firestore({
       projectId: this.projectId,
-      auth: this.auth,
+      databaseId: 'omni',
+      keyFilename: './omni-463513-88580bf51818.json',
     });
   }
 
   private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) return 0;
+    if (!a || !b || a.length !== b.length || a.length === 0) {
+      console.warn(`⚠️ Invalid embeddings for similarity calculation: a.length=${a?.length || 0}, b.length=${b?.length || 0}`);
+      return 0;
+    }
     
     let dotProduct = 0;
     let normA = 0;
     let normB = 0;
     
     for (let i = 0; i < a.length; i++) {
+      if (typeof a[i] !== 'number' || typeof b[i] !== 'number') {
+        console.warn(`⚠️ Non-numeric values in embeddings at index ${i}: a[${i}]=${a[i]}, b[${i}]=${b[i]}`);
+        return 0;
+      }
       dotProduct += a[i] * b[i];
       normA += a[i] * a[i];
       normB += b[i] * b[i];

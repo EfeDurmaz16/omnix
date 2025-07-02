@@ -16,7 +16,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownInput } from '@/components/ui/markdown-input';
 import { Badge } from '@/components/ui/badge';
 
 interface EnhancedChatInputProps {
@@ -51,19 +51,14 @@ export function EnhancedChatInput({
   const [transcriptionPreview, setTranscriptionPreview] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
   
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize textarea
+  // Auto-resize logic for markdown input
   useEffect(() => {
-    if (textareaRef.current) {
-      const textarea = textareaRef.current;
-      textarea.style.height = 'auto';
-      const scrollHeight = textarea.scrollHeight;
-      const newRows = Math.min(Math.max(Math.ceil(scrollHeight / 24), 1), 6);
-      setRows(newRows);
-      textarea.style.height = `${Math.min(scrollHeight, 144)}px`; // Max 6 rows
-    }
+    // Simply count actual newlines for a more accurate row count
+    const lines = message.split('\n');
+    const newRows = Math.min(Math.max(lines.length, 1), 10); // Allow up to 10 rows for code blocks
+    setRows(newRows);
   }, [message]);
 
   const handleSend = () => {
@@ -437,10 +432,9 @@ export function EnhancedChatInput({
 
         {/* Text Input Container */}
         <div className="flex-1 relative">
-          <Textarea
-            ref={textareaRef}
+          <MarkdownInput
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={setMessage}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled}
@@ -451,7 +445,7 @@ export function EnhancedChatInput({
 
           {/* Character Count */}
           {message.length > 100 && (
-            <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
+            <div className="absolute bottom-2 right-2 text-xs text-muted-foreground z-10">
               {message.length}
             </div>
           )}
@@ -492,6 +486,14 @@ export function EnhancedChatInput({
             <span className="cultural-text-primary">to send</span>
             <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Shift+Enter</kbd>
             <span className="cultural-text-primary">for new line</span>
+            <span className="cultural-text-primary">• Use </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">**bold**</code>
+            <span className="cultural-text-primary">, </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">*italic*</code>
+            <span className="cultural-text-primary">, </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">`code`</code>
+            <span className="cultural-text-primary">, </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">```lang</code>
           </div>
         </div>
 

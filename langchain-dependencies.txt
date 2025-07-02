@@ -1,0 +1,22 @@
+# LangChain Dependencies to Add
+
+## Core LangChain packages
+npm install langchain @langchain/openai @langchain/community @langchain/core
+
+## Specific components needed
+npm install @langchain/openai           # OpenAI models and embeddings  
+npm install @langchain/community        # Community integrations (Firestore)
+npm install langchain                   # Core LangChain functionality
+
+## Optional LangSmith for observability
+npm install langsmith
+
+## Command to install all at once:
+npm install langchain @langchain/openai @langchain/community @langchain/core langsmith
+
+## Package versions (latest as of 2024):
+- langchain: ^0.1.x
+- @langchain/openai: ^0.0.x  
+- @langchain/community: ^0.0.x
+- @langchain/core: ^0.1.x
+- langsmith: ^0.0.x

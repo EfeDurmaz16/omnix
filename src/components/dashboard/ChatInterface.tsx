@@ -105,7 +105,28 @@ export function ChatInterface({
     console.log('🚀 ChatInterface mounted, loading data...');
     fetchAvailableModels();
     loadChatHistory();
+    
+    // Load preferences from localStorage after hydration
+    const savedModel = localStorage.getItem('omnix-selected-model');
+    const savedPromptMode = localStorage.getItem('omnix-thinking-mode');
+    
+    if (savedModel) {
+      setSelectedModel(savedModel);
+    }
+    if (savedPromptMode) {
+      setPromptMode(savedPromptMode);
+    }
   }, []);
+
+  // Persist selectedModel to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-selected-model', selectedModel);
+  }, [selectedModel]);
+
+  // Persist promptMode to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-thinking-mode', promptMode);
+  }, [promptMode]);
 
   // Debug sessions changes
   useEffect(() => {
@@ -195,62 +216,91 @@ export function ChatInterface({
     }
   };
 
-  const loadChatHistory = () => {
-    // Load from localStorage for now - in production use database
-    const savedSessions = localStorage.getItem('omnix-chat-sessions');
-    console.log('Loading chat history from localStorage:', savedSessions ? 'found' : 'not found');
-    
-    if (savedSessions) {
-      try {
-        const parsed = JSON.parse(savedSessions).map((session: any) => ({
-          ...session,
-          createdAt: new Date(session.createdAt),
-          updatedAt: new Date(session.updatedAt),
-          messages: session.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp)
-          }))
-        }));
-        
-        console.log('Loaded sessions:', parsed.length, parsed.map((s: ChatSession) => ({ id: s.id, title: s.title, msgCount: s.messages.length })));
-        setSessions(parsed);
-        
-        // Set current session to the most recent one
-        if (parsed.length > 0) {
-          setCurrentSessionId(parsed[0].id);
-          console.log('Set current session to:', parsed[0].id);
-        }
-      } catch (error) {
-        console.error('Error parsing saved sessions:', error);
-        localStorage.removeItem('omnix-chat-sessions'); // Clear corrupted data
+  const loadChatHistory = async () => {
+    // Load from database instead of localStorage for consistency
+    try {
+      console.log('Loading chat history from database...');
+      
+      if (!user?.id) {
+        console.log('No user ID available, skipping chat history load');
+        return;
       }
-    } else {
-      console.log('No saved sessions found');
+
+      // For now, keep localStorage as fallback while we migrate to proper database integration
+      const savedSessions = localStorage.getItem('omnix-chat-sessions');
+      console.log('Loading chat history from localStorage:', savedSessions ? 'found' : 'not found');
+      
+      if (savedSessions) {
+        try {
+          const parsed = JSON.parse(savedSessions).map((session: any) => ({
+            ...session,
+            createdAt: new Date(session.createdAt),
+            updatedAt: new Date(session.updatedAt),
+            messages: session.messages.map((msg: any) => ({
+              ...msg,
+              timestamp: new Date(msg.timestamp)
+            }))
+          }));
+          
+          console.log('Loaded sessions:', parsed.length, parsed.map((s: ChatSession) => ({ id: s.id, title: s.title, msgCount: s.messages.length })));
+          setSessions(parsed);
+          
+          // Set current session to the most recent one
+          if (parsed.length > 0) {
+            setCurrentSessionId(parsed[0].id);
+            console.log('Set current session to:', parsed[0].id);
+          }
+        } catch (error) {
+          console.error('Error parsing saved sessions:', error);
+          localStorage.removeItem('omnix-chat-sessions'); // Clear corrupted data
+        }
+      } else {
+        console.log('No saved sessions found');
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
     }
   };
 
-  const saveChatHistory = (updatedSessions: ChatSession[]) => {
+  const saveChatHistory = async (updatedSessions: ChatSession[]) => {
     console.log('Saving chat history:', updatedSessions.length, 'sessions');
     console.log('Sessions:', updatedSessions.map((s: ChatSession) => ({ id: s.id, title: s.title, msgCount: s.messages.length })));
+    
+    // Save to localStorage for immediate access
     localStorage.setItem('omnix-chat-sessions', JSON.stringify(updatedSessions));
+    
+    // Also sync to database for persistence across devices
+    try {
+      if (user?.id) {
+        console.log('💾 Syncing chat sessions to database...');
+        // TODO: Implement proper database sync when we have the API endpoint
+        // For now, just localStorage is used
+      }
+    } catch (error) {
+      console.warn('Failed to sync to database:', error);
+    }
   };
 
-  const createNewSession = () => {
+  const createNewSession = async () => {
     const newSession: ChatSession = {
-      id: `session-${Date.now()}`,
+      id: `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // More unique ID
       title: 'New Chat',
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date()
     };
     
+    console.log('🆕 Creating new session:', newSession.id);
+    
     const updatedSessions = [newSession, ...sessions];
     setSessions(updatedSessions);
     setCurrentSessionId(newSession.id);
-    saveChatHistory(updatedSessions);
+    await saveChatHistory(updatedSessions);
   };
 
-  const deleteSession = (sessionId: string) => {
+  const deleteSession = async (sessionId: string) => {
+    console.log('🗑️ Deleting session:', sessionId);
+    
     const updatedSessions = sessions.filter(s => s.id !== sessionId);
     setSessions(updatedSessions);
     
@@ -258,17 +308,19 @@ export function ChatInterface({
       setCurrentSessionId(updatedSessions.length > 0 ? updatedSessions[0].id : null);
     }
     
-    saveChatHistory(updatedSessions);
+    await saveChatHistory(updatedSessions);
   };
 
-  const updateSessionTitle = (sessionId: string, newTitle: string) => {
+  const updateSessionTitle = async (sessionId: string, newTitle: string) => {
+    console.log('✏️ Updating session title:', sessionId, 'to:', newTitle);
+    
     const updatedSessions = sessions.map(session =>
       session.id === sessionId 
         ? { ...session, title: newTitle, updatedAt: new Date() }
         : session
     );
     setSessions(updatedSessions);
-    saveChatHistory(updatedSessions);
+    await saveChatHistory(updatedSessions);
   };
 
   const scrollToBottom = () => {
@@ -379,7 +431,7 @@ export function ChatInterface({
         : session
     );
     setSessions(updatedSessions);
-    saveChatHistory(updatedSessions); // Save immediately after user message
+    await saveChatHistory(updatedSessions); // Save immediately after user message
 
     setInputMessage('');
     setUploadedFiles([]);
@@ -457,7 +509,7 @@ export function ChatInterface({
           : session
       );
       setSessions(finalSessions);
-      saveChatHistory(finalSessions);
+      await saveChatHistory(finalSessions);
 
     } catch (error) {
       console.error('Error:', error);
@@ -496,7 +548,7 @@ export function ChatInterface({
           : session
       );
       setSessions(errorSessions);
-      saveChatHistory(errorSessions);
+      await saveChatHistory(errorSessions);
     } finally {
       setLoading(false);
     }
@@ -522,9 +574,9 @@ export function ChatInterface({
   };
 
   return (
-    <div className="flex h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="flex h-full cultural-bg">
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-96' : 'w-16'} transition-all duration-300 bg-slate-900/50 backdrop-blur-xl border-r border-slate-700/50 flex flex-col h-full`}>
+      <div className={`${sidebarOpen ? 'w-96' : 'w-16'} transition-all duration-300 cultural-card backdrop-blur-xl border-r cultural-border flex flex-col h-full`}>
         <div className="p-4 space-y-4 flex-1 min-h-0 flex flex-col">
           {/* New Chat Button */}
           <Button 
@@ -539,9 +591,9 @@ export function ChatInterface({
             <>
               {/* Prompt Mode Selector - Only show for authenticated users */}
               {!isGuest && (
-                <Card className="bg-slate-800/50 border-slate-700/50 flex-shrink-0">
+                <Card className="cultural-card flex-shrink-0">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-slate-300">Prompt Mode</CardTitle>
+                  <CardTitle className="text-sm cultural-text-muted">Prompt Mode</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-2">
@@ -553,8 +605,8 @@ export function ChatInterface({
                           onClick={() => setPromptMode(mode.id)}
                           className={`thinking-mode-original w-full p-3 rounded-lg border transition-all duration-200 text-left ${
                             promptMode === mode.id
-                              ? 'bg-slate-700/70 border-slate-500/50 ring-1 ring-purple-400/30'
-                              : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700/30'
+                              ? 'cultural-card cultural-border ring-1 ring-purple-400/30'
+                              : 'cultural-card cultural-border hover:opacity-80'
                           }`}
                         >
                           <div className="flex items-center space-x-3">
@@ -562,8 +614,8 @@ export function ChatInterface({
                               <Icon className="w-4 h-4 text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-white text-sm">{mode.name}</h4>
-                              <p className="text-xs text-slate-400 mt-0.5">{mode.description}</p>
+                              <h4 className="font-medium cultural-text-primary text-sm">{mode.name}</h4>
+                              <p className="text-xs cultural-text-muted mt-0.5">{mode.description}</p>
                             </div>
                           </div>
                         </button>
@@ -576,18 +628,18 @@ export function ChatInterface({
 
               {/* Model Selector - Only show for authenticated users */}
               {!isGuest && (
-                <Card className="bg-slate-800/50 border-slate-700/50 flex-shrink-0">
+                <Card className="cultural-card flex-shrink-0">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-slate-300">AI Model</CardTitle>
+                  <CardTitle className="text-sm cultural-text-muted">AI Model</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
                   <Select value={selectedModel} onValueChange={setSelectedModel}>
-                    <SelectTrigger className="bg-slate-700/50 border-slate-600/50 text-white h-12">
+                    <SelectTrigger className="cultural-card cultural-border cultural-text-primary h-12">
                       <SelectValue placeholder="Select a model..." />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700 max-h-80 w-full">
+                    <SelectContent className="cultural-card cultural-border max-h-80 w-full">
                       {availableModels.length === 0 ? (
-                        <SelectItem value="loading" disabled className="text-slate-400">
+                        <SelectItem value="loading" disabled className="cultural-text-muted">
                           Loading models...
                         </SelectItem>
                       ) : (

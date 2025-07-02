@@ -10,6 +10,8 @@ import { ChatHeader } from './ChatHeader';
 import { MessagesContainer } from './MessagesContainer';
 import { EnhancedChatInput } from './EnhancedChatInput';
 import { AdvancedModelSearch } from '../models/AdvancedModelSearch';
+import { useAuth } from '@/components/auth/ClerkAuthWrapper';
+import { autoRouter } from '@/lib/routing/AutoRouter';
 
 interface Message {
   id: string;
@@ -29,7 +31,7 @@ interface Conversation {
 
 // Custom icon component for brain explosion emoji  
 const BrainBombed = ({ className }: { className?: string }) => (
-  <span className={`${className || 'text-base'}`}>🤯</span>
+  <span className={`${className || 'text-sm'} flex items-center justify-center leading-none`}>🤯</span>
 );
 
 const thinkingModes = [
@@ -72,6 +74,7 @@ interface ModernChatInterfaceProps {
 }
 
 export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProps = {}) {
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -81,13 +84,60 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   const [isThinking, setIsThinking] = useState(false);
   const [showModelSearch, setShowModelSearch] = useState(false);
   const [thinkingMode, setThinkingMode] = useState('think');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [autoRoutingEnabled, setAutoRoutingEnabled] = useState(false);
 
-  // Load conversations on mount
+  // Load conversations and preferences on mount
   useEffect(() => {
     loadConversations();
+    
+    // Load preferences from localStorage after hydration
+    const savedModel = localStorage.getItem('omnix-selected-model');
+    const savedThinkingMode = localStorage.getItem('omnix-thinking-mode');
+    const savedAutoRouting = localStorage.getItem('omnix-auto-routing');
+    
+    if (savedModel) {
+      setSelectedModel(savedModel);
+    }
+    if (savedThinkingMode) {
+      setThinkingMode(savedThinkingMode);
+    }
+    if (savedAutoRouting) {
+      setAutoRoutingEnabled(savedAutoRouting === 'true');
+    }
   }, []);
 
+  // Persist conversations to localStorage
+  useEffect(() => {
+    if (conversations.length > 0) {
+      localStorage.setItem('omnix-conversations', JSON.stringify(conversations));
+    }
+  }, [conversations]);
+
+  // Persist selectedModel to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-selected-model', selectedModel);
+  }, [selectedModel]);
+
+  // Persist thinkingMode to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-thinking-mode', thinkingMode);
+  }, [thinkingMode]);
+
+  // Persist autoRoutingEnabled to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-auto-routing', autoRoutingEnabled.toString());
+  }, [autoRoutingEnabled]);
+
   const loadConversations = async () => {
+    const savedConversations = localStorage.getItem('omnix-conversations');
+    if (savedConversations) {
+      setConversations(JSON.parse(savedConversations));
+      return;
+    }
+
     try {
       // This will be replaced with actual API call
       const response = await fetch('/api/conversations');
@@ -122,31 +172,115 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     setSidebarOpen(false);
   };
 
+  const stopGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsStreaming(false);
+      setIsLoading(false);
+      setStreamingMessage('');
+      console.log('🛑 Generation stopped by user');
+    }
+  };
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    // Find the message index
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Update the message content without removing subsequent messages
+    const updatedMessages = [...messages];
+    updatedMessages[messageIndex] = {
+      ...updatedMessages[messageIndex],
+      content: newContent,
+      timestamp: new Date() // Update timestamp to show it was edited
+    };
+
+    // Keep all messages, just update the edited one
+    setMessages(updatedMessages);
+
+    // Automatically send the edited message to get a new AI response (this will add a new response)
+    await handleSendMessage(newContent);
+  };
+
+  // Auto-routing logic to select optimal model based on query
+  const getOptimalModel = async (query: string, currentModel: string): Promise<string> => {
+    if (!autoRoutingEnabled || !user) return currentModel;
+
+    try {
+      const routingResult = await autoRouter.routeQuery({
+        query,
+        userPlan: user.plan || 'pro',
+        userPreference: 'balanced',
+        hasAutoRouting: true,
+        currentModel,
+        context: {
+          conversationHistory: messages.slice(-5).map(m => m.content),
+          taskComplexity: query.length < 50 ? 'low' : query.length < 200 ? 'medium' : 'high',
+          expectedLength: query.includes('explain') || query.includes('describe') ? 'long' : 'medium'
+        }
+      });
+
+      console.log('🤖 Auto-routing recommendation:', {
+        original: currentModel,
+        recommended: routingResult.recommendedModel.id,
+        reason: routingResult.routingReason,
+        confidence: routingResult.confidence,
+        shouldRedirect: routingResult.shouldRedirect
+      });
+
+      // Switch models if confidence is high enough and it's NOT a redirect recommendation
+      // (redirects should go to image/video pages, not switch chat models)
+      if (routingResult.confidence > 0.6 && !routingResult.shouldRedirect && 
+          routingResult.recommendedModel.id !== currentModel) {
+        console.log(`🔄 Auto-routing: ${currentModel} → ${routingResult.recommendedModel.id}`);
+        return routingResult.recommendedModel.id;
+      }
+    } catch (error) {
+      console.warn('Auto-routing failed:', error);
+    }
+
+    return currentModel;
+  };
+
   const handleSendMessage = async (content: string, files?: any[]) => {
     if (!content.trim() || isLoading) return;
+
+    // Get optimal model if auto-routing is enabled
+    const optimalModel = await getOptimalModel(content.trim(), selectedModel);
+    if (optimalModel !== selectedModel) {
+      console.log(`🔄 Auto-routing: ${selectedModel} → ${optimalModel}`);
+      setSelectedModel(optimalModel);
+    }
 
     const userMessage: Message = {
       id: `msg_${Date.now()}`,
       role: 'user',
       content: content.trim(),
       timestamp: new Date(),
-      model: selectedModel
+      model: optimalModel
     };
 
     // Add user message immediately
     setMessages(prev => [...prev, userMessage]);
     setIsThinking(true);
     setIsLoading(true);
+    setStreamingMessage('');
+
+    // Create abort controller for this request
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
       // Show thinking state for more advanced models
-      if (['o3', 'o3-pro', 'claude-4-opus'].includes(selectedModel)) {
+      if (['o3', 'o3-pro', 'claude-4-opus'].includes(optimalModel)) {
         await new Promise(resolve => setTimeout(resolve, 1000)); // Show thinking for 1 second
       }
 
       setIsThinking(false);
+      setIsStreaming(true);
 
-      // Call AI API
+      // Call AI API with streaming
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -157,32 +291,85 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             role: msg.role,
             content: msg.content
           })),
-          model: selectedModel,
+          model: optimalModel,
           mode: thinkingMode,
           conversationId: currentConversation?.id,
-          files: files || [] // Include processed files
+          files: files || [], // Include processed files
+          stream: true // Request streaming response
         }),
+        signal: controller.signal // Add abort signal
       });
 
       if (!response.ok) {
         throw new Error('Failed to get AI response');
       }
 
-      const data = await response.json();
-      
-      const assistantMessage: Message = {
-        id: `msg_${Date.now()}_ai`,
-        role: 'assistant',
-        content: data.content || 'Sorry, I could not generate a response.',
-        timestamp: new Date(),
-        model: selectedModel
-      };
+      // Check if response is streaming
+      const contentType = response.headers.get('content-type');
+      if (response.body && (contentType?.includes('text/plain') || contentType?.includes('text/event-stream'))) {
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
 
-      setMessages(prev => [...prev, assistantMessage]);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            const chunk = decoder.decode(value, { stream: true });
+            fullContent += chunk;
+            setStreamingMessage(fullContent);
+          }
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            console.log('🛑 Streaming aborted by user');
+            return;
+          }
+          throw error;
+        }
+
+        // Create final message
+        const assistantMessage: Message = {
+          id: `msg_${Date.now()}_ai`,
+          role: 'assistant',
+          content: fullContent || 'Sorry, I could not generate a response.',
+          timestamp: new Date(),
+          model: optimalModel
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        setStreamingMessage('');
+
+      } else {
+        // Fallback to regular JSON response
+        const data = await response.json();
+        
+        const assistantMessage: Message = {
+          id: `msg_${Date.now()}_ai`,
+          role: 'assistant',
+          content: data.content || 'Sorry, I could not generate a response.',
+          timestamp: new Date(),
+          model: optimalModel
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+      }
 
       // Update conversation
       if (currentConversation) {
-        const updatedMessages = [...messages, userMessage, assistantMessage];
+        const lastMessage = messages[messages.length - 1];
+        const finalContent = lastMessage?.content || streamingMessage || 'Response generated';
+        
+        const updatedMessages = [...messages, userMessage, {
+          id: `msg_${Date.now()}_ai`,
+          role: 'assistant' as const,
+          content: finalContent,
+          timestamp: new Date(),
+          model: optimalModel
+        }];
+        
         const updatedConversation = {
           ...currentConversation,
           messages: updatedMessages,
@@ -198,17 +385,25 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
       }
 
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('🛑 Request aborted by user');
+        return;
+      }
+      
       console.error('Error sending message:', error);
       const errorMessage: Message = {
         id: `msg_${Date.now()}_error`,
         role: 'assistant',
         content: 'Sorry, there was an error processing your message. Please try again.',
         timestamp: new Date(),
-        model: selectedModel
+        model: optimalModel
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
+      setAbortController(null);
+      setStreamingMessage('');
     }
   };
 
@@ -336,6 +531,9 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             conversationTitle={currentConversation?.title || "New Conversation"}
             thinkingMode={thinkingMode}
             onThinkingModeChange={setThinkingMode}
+            userId={user?.id}
+            autoRoutingEnabled={autoRoutingEnabled}
+            onAutoRoutingToggle={setAutoRoutingEnabled}
           />
         </div>
 
@@ -346,6 +544,11 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             isLoading={isLoading}
             selectedModel={selectedModel}
             onModelSwitch={() => {}}
+            isThinking={isThinking}
+            isStreaming={isStreaming}
+            streamingMessage={streamingMessage}
+            onStopGeneration={stopGeneration}
+            onEditMessage={handleEditMessage}
           />
         </div>
 

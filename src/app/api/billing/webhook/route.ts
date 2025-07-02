@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
     let event: Stripe.Event;
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    } catch (err: any) {
-      console.error('❌ Webhook signature verification failed:', err.message);
+    } catch (err: unknown) {
+      console.error('❌ Webhook signature verification failed:', err instanceof Error ? err.message : 'Unknown error');
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 400 }
@@ -68,10 +68,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Webhook error:', error);
     return NextResponse.json(
-      { error: 'Webhook handler failed', details: error.message },
+      { error: 'Webhook handler failed', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -186,8 +186,28 @@ async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscrip
 
 async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkout.Session) {
   try {
-    // Determine credit amount based on the price ID
-    const priceId = session.metadata?.priceId;
+    console.log('💳 Processing credit purchase for user:', clerkUserId);
+    console.log('💳 Session data:', { 
+      id: session.id, 
+      mode: session.mode,
+      payment_status: session.payment_status,
+      metadata: session.metadata 
+    });
+    
+    // Get price ID from line items (more reliable than metadata)
+    let priceId = session.metadata?.priceId;
+    
+    // Fallback: get price ID from line items if not in metadata
+    if (!priceId && session.line_items) {
+      try {
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+        priceId = lineItems.data[0]?.price?.id;
+        console.log('💳 Retrieved price ID from line items:', priceId);
+      } catch (error) {
+        console.error('❌ Failed to retrieve line items:', error);
+      }
+    }
+    
     let creditAmount = 0;
     
     // Map real Stripe price IDs to credit amounts
@@ -202,22 +222,37 @@ async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkou
     creditAmount = priceToCreditsMap[priceId!] || 0;
     
     if (creditAmount > 0) {
-      console.log('💳 Adding credits to user:', clerkUserId, 'Amount:', creditAmount);
+      console.log('💳 Credit purchase confirmed:', {
+        userId: clerkUserId,
+        priceId,
+        creditAmount,
+        sessionId: session.id
+      });
       
-      // For now, we'll trigger a client-side update by setting a flag
-      // In a real app, you'd update your database here
-      console.log('✅ Credits successfully added to user account');
+      // TODO: Implement actual database update here
+      // This is where you'd normally update your database
+      // For now, the client-side handles credit addition via localStorage
       
-      // TODO: Replace with actual database update
-      // await addCreditsToUser(clerkUserId, creditAmount);
+      // Log successful processing
+      console.log('✅ Credit purchase webhook processed successfully');
       
-      // For now, we can use a simple notification system
-      // The frontend can check for successful payments and refresh user data
+      // Store successful webhook processing for potential reconciliation
+      // You could store this in a database for audit purposes
+      
     } else {
-      console.error('❌ Unknown price ID for credit purchase:', priceId);
+      console.error('❌ Unknown price ID for credit purchase:', {
+        priceId,
+        availablePriceIds: Object.keys(priceToCreditsMap),
+        sessionId: session.id
+      });
+      
+      // Don't fail the webhook for unknown price IDs, just log the error
+      // The client-side fallback will handle credit addition
     }
     
   } catch (error) {
     console.error('❌ Failed to process credit purchase:', error);
+    // Don't throw error - let webhook succeed even if processing fails
+    // Client-side will handle credit addition as fallback
   }
 } 

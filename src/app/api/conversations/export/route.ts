@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
+import { contextManager } from '@/lib/context/AdvancedContextManager';
+import { ChatExportFormatter } from '@/lib/import-export/formatters';
+import { 
+  SupportedExportFormat, 
+  ExportOptions, 
+  BaseConversation 
+} from '@/types/import-export';
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     const user = await currentUser();
     
@@ -13,183 +22,130 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const format = searchParams.get('format') || 'omnix'; // omnix, chatgpt, claude, json
-    const startDate = searchParams.get('startDate') || undefined;
-    const endDate = searchParams.get('endDate') || undefined;
+    
+    // Parse export options from query parameters
+    const options: ExportOptions = {
+      format: (searchParams.get('format') || 'json') as SupportedExportFormat,
+      includeMetadata: searchParams.get('includeMetadata') !== 'false',
+      includeTimestamps: searchParams.get('includeTimestamps') !== 'false',
+      includeAttachments: searchParams.get('includeAttachments') === 'true',
+      dateRange: searchParams.get('startDate') && searchParams.get('endDate') ? {
+        start: new Date(searchParams.get('startDate')!),
+        end: new Date(searchParams.get('endDate')!)
+      } : undefined,
+      conversationIds: searchParams.get('conversationIds')?.split(',').filter(Boolean),
+      compression: searchParams.get('compression') === 'true'
+    };
 
-    console.log('📤 Exporting conversations for user:', user.id, 'format:', format);
+    console.log('📤 Exporting conversations for user:', user.id, 'options:', options);
 
-    // In a real implementation, you'd fetch from your database
-    // For now, we'll return a mock structure
-    const conversations = await getMockConversations(user.id, startDate, endDate);
-
-    let exportData;
-    let filename;
-    let contentType = 'application/json';
-
-    switch (format) {
-      case 'chatgpt':
-        exportData = formatForChatGPT(conversations);
-        filename = `omnix-conversations-chatgpt-${new Date().toISOString().split('T')[0]}.json`;
-        break;
-      
-      case 'claude':
-        exportData = formatForClaude(conversations);
-        filename = `omnix-conversations-claude-${new Date().toISOString().split('T')[0]}.json`;
-        break;
-      
-      case 'csv':
-        exportData = formatForCSV(conversations);
-        filename = `omnix-conversations-${new Date().toISOString().split('T')[0]}.csv`;
-        contentType = 'text/csv';
-        break;
-      
-      case 'omnix':
-      default:
-        exportData = formatForOmniX(conversations);
-        filename = `omnix-conversations-${new Date().toISOString().split('T')[0]}.json`;
-        break;
+    // Fetch conversations from database
+    const conversations = await fetchUserConversations(user.id, options);
+    
+    if (conversations.length === 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'No conversations found for export'
+      }, { status: 404 });
     }
 
-    const response = new NextResponse(exportData, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
+    // Create export formatter and generate content
+    const formatter = new ChatExportFormatter(options);
+    const exportResult = await formatter.exportConversations(
+      conversations,
+      options.format,
+      { id: user.id, email: user.emailAddresses[0]?.emailAddress, name: user.fullName || user.firstName }
+    );
+    
+    // Calculate processing time
+    const processingTime = Date.now() - startTime;
+
+    console.log('✅ Export completed:', {
+      filename: exportResult.filename,
+      conversations: conversations.length,
+      format: options.format,
+      size: exportResult.size,
+      processingTime
     });
 
-    console.log('✅ Export completed:', filename);
+    // Return file download response
+    const response = new NextResponse(
+      typeof exportResult.data === 'string' ? exportResult.data : JSON.stringify(exportResult.data),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': exportResult.mimeType,
+          'Content-Disposition': `attachment; filename="${exportResult.filename}"`,
+          'X-Export-Stats': JSON.stringify({
+            conversationCount: conversations.length,
+            processingTime,
+            format: options.format
+          })
+        },
+      }
+    );
+
     return response;
 
   } catch (error) {
     console.error('❌ Export error:', error);
-    return NextResponse.json(
-      { error: 'Export failed' },
-      { status: 500 }
-    );
+    
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Export failed'
+    }, { status: 500 });
   }
 }
 
-// Mock function - replace with real database query
-async function getMockConversations(userId: string, startDate?: string, endDate?: string) {
-  return [
-    {
-      id: 'conv-1',
-      title: 'Planning my startup',
-      createdAt: '2024-01-15T10:30:00Z',
-      updatedAt: '2024-01-15T11:45:00Z',
-      model: 'gpt-4',
-      messages: [
-        {
-          id: 'msg-1',
-          role: 'user',
-          content: 'Help me plan my AI startup',
-          timestamp: '2024-01-15T10:30:00Z'
-        },
-        {
-          id: 'msg-2',
-          role: 'assistant',
-          content: 'I\'d be happy to help you plan your AI startup! Let\'s start with the key areas...',
-          timestamp: '2024-01-15T10:30:30Z',
-          model: 'gpt-4'
+/**
+ * Fetch user conversations based on export options
+ */
+async function fetchUserConversations(
+  userId: string, 
+  options: ExportOptions
+): Promise<BaseConversation[]> {
+  try {
+    // If specific conversation IDs are requested
+    if (options.conversationIds && options.conversationIds.length > 0) {
+      const conversations: BaseConversation[] = [];
+      
+      for (const convId of options.conversationIds) {
+        const conversation = await contextManager.loadConversation(convId);
+        if (conversation && conversation.userId === userId) {
+          conversations.push(conversation);
         }
-      ]
+      }
+      
+      return conversations;
     }
-  ];
+
+    // Get all user conversations with pagination
+    const result = await contextManager.getUserConversations(
+      userId,
+      options.pagination?.limit || 1000,
+      options.pagination?.offset || 0
+    );
+
+    let conversations = result.conversations;
+
+    // Apply date range filter if specified
+    if (options.dateRange) {
+      const startDate = new Date(options.dateRange.start);
+      const endDate = new Date(options.dateRange.end);
+      
+      conversations = conversations.filter(conv => {
+        const convDate = new Date(conv.createdAt);
+        return convDate >= startDate && convDate <= endDate;
+      });
+    }
+
+    return conversations;
+
+  } catch (error) {
+    console.error('Failed to fetch conversations for export:', error);
+    return [];
+  }
 }
 
-function formatForOmniX(conversations: any[]) {
-  return JSON.stringify({
-    version: '1.0',
-    source: 'omnix',
-    exportDate: new Date().toISOString(),
-    conversations: conversations.map(conv => ({
-      id: conv.id,
-      title: conv.title,
-      model: conv.model,
-      createdAt: conv.createdAt,
-      updatedAt: conv.updatedAt,
-      messages: conv.messages.map((msg: any) => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        model: msg.model || conv.model
-      }))
-    }))
-  }, null, 2);
-}
 
-function formatForChatGPT(conversations: any[]) {
-  // Format compatible with ChatGPT export format
-  return JSON.stringify(conversations.map(conv => ({
-    title: conv.title,
-    create_time: new Date(conv.createdAt).getTime() / 1000,
-    update_time: new Date(conv.updatedAt).getTime() / 1000,
-    mapping: Object.fromEntries(
-      conv.messages.map((msg: any, index: number) => [
-        msg.id,
-        {
-          id: msg.id,
-          message: {
-            id: msg.id,
-            create_time: new Date(msg.timestamp).getTime() / 1000,
-            content: {
-              content_type: 'text',
-              parts: [msg.content]
-            },
-            author: {
-              role: msg.role
-            },
-            metadata: {
-              model_slug: msg.model || conv.model
-            }
-          },
-          parent: index > 0 ? conv.messages[index - 1].id : null,
-          children: index < conv.messages.length - 1 ? [conv.messages[index + 1].id] : []
-        }
-      ])
-    )
-  })), null, 2);
-}
-
-function formatForClaude(conversations: any[]) {
-  // Format compatible with Claude export format
-  return JSON.stringify({
-    conversations: conversations.map(conv => ({
-      uuid: conv.id,
-      name: conv.title,
-      created_at: conv.createdAt,
-      updated_at: conv.updatedAt,
-      chat_messages: conv.messages.map((msg: any) => ({
-        uuid: msg.id,
-        text: msg.content,
-        sender: msg.role === 'user' ? 'human' : 'assistant',
-        created_at: msg.timestamp
-      }))
-    }))
-  }, null, 2);
-}
-
-function formatForCSV(conversations: any[]) {
-  const headers = ['Conversation ID', 'Title', 'Date', 'Model', 'Role', 'Message', 'Timestamp'];
-  const rows = [headers.join(',')];
-  
-  conversations.forEach(conv => {
-    conv.messages.forEach((msg: any) => {
-      const row = [
-        conv.id,
-        `"${conv.title.replace(/"/g, '""')}"`,
-        conv.createdAt.split('T')[0],
-        conv.model,
-        msg.role,
-        `"${msg.content.replace(/"/g, '""')}"`,
-        msg.timestamp
-      ];
-      rows.push(row.join(','));
-    });
-  });
-  
-  return rows.join('\n');
-} 
+ 

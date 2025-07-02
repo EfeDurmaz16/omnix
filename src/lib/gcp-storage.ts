@@ -40,6 +40,8 @@ try {
 
 const bucketName = process.env.GCS_BUCKET_NAME || 'omnix-video-storage';
 
+export { firestore };
+
 /**
  * Generates a signed URL for uploading a file to Google Cloud Storage.
  * @param userId - The ID of the user uploading the file.

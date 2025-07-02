@@ -18,6 +18,8 @@ import {
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ImportExportButton } from '@/components/import-export/ImportExportButton';
+import { Switch } from '@/components/ui/switch';
 
 interface ChatHeaderProps {
   selectedModel: string;
@@ -28,11 +30,14 @@ interface ChatHeaderProps {
   conversationTitle: string;
   thinkingMode?: string;
   onThinkingModeChange?: (mode: string) => void;
+  userId?: string;
+  autoRoutingEnabled?: boolean;
+  onAutoRoutingToggle?: (enabled: boolean) => void;
 }
 
 // Custom icon component for brain explosion emoji
 const BrainBombed = ({ className }: { className?: string }) => (
-  <span className={`${className || 'text-xs'}`}>🤯</span>
+  <span className={`${className || 'text-sm'} flex items-center justify-center leading-none`}>🤯</span>
 );
 
 const thinkingModes = [
@@ -50,7 +55,10 @@ export function ChatHeader({
   showModelSearch,
   conversationTitle,
   thinkingMode,
-  onThinkingModeChange
+  onThinkingModeChange,
+  userId,
+  autoRoutingEnabled = false,
+  onAutoRoutingToggle
 }: ChatHeaderProps) {
   const [showQuickModels, setShowQuickModels] = useState(false);
 
@@ -187,7 +195,7 @@ export function ChatHeader({
       <div className="flex items-center gap-2">
         {/* Thinking Mode Selector - Always visible during chat */}
         {thinkingMode && onThinkingModeChange && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 border border-border/50 rounded-md p-1">
             {thinkingModes.map((mode) => {
               const IconComponent = mode.icon;
               const isActive = thinkingMode === mode.id;
@@ -197,10 +205,10 @@ export function ChatHeader({
                   variant="ghost"
                   size="sm"
                   onClick={() => onThinkingModeChange(mode.id)}
-                  className={`thinking-mode-${mode.id} ${isActive ? 'active' : ''} px-2 py-1 h-7 transition-all duration-200 border-0 ${
+                  className={`thinking-mode-${mode.id} ${isActive ? 'active' : ''} px-2 py-1 h-7 min-w-[28px] transition-all duration-200 border-0 flex items-center justify-center ${
                     isActive 
                       ? 'text-white shadow-lg' 
-                      : 'text-muted-foreground hover:shadow-md'
+                      : 'text-muted-foreground hover:shadow-md hover:bg-muted/50'
                   }`}
                   title={`${mode.name} mode`}
                 >
@@ -208,6 +216,18 @@ export function ChatHeader({
                 </Button>
               );
             })}
+          </div>
+        )}
+
+        {/* Auto-Routing Toggle */}
+        {onAutoRoutingToggle && (
+          <div className="flex items-center gap-2 px-2 min-w-fit">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Smart</span>
+            <Switch
+              checked={autoRoutingEnabled}
+              onCheckedChange={onAutoRoutingToggle}
+              className="scale-90 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input border-border"
+            />
           </div>
         )}
 
@@ -219,9 +239,15 @@ export function ChatHeader({
           <Share className="h-4 w-4" />
         </Button>
         
-        <Button variant="ghost" size="sm" className="hidden sm:flex">
-          <Download className="h-4 w-4" />
-        </Button>
+        {/* Import/Export Button */}
+        {userId && (
+          <ImportExportButton 
+            userId={userId} 
+            variant="ghost" 
+            size="sm" 
+            className="hidden sm:flex"
+          />
+        )}
 
         {/* More Menu */}
         <Button variant="ghost" size="sm">

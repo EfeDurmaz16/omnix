@@ -144,12 +144,12 @@ export class VertexAIProvider implements ModelProvider {
       ]
     },
     {
-      id: 'imagen-4.0-fast-generate',
+      id: 'imagen-4.0-fast-generate-preview-06-06',
       name: 'Imagen 4 Fast',
       provider: 'vertex',
       type: 'image',
       contextWindow: 0,
-      inputCostPer1kTokens: 0.04, 
+      inputCostPer1kTokens: 0.02,
       outputCostPer1kTokens: 0,
       maxTokens: 0,
       capabilities: [
@@ -176,19 +176,6 @@ export class VertexAIProvider implements ModelProvider {
       type: 'image',
       contextWindow: 0,
       inputCostPer1kTokens: 0.08,
-      outputCostPer1kTokens: 0,
-      maxTokens: 0,
-      capabilities: [
-        { type: 'image-generation', supported: true }
-      ]
-    },
-    {
-      id: 'imagen-4.0-fast-generate-preview-06-06',
-      name: 'Imagen 4 Fast',
-      provider: 'vertex',
-      type: 'image',
-      contextWindow: 0,
-      inputCostPer1kTokens: 0.02,
       outputCostPer1kTokens: 0,
       maxTokens: 0,
       capabilities: [
@@ -668,6 +655,8 @@ export class VertexAIProvider implements ModelProvider {
     model: string;
     size?: string;
     quality?: string;
+    sourceImage?: string; // Base64 data URL or URL of source image for image-to-image
+    editType?: 'variation' | 'inpaint' | 'outpaint';
   }): Promise<{
     id: string;
     url: string;
@@ -683,7 +672,9 @@ export class VertexAIProvider implements ModelProvider {
 
       console.log('🎨 Generating image with Vertex AI Imagen:', {
         model: options.model,
-        prompt: options.prompt.substring(0, 100) + '...'
+        prompt: options.prompt.substring(0, 100) + '...',
+        hasSourceImage: !!options.sourceImage,
+        editType: options.editType
       });
 
       const projectId = process.env.GOOGLE_CLOUD_PROJECT;
@@ -691,12 +682,71 @@ export class VertexAIProvider implements ModelProvider {
       
       // Prepare the REST API request for Imagen
       const imageCount = 1; // Generate 1 image
-      const requestBody = {
-        instances: [
-          {
-            prompt: options.prompt
+      const instance: any = {
+        prompt: options.prompt
+      };
+
+      // Add source image for image-to-image editing
+      if (options.sourceImage) {
+        console.log('📸 Adding source image for image-to-image editing');
+        
+        let imageData = options.sourceImage;
+        
+        if (imageData.startsWith('data:image/')) {
+          // Extract base64 data from data URL
+          imageData = imageData.split(',')[1];
+          console.log('✅ Extracted base64 from data URL, length:', imageData.length);
+        } else if (imageData.startsWith('http')) {
+          // If it's a URL, we need to fetch and convert to base64
+          console.log('🌐 Fetching image from URL to convert to base64');
+          try {
+            const imageResponse = await fetch(imageData);
+            const imageBuffer = await imageResponse.arrayBuffer();
+            imageData = Buffer.from(imageBuffer).toString('base64');
+            console.log('✅ Converted URL image to base64, length:', imageData.length);
+          } catch (fetchError) {
+            console.error('❌ Failed to fetch image from URL:', fetchError);
+            throw new Error('Failed to fetch source image for editing');
           }
-        ],
+        }
+        
+        // Validate base64 format and check for placeholder
+        if (!imageData || imageData.length < 100) {
+          console.error('❌ Invalid base64 data:', imageData?.substring(0, 50));
+          throw new Error('Invalid image data for editing');
+        }
+        
+        // Check if this is our transparent placeholder (skip image-to-image for placeholder)
+        const transparentPlaceholder = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+        if (imageData === transparentPlaceholder) {
+          console.log('🔄 Detected placeholder image, skipping image-to-image editing');
+          // Don't add image parameter for placeholder - just do text-to-image
+          return await this.generateImage({
+            ...options,
+            sourceImage: undefined, // Remove source image to do text-to-image instead
+            editType: undefined
+          });
+        }
+        
+        // Add the source image to the instance
+        instance.image = {
+          bytesBase64Encoded: imageData
+        };
+
+        // Add edit mode parameter based on edit type
+        if (options.editType === 'inpaint') {
+          instance.editMode = 'inpainting-insert';
+        } else if (options.editType === 'outpaint') {
+          instance.editMode = 'outpainting';
+        } else {
+          instance.editMode = 'product-image'; // Default for variations
+        }
+        
+        console.log('✅ Image data prepared for Imagen API, base64 length:', imageData.length, 'edit mode:', instance.editMode);
+      }
+
+      const requestBody = {
+        instances: [instance],
         parameters: {
           sampleCount: imageCount,
           language: "en",
@@ -773,12 +823,15 @@ export class VertexAIProvider implements ModelProvider {
       } catch (apiError) {
         console.warn('⚠️ Real Imagen API failed, using placeholder:', apiError instanceof Error ? apiError.message : 'Unknown error');
         
-        // Fallback to placeholder if real API fails
+        // Fallback to a local base64 placeholder if real API fails
         const imageId = `img_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        const imageUrl = `https://via.placeholder.com/1024x1024/4F46E5/FFFFFF?text=Imagen+${options.model.replace('imagen-', '').replace('-generate', '')}+Generated+(API+Unavailable)`;
+        
+        // Create a simple 1x1 pixel transparent PNG as base64 (this avoids external network calls)
+        const placeholderBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+        const imageUrl = `data:image/png;base64,${placeholderBase64}`;
         
         console.log('✅ Imagen generation completed (fallback):', imageId);
-        console.log('🔗 Using placeholder image URL due to API unavailability');
+        console.log('🔗 Using local placeholder image due to API unavailability');
         
         return {
           id: imageId,

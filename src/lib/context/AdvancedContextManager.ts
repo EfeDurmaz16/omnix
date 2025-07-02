@@ -6,6 +6,7 @@ import {
 import { MemoryManager } from '../rag/MemoryManager';
 import { getModelRouter } from '../model-router';
 import { conversationStore } from '../database/ConversationStore';
+import { getPerformanceConfig } from '../config/performance';
 
 export interface ConversationContext {
   id: string;
@@ -67,6 +68,11 @@ export class AdvancedContextManager {
   private readonly maxContextTokens = 128000; // Maximum context window
   private readonly summarizationThreshold = 0.8; // When to start summarizing
   
+  // Performance optimization caches
+  private memoryCache: Map<string, { data: string; timestamp: number }> = new Map();
+  private performanceConfig = getPerformanceConfig();
+  private readonly maxCacheSize = 100;
+  
   // RAG Integration
   private vectorStore: EnhancedGCPVectorStore;
   private memoryManager: MemoryManager;
@@ -98,12 +104,13 @@ export class AdvancedContextManager {
   }
 
   /**
-   * Get or create a conversation context with RAG-enhanced memory injection
+   * Get or create a conversation context with optional RAG-enhanced memory injection
    */
   async getOrCreateContext(
     userId: string, 
     conversationId?: string,
-    initialModel: string = 'gpt-4o'
+    initialModel: string = 'gpt-4o',
+    quickMode: boolean = false
   ): Promise<ConversationContext> {
     const contextId = conversationId || this.generateContextId();
     
@@ -126,19 +133,34 @@ export class AdvancedContextManager {
         tokenCount: 0,
       },
       settings: {
-        memoryEnabled: true,
+        memoryEnabled: !quickMode,
         temperature: 0.7,
         maxTokens: 4000,
       },
     };
 
-    // Load user's persistent memory into context
-    await this.injectUserMemory(newContext);
+    // Load user's persistent memory into context (skip in quick mode)
+    if (!quickMode) {
+      try {
+        await Promise.race([
+          this.injectUserMemory(newContext),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Memory injection timeout')), 2000)
+          )
+        ]);
+      } catch (error) {
+        console.warn('⚡ Memory injection skipped due to timeout or error:', error);
+      }
+    }
 
     this.activeContexts.set(contextId, newContext);
-    await this.persistContext(newContext);
+    
+    // Persist context asynchronously (don't block)
+    this.persistContext(newContext).catch(error => 
+      console.warn('Context persistence failed (non-blocking):', error)
+    );
 
-    console.log('🆕 Created new context:', contextId, 'for user:', userId);
+    console.log('🆕 Created new context:', contextId, 'for user:', userId, quickMode ? '(quick mode)' : '(full mode)');
     return newContext;
   }
 
@@ -170,9 +192,11 @@ export class AdvancedContextManager {
       context.title = this.generateTitle(message.content);
     }
 
-    // Enhanced memory extraction for user messages
-    if (message.role === 'user') {
-      await this.extractAndStoreUserMemories(context.userId, message.content, contextId);
+    // Enhanced memory extraction for user messages (only for substantial messages to reduce overhead)
+    if (message.role === 'user' && message.content.length > 20) {
+      // Extract memories asynchronously to not block the main flow
+      this.extractAndStoreUserMemories(context.userId, message.content, contextId)
+        .catch(error => console.warn('Memory extraction failed (non-blocking):', error));
     }
 
     // Check if context needs compression
@@ -195,6 +219,7 @@ export class AdvancedContextManager {
    * RAG-enhanced context retrieval for model consumption
    */
   async getContextForModel(contextId: string): Promise<ContextMessage[]> {
+    const startTime = Date.now();
     const context = this.activeContexts.get(contextId);
     if (!context) {
       throw new Error(`Context ${contextId} not found`);
@@ -202,17 +227,21 @@ export class AdvancedContextManager {
 
     let messages = [...context.messages];
 
-    // Add RAG-enhanced memory context if enabled
-    if (context.settings.memoryEnabled) {
-      const memoryContext = await this.getRelevantMemoryWithRAG(context.userId, context);
-      if (memoryContext.length > 0) {
-        const memoryMessage: ContextMessage = {
-          id: 'memory-context-rag',
-          role: 'system',
-          content: this.formatEnhancedMemoryContext(memoryContext),
-          timestamp: new Date(),
-        };
-        messages = [memoryMessage, ...messages];
+    // Skip memory injection for performance if not enabled or if messages are already memory-enhanced
+    if (context.settings.memoryEnabled && !messages.some(m => m.id === 'cross-chat-memory')) {
+      try {
+        const memoryContext = await this.getRelevantMemoryWithRAG(context.userId, context);
+        if (memoryContext.length > 0) {
+          const memoryMessage: ContextMessage = {
+            id: 'memory-context-rag',
+            role: 'system',
+            content: this.formatEnhancedMemoryContext(memoryContext),
+            timestamp: new Date(),
+          };
+          messages = [memoryMessage, ...messages];
+        }
+      } catch (error) {
+        console.warn('Failed to add RAG memory context, continuing without it:', error);
       }
     }
 
@@ -225,34 +254,132 @@ export class AdvancedContextManager {
     };
     messages = [factCheckPrompt, ...messages];
 
+    const elapsedTime = Date.now() - startTime;
+    console.log(`⏱️ Context retrieval for model took ${elapsedTime}ms`);
+
     return messages;
   }
 
   /**
-   * Enhanced memory injection using RAG vector search
+   * Enhanced memory injection using RAG vector search (OPTIMIZED)
    */
   private async injectUserMemory(context: ConversationContext): Promise<void> {
-    if (!context.settings.memoryEnabled) return;
+    if (!context.settings.memoryEnabled) {
+      console.log('🚫 Memory disabled for context:', context.id);
+      return;
+    }
 
+    const startTime = performance.now();
+    
     try {
-      // Get user's relevant memories for context enhancement
-      const relevantMemories = await this.memoryManager.getRelevantMemoriesForContext(
+      // Get the last user message to use as search context
+      const lastUserMessage = context.messages
+        .filter(m => m.role === 'user')
+        .slice(-1)[0];
+      
+      const searchQuery = lastUserMessage ? 
+        lastUserMessage.content : 
+        'user profile and preferences';
+
+      // Check cache first for recent memory queries
+      const cacheKey = `${context.userId}-${searchQuery.substring(0, 50)}`;
+      const cached = this.memoryCache.get(cacheKey);
+      const now = Date.now();
+      
+      if (cached && (now - cached.timestamp) < this.performanceConfig.memoryCacheTimeout) {
+        console.log('⚡ Using cached memory data');
+        if (cached.data.trim()) {
+          const memoryMessage: ContextMessage = {
+            id: 'cross-chat-memory',
+            role: 'system',
+            content: `# Relevant information from previous conversations:\n${cached.data}`,
+            timestamp: new Date(),
+          };
+          context.messages.unshift(memoryMessage);
+        }
+        return;
+      }
+
+      console.log('🔍 Memory search for user:', context.userId, 'query:', searchQuery.substring(0, 100));
+
+      // Get user's relevant memories with timeout protection
+      const relevantMemories = await this.getMemoriesWithTimeout(
         context.userId,
-        'user profile and preferences',
-        'preference'
+        searchQuery,
+        this.performanceConfig.maxMemorySearchTime
       );
       
-      if (relevantMemories.formatted) {
+      const elapsedTime = performance.now() - startTime;
+      console.log(`⏱️ Memory injection took ${elapsedTime.toFixed(2)}ms`);
+      
+      console.log('💾 Found memories:', {
+        conversationMemories: relevantMemories.conversationMemories.length,
+        userMemories: relevantMemories.userMemories.length,
+        formattedLength: relevantMemories.formatted.length
+      });
+      
+      // Cache the result
+      this.memoryCache.set(cacheKey, {
+        data: relevantMemories.formatted,
+        timestamp: now
+      });
+      
+      // Clean old cache entries if cache is getting too large
+      if (this.memoryCache.size > this.maxCacheSize) {
+        const oldestKeys = Array.from(this.memoryCache.keys()).slice(0, 20);
+        oldestKeys.forEach(key => this.memoryCache.delete(key));
+      }
+      
+      if (relevantMemories.formatted && relevantMemories.formatted.trim()) {
+        console.log('📝 Injecting cross-chat memory into conversation:', context.id);
         const memoryMessage: ContextMessage = {
-          id: 'user-profile-memory',
+          id: 'cross-chat-memory',
           role: 'system',
-          content: relevantMemories.formatted,
+          content: `# Relevant information from previous conversations:\n${relevantMemories.formatted}`,
           timestamp: new Date(),
         };
         context.messages.unshift(memoryMessage);
+      } else {
+        console.log('⚠️ No relevant memories found or empty formatted response');
       }
     } catch (error) {
-      console.warn('Failed to inject user memory:', error);
+      const elapsedTime = performance.now() - startTime;
+      console.error(`❌ Memory injection failed after ${elapsedTime.toFixed(2)}ms:`, error);
+    }
+  }
+
+  /**
+   * Get memories with timeout protection to prevent slow queries from blocking chat
+   */
+  private async getMemoriesWithTimeout(
+    userId: string,
+    searchQuery: string,
+    timeoutMs: number
+  ): Promise<{ conversationMemories: any[]; userMemories: ExtractedMemory[]; formatted: string; }> {
+    if (!this.performanceConfig.enableMemorySearch) {
+      console.log('⚡ Memory search disabled for performance');
+      return { conversationMemories: [], userMemories: [], formatted: '' };
+    }
+
+    const timeoutPromise = new Promise<{ conversationMemories: any[]; userMemories: ExtractedMemory[]; formatted: string; }>((_, reject) =>
+      setTimeout(() => reject(new Error('Memory search timeout')), timeoutMs)
+    );
+
+    const memoryPromise = this.memoryManager.getRelevantMemoriesForContext(
+      userId,
+      searchQuery,
+      'conversation'
+    );
+
+    try {
+      return await Promise.race([memoryPromise, timeoutPromise]);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('timeout')) {
+        console.warn(`⚠️ Memory search timed out after ${timeoutMs}ms, proceeding without memory context`);
+      } else {
+        console.warn('Memory search failed:', error);
+      }
+      return { conversationMemories: [], userMemories: [], formatted: '' };
     }
   }
 

@@ -53,3 +53,6 @@ ehthumbs.db
 Thumbs.db
 
 certificates/
+
+# Data directory for server-side storage
+.data/

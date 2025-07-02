@@ -40,20 +40,7 @@ export default function ThemesPage() {
     }
   };
 
-  const getThemeGradient = (themeId: string) => {
-    switch (themeId) {
-      case 'aegean': 
-        return 'bg-gradient-to-br from-blue-500 via-blue-600 to-orange-500';
-      case 'karadeniz': 
-        return 'bg-gradient-to-br from-slate-800 via-slate-900 to-emerald-800';
-      case 'gobeklitepe': 
-        return 'bg-gradient-to-br from-amber-600 via-orange-700 to-purple-800';
-      case 'ani': 
-        return 'bg-gradient-to-br from-amber-600 via-red-800 to-orange-700';
-      default: 
-        return 'bg-gradient-to-br from-gray-400 to-gray-600';
-    }
-  };
+  
 
   const getThemeDescription = (themeId: string) => {
     switch (themeId) {
@@ -158,8 +145,8 @@ export default function ThemesPage() {
           animate={{ opacity: 1, scale: 1 }}
           className="mb-12"
         >
-          <Card className="glass-morphism ancient-glow overflow-hidden">
-            <div className={`h-40 ${getThemeGradient(theme)} relative`}>
+          <Card className="glass-morphism ancient-glow overflow-hidden cultural-card">
+            <div className={`h-40 cultural-gradient-bg ${theme} relative`}>
               <div className="absolute inset-0 bg-black/30" />
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
@@ -210,10 +197,10 @@ export default function ThemesPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <Card className={`overflow-hidden hover:shadow-xl transition-all duration-300 ${
+                <Card className={`overflow-hidden hover:shadow-xl transition-all duration-300 cultural-card ${
                   theme === themeItem.id ? 'ring-2 ring-primary shadow-lg' : ''
                 }`}>
-                  <div className={`h-32 ${getThemeGradient(themeItem.id)} relative overflow-hidden`}>
+                  <div className={`h-32 cultural-gradient-bg ${themeItem.id} relative overflow-hidden`}>
                     <div className="absolute inset-0 bg-black/20" />
                     <div className="absolute bottom-4 left-4 text-white">
                       <div className="flex items-center gap-2 mb-2">
@@ -273,7 +260,7 @@ export default function ThemesPage() {
         </div>
 
         {/* Interactive Demo Section */}
-        <Card className="p-8 glass-morphism">
+        <Card className="p-8 glass-morphism cultural-card">
           <CardHeader className="text-center pb-8">
             <CardTitle className="text-2xl flex items-center justify-center gap-2">
               <Eye className="h-6 w-6" />
@@ -403,7 +390,7 @@ export default function ThemesPage() {
         </Card>
 
         {/* Usage Guide */}
-        <Card className="mt-12 p-6">
+        <Card className="mt-12 p-6 cultural-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="h-5 w-5" />

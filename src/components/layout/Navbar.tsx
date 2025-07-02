@@ -61,7 +61,7 @@ export function Navbar() {
                   <Link
                     key={item.name}
                     href={item.href}
-                    className="relative text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-300 group py-2"
+                    className="relative text-sm font-medium cultural-text-primary hover:text-foreground transition-all duration-300 group py-2 cultural-hover"
                   >
                     {item.name}
                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-primary to-accent-foreground group-hover:w-full transition-all duration-300"></span>
@@ -151,7 +151,7 @@ export function Navbar() {
                         key={item.name}
                         href={item.href}
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="text-muted-foreground hover:text-foreground transition-colors duration-300 py-3 px-4 rounded-lg cultural-hover font-medium"
+                        className="cultural-text-primary hover:text-foreground transition-colors duration-300 py-3 px-4 rounded-lg cultural-hover font-medium"
                       >
                         {item.name}
                       </Link>
@@ -166,7 +166,7 @@ export function Navbar() {
                             key={item.name}
                             href={item.href}
                             onClick={() => setIsMobileMenuOpen(false)}
-                            className="text-muted-foreground hover:text-foreground transition-colors duration-300 block py-3 px-4 rounded-lg cultural-hover font-medium"
+                            className="cultural-text-primary hover:text-foreground transition-colors duration-300 block py-3 px-4 rounded-lg cultural-hover font-medium"
                           >
                             {item.name}
                           </Link>
