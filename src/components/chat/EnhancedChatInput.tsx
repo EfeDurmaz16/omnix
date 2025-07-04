@@ -280,7 +280,7 @@ export function EnhancedChatInput({
         setTranscriptionPreview('Transcribing...');
         
         const recorder = (window as any).__currentRecorder;
-        if (recorder) {
+        if (recorder && recorder.recording) {
           const audioBlob = await recorder.stopRecording();
           console.log('📝 Transcribing audio...');
           
@@ -300,6 +300,9 @@ export function EnhancedChatInput({
           
           // Clean up
           delete (window as any).__currentRecorder;
+        } else {
+          setTranscriptionPreview('No active recording found');
+          console.warn('⚠️ No active recording to stop');
         }
         
         setIsRecording(false);

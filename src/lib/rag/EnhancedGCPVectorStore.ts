@@ -158,13 +158,15 @@ export class EnhancedGCPVectorStore {
       await docRef.set({
         userId,
         conversationId: conversation.id,
-        messages: conversation.messages.map((msg, idx) => ({
-          content: msg.content,
-          role: msg.role,
-          timestamp: msg.timestamp,
-          embedding: embeddings[idx],
-          messageId: msg.id || `msg-${idx}`,
-        })),
+        messages: conversation.messages
+          .map((msg, idx) => ({
+            content: msg.content,
+            role: msg.role,
+            timestamp: msg.timestamp,
+            embedding: embeddings && embeddings[idx] ? embeddings[idx] : null,
+            messageId: msg.id || `msg-${idx}`,
+          }))
+          .filter(msg => msg.embedding !== null), // Only store messages with valid embeddings
         metadata: conversation.metadata,
         createdAt: new Date(),
         storageType: this.useVectorSearch ? 'vector-search-ready' : 'firestore',

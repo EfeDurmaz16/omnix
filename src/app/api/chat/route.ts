@@ -17,6 +17,9 @@ interface ChatRequest {
   conversationId?: string;
   mode?: 'flash' | 'think' | 'ultra-think' | 'full-think';
   stream?: boolean;
+  includeMemory?: boolean;
+  voiceChat?: boolean;
+  language?: string;
   files?: Array<{
     name: string;
     type: string;
@@ -40,7 +43,17 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body: ChatRequest = await req.json();
-    const { messages, model, sessionId, conversationId, mode, files, stream = false } = body;
+    const { messages, model, sessionId, conversationId, mode, files, stream = false, includeMemory = false, voiceChat = false, language = 'en' } = body;
+    
+    // Debug voice chat requests
+    if (voiceChat) {
+      console.log('🎙️ Voice chat request received:', {
+        messageCount: messages.length,
+        lastMessage: messages[messages.length - 1]?.content?.substring(0, 100),
+        language: language,
+        includeMemory: includeMemory
+      });
+    }
 
     // Input validation
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -241,6 +254,77 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Voice chat memory enhancement
+    if (voiceChat && includeMemory && !useQuickMode) {
+      try {
+        console.log('🎙️ Retrieving voice chat memories for context');
+        
+        // Get the user's last message for memory search
+        const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0];
+        if (lastUserMessage) {
+          // Create a simple temporary context and use the existing memory flow
+          const tempContextId = `voice_temp_${Date.now()}`;
+          const tempContext = await contextManager.getOrCreateContext(
+            userId, 
+            tempContextId, 
+            model, 
+            false // Don't use quick mode to enable memory
+          );
+          
+          // Add the voice message to get memory context
+          contextManager.addMessage(tempContext.id, {
+            id: `voice_${Date.now()}`,
+            role: 'user',
+            content: lastUserMessage.content,
+            timestamp: new Date()
+          });
+          
+          // Get the enhanced context which includes memory (returns ContextMessage[] directly)
+          const enhancedTempMessages = await contextManager.getContextForModel(tempContext.id);
+          
+          console.log('🔍 Enhanced context result:', {
+            exists: !!enhancedTempMessages,
+            isArray: Array.isArray(enhancedTempMessages),
+            messageCount: enhancedTempMessages?.length || 0,
+            messageTypes: enhancedTempMessages?.map(m => m?.role) || []
+          });
+          
+          // Check if messages exist and find memory content
+          if (enhancedTempMessages && Array.isArray(enhancedTempMessages) && enhancedTempMessages.length > 0) {
+            // Extract memory from the enhanced messages
+            const memoryMessage = enhancedTempMessages.find(msg => 
+              msg && msg.role === 'system' && msg.content && (
+                msg.content.includes('Previous conversations') ||
+                msg.content.includes('user memories') ||
+                msg.content.includes('memory') ||
+                msg.content.includes('context')
+              )
+            );
+            
+            if (memoryMessage && memoryMessage.content.trim()) {
+              // Use language-aware context formatting
+              const contextMessage = language === 'en' 
+                ? `# Voice Chat Context from Previous Conversations:\n${memoryMessage.content}\n\n*Note: User is speaking via voice chat in ${language.toUpperCase()} - provide natural, conversational responses in the same language.*`
+                : `# Contexto de Chat de Voz de Conversaciones Anteriores:\n${memoryMessage.content}\n\n*Nota: El usuario está hablando por chat de voz en ${language.toUpperCase()} - proporciona respuestas naturales y conversacionales en el mismo idioma.*`;
+              
+              const voiceMemoryMessage = {
+                role: 'system' as const,
+                content: contextMessage
+              };
+              enhancedMessages = [voiceMemoryMessage, ...enhancedMessages];
+              console.log('✅ Voice chat memory context added');
+            } else {
+              console.log('📭 No relevant memory found for voice chat context');
+            }
+          } else {
+            console.warn('⚠️ Enhanced context has no messages, skipping voice memory');
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Voice chat memory retrieval failed:', error);
+      }
+    }
+
     // Create enhanced request
     const enhancedRequest: GenerateRequest = {
       ...generateRequest,
@@ -263,20 +347,19 @@ export async function POST(req: NextRequest) {
             // Use our model router to generate the response
             const aiResponse = await routeRequest(enhancedRequest);
             
-            // Stream the response in larger chunks for better performance
-            const chunkSize = 20; // words per chunk
-            const words = aiResponse.content.split(' ');
+            // Stream the response character by character for fast typing effect
+            const content = aiResponse.content;
+            const chunkSize = 3; // characters per chunk for smooth typing
             
-            for (let i = 0; i < words.length; i += chunkSize) {
-              const chunk = words.slice(i, i + chunkSize).join(' ');
-              const separator = i + chunkSize < words.length ? ' ' : '';
+            for (let i = 0; i < content.length; i += chunkSize) {
+              const chunk = content.slice(i, i + chunkSize);
               
               // Send chunk
-              controller.enqueue(encoder.encode(chunk + separator));
+              controller.enqueue(encoder.encode(chunk));
               
-              // Small delay only for visual streaming effect (much faster)
-              if (i + chunkSize < words.length) {
-                await new Promise(resolve => setTimeout(resolve, 10));
+              // Fast delay for smooth typing effect
+              if (i + chunkSize < content.length) {
+                await new Promise(resolve => setTimeout(resolve, 25));
               }
             }
             

@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, Search, Settings, Plus, ChevronDown, Zap, Brain, Sparkles } from 'lucide-react';
+import { Menu, X, Search, Settings, Plus, ChevronDown, Zap, Brain, Sparkles, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatSidebar } from './ChatSidebar';
 import { ChatHeader } from './ChatHeader';
 import { MessagesContainer } from './MessagesContainer';
 import { EnhancedChatInput } from './EnhancedChatInput';
+import { RealtimeVoiceChat } from './RealtimeVoiceChat';
 import { AdvancedModelSearch } from '../models/AdvancedModelSearch';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
 import { autoRouter } from '@/lib/routing/AutoRouter';
@@ -88,6 +89,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   const [streamingMessage, setStreamingMessage] = useState('');
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [autoRoutingEnabled, setAutoRoutingEnabled] = useState(false);
+  const [showVoiceChat, setShowVoiceChat] = useState(false);
 
   // Load conversations and preferences on mount
   useEffect(() => {
@@ -534,6 +536,8 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             userId={user?.id}
             autoRoutingEnabled={autoRoutingEnabled}
             onAutoRoutingToggle={setAutoRoutingEnabled}
+            showVoiceChat={showVoiceChat}
+            onVoiceChatToggle={setShowVoiceChat}
           />
         </div>
 
@@ -551,6 +555,22 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             onEditMessage={handleEditMessage}
           />
         </div>
+
+        {/* Voice Chat Area */}
+        {showVoiceChat && (
+          <div className="cultural-card cultural-border border-t">
+            <RealtimeVoiceChat
+              selectedModel={selectedModel}
+              onMessage={(message, isUser) => {
+                if (isUser) {
+                  handleSendMessage(message);
+                }
+              }}
+              disabled={isLoading}
+              className="m-0"
+            />
+          </div>
+        )}
 
         {/* Input Area */}
         <div className="cultural-card cultural-border border-t">

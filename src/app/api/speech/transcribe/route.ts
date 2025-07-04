@@ -17,19 +17,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('🎤 Transcribing audio file:', audioFile.name, audioFile.size, 'bytes');
+    console.log('🎤 Transcribing audio file:', {
+      name: audioFile.name,
+      size: audioFile.size,
+      type: audioFile.type
+    });
 
-    // Convert File to format expected by OpenAI
-    const audioBuffer = await audioFile.arrayBuffer();
-    const audioBlob = new File([audioBuffer], 'audio.webm', { type: 'audio/webm' });
+    // Validate file format
+    const supportedFormats = ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'];
+    const fileExtension = audioFile.name.split('.').pop()?.toLowerCase();
+    
+    if (!fileExtension || !supportedFormats.includes(fileExtension)) {
+      console.error('❌ Unsupported file format:', fileExtension, 'File:', audioFile.name);
+      return NextResponse.json(
+        { 
+          error: `Invalid file format. Supported formats: ${supportedFormats.join(', ')}`,
+          details: `Received file: ${audioFile.name} with extension: ${fileExtension}`
+        },
+        { status: 400 }
+      );
+    }
+
+    // Additional MIME type validation
+    const supportedMimeTypes = [
+      'audio/flac', 'audio/x-flac',
+      'audio/m4a', 'audio/mp4', 'audio/x-m4a',
+      'audio/mp3', 'audio/mpeg',
+      'audio/mpga',
+      'audio/oga', 'audio/ogg',
+      'audio/wav', 'audio/wave', 'audio/x-wav',
+      'audio/webm'
+    ];
+
+    if (audioFile.type && !supportedMimeTypes.includes(audioFile.type)) {
+      console.warn('⚠️ Unusual MIME type, but proceeding based on file extension:', audioFile.type);
+    }
 
     // Get preferred language from query params (optional)
     const url = new URL(request.url);
     const preferredLanguage = url.searchParams.get('language'); // e.g., 'en', 'tr', 'fr'
 
+    console.log('📤 Sending to OpenAI Whisper:', {
+      filename: audioFile.name,
+      size: audioFile.size,
+      type: audioFile.type,
+      language: preferredLanguage || 'auto-detect'
+    });
+
     // Call OpenAI Whisper API with auto-detection or preferred language
+    // OpenAI API accepts the File object directly from FormData
     const transcription = await openai.audio.transcriptions.create({
-      file: audioBlob,
+      file: audioFile,
       model: 'whisper-1',
       language: preferredLanguage || undefined, // Auto-detect if not specified
       response_format: 'verbose_json', // Get more details including language detection
@@ -50,12 +88,33 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Speech transcription error:', error);
+    
+    // Handle specific OpenAI API errors
+    let errorMessage = 'Transcription failed';
+    let statusCode = 500;
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      // Check for specific OpenAI error types
+      if (error.message.includes('Invalid file format')) {
+        statusCode = 400;
+        errorMessage = 'Invalid audio file format. Please try again.';
+      } else if (error.message.includes('File too large')) {
+        statusCode = 413;
+        errorMessage = 'Audio file too large. Please record a shorter message.';
+      } else if (error.message.includes('Rate limit')) {
+        statusCode = 429;
+        errorMessage = 'Too many requests. Please wait a moment and try again.';
+      }
+    }
+    
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Transcription failed',
-        details: 'Please try again or check your microphone permissions'
+        error: errorMessage,
+        details: error instanceof Error ? error.message : 'Unknown error occurred'
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 } 

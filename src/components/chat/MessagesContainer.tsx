@@ -557,7 +557,7 @@ function StreamingMessage({
               {streamingMessage}
             </ReactMarkdown>
             {/* Typing cursor */}
-            <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
+            <span className="inline-block w-3 h-5 bg-primary ml-1 animate-pulse" style={{ animationDuration: '1s' }} />
           </div>
         </div>
       </div>

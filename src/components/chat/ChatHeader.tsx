@@ -13,7 +13,8 @@ import {
   Crown,
   Star,
   Brain,
-  Sparkles
+  Sparkles,
+  Mic
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,8 @@ interface ChatHeaderProps {
   userId?: string;
   autoRoutingEnabled?: boolean;
   onAutoRoutingToggle?: (enabled: boolean) => void;
+  showVoiceChat?: boolean;
+  onVoiceChatToggle?: (enabled: boolean) => void;
 }
 
 // Custom icon component for brain explosion emoji
@@ -58,7 +61,9 @@ export function ChatHeader({
   onThinkingModeChange,
   userId,
   autoRoutingEnabled = false,
-  onAutoRoutingToggle
+  onAutoRoutingToggle,
+  showVoiceChat = false,
+  onVoiceChatToggle
 }: ChatHeaderProps) {
   const [showQuickModels, setShowQuickModels] = useState(false);
 
@@ -227,6 +232,18 @@ export function ChatHeader({
               checked={autoRoutingEnabled}
               onCheckedChange={onAutoRoutingToggle}
               className="scale-90 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input border-border"
+            />
+          </div>
+        )}
+
+        {/* Voice Chat Toggle */}
+        {onVoiceChatToggle && (
+          <div className="flex items-center gap-2 px-2 min-w-fit">
+            <Mic className={`h-4 w-4 ${showVoiceChat ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <Switch
+              checked={showVoiceChat}
+              onCheckedChange={onVoiceChatToggle}
+              className="scale-90 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-input border-border"
             />
           </div>
         )}
