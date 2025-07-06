@@ -36,6 +36,8 @@ interface ChatHeaderProps {
   onAutoRoutingToggle?: (enabled: boolean) => void;
   showVoiceChat?: boolean;
   onVoiceChatToggle?: (enabled: boolean) => void;
+  webSearchEnabled?: boolean;
+  onWebSearchToggle?: (enabled: boolean) => void;
 }
 
 // Custom icon component for brain explosion emoji
@@ -63,7 +65,9 @@ export function ChatHeader({
   autoRoutingEnabled = false,
   onAutoRoutingToggle,
   showVoiceChat = false,
-  onVoiceChatToggle
+  onVoiceChatToggle,
+  webSearchEnabled = false,
+  onWebSearchToggle
 }: ChatHeaderProps) {
   const [showQuickModels, setShowQuickModels] = useState(false);
 
@@ -244,6 +248,20 @@ export function ChatHeader({
               checked={showVoiceChat}
               onCheckedChange={onVoiceChatToggle}
               className="scale-90 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-input border-border"
+            />
+          </div>
+        )}
+
+        {/* Web Search Toggle */}
+        {onWebSearchToggle && (
+          <div className="flex items-center gap-2 px-2 min-w-fit">
+            <span className={`text-sm ${webSearchEnabled ? 'text-blue-500' : 'text-muted-foreground'}`}>
+              {webSearchEnabled ? '🌐' : '🔍'}
+            </span>
+            <Switch
+              checked={webSearchEnabled}
+              onCheckedChange={onWebSearchToggle}
+              className="scale-90 data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-input border-border"
             />
           </div>
         )}

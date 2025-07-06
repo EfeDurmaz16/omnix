@@ -934,13 +934,70 @@ export class OpenAIProvider implements ModelProvider {
         });
       }
 
+      // Handle image attachments for vision models
+      if (request.attachedImages && request.attachedImages.length > 0) {
+        const isVisionModel = request.model.includes('gpt-4') && !request.model.includes('o1') && !request.model.includes('o3');
+        
+        if (isVisionModel) {
+          // Find the last user message and add images to it
+          const lastUserMessageIndex = messages.length - 1;
+          if (messages[lastUserMessageIndex]?.role === 'user') {
+            const imageContent = request.attachedImages
+              .filter(image => image.content && image.mimeType)
+              .map(image => {
+                let imageUrl = image.content;
+                
+                // Check if content already includes data URL prefix
+                if (!imageUrl.startsWith('data:')) {
+                  // Ensure mimeType is valid for images
+                  const mimeType = image.mimeType.startsWith('image/') 
+                    ? image.mimeType 
+                    : 'image/jpeg';
+                  imageUrl = `data:${mimeType};base64,${imageUrl}`;
+                }
+                
+                console.log('🖼️ Processing image for vision model:', {
+                  mimeType: image.mimeType,
+                  contentLength: image.content.length,
+                  hasDataPrefix: image.content.startsWith('data:'),
+                  finalUrlLength: imageUrl.length
+                });
+                
+                return {
+                  type: 'image_url' as const,
+                  image_url: {
+                    url: imageUrl,
+                    detail: 'high' as const
+                  }
+                };
+              });
+            
+            // Only modify message if we have valid image content
+            if (imageContent.length > 0) {
+              messages[lastUserMessageIndex] = {
+                ...messages[lastUserMessageIndex],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: messages[lastUserMessageIndex].content
+                  },
+                  ...imageContent
+                ]
+              };
+            } else {
+              console.warn('⚠️ No valid images found for vision model');
+            }
+          }
+        }
+      }
+
       // Prepare OpenAI API request parameters
       const requestParams: any = {
         model: request.model,
         messages: messages.map(msg => {
           const baseMessage: any = {
             role: msg.role,
-            content: typeof msg.content === 'string' ? msg.content : this.formatContent(msg.content),
+            content: msg.content,
           };
           
           if (msg.name && msg.role === 'function') {
@@ -1013,6 +1070,23 @@ export class OpenAIProvider implements ModelProvider {
             ? parseInt(error.headers['x-ratelimit-reset-tokens']) * 1000 
             : undefined;
           throw new RateLimitError(this.name, resetTime);
+        }
+        
+        // Handle image-specific errors
+        if (error.message.includes('Invalid base64 image_url') || 
+            error.message.includes('image_url')) {
+          console.error('🖼️ Image processing error:', {
+            message: error.message,
+            status: error.status,
+            hasAttachedImages: !!request.attachedImages?.length
+          });
+          throw new ProviderError(
+            'Invalid image format. Please ensure images are properly encoded.',
+            this.name,
+            'invalid_image',
+            error.status,
+            false
+          );
         }
         
         throw new ProviderError(
@@ -1307,23 +1381,115 @@ export class OpenAIProvider implements ModelProvider {
         // GPT-Image-1 - Advanced image editing capabilities
         console.log('🎨 Generating with GPT-Image-1...');
         
-        const response = await this.client.images.generate({
-          model: 'dall-e-3', // Use DALL-E 3 as the backend for now
-          prompt: `[GPT-Image-1 Enhanced] ${options.prompt}. Ultra-high quality, photorealistic, perfect lighting, professional photography`,
-          size: (options.size as any) || '1024x1024',
-          quality: options.quality || 'hd',
-          style: 'natural',
-          n: 1,
+        // Map invalid sizes to valid GPT-Image-1 sizes
+        let validSize = options.size || '1024x1024';
+        const validSizes = ['1024x1024', '1024x1536', '1536x1024'];
+        
+        if (!validSizes.includes(validSize)) {
+          console.log(`⚠️ Invalid size ${validSize} for gpt-image-1, defaulting to 1024x1024`);
+          validSize = '1024x1024';
+        }
+        
+        // Map quality values for GPT-Image-1 (uses 'low', 'medium', 'high', 'auto')
+        let validQuality = 'medium'; // Default to medium
+        if (options.quality) {
+          const qualityMap: Record<string, string> = {
+            'standard': 'medium',
+            'hd': 'high',
+            'low': 'low',
+            'medium': 'medium', 
+            'high': 'high',
+            'auto': 'auto'
+          };
+          validQuality = qualityMap[options.quality] || 'medium';
+        }
+        
+        console.log('🚀 Making GPT-Image-1 request with params:', {
+          model: 'gpt-image-1',
+          prompt: options.prompt.substring(0, 100),
+          size: validSize,
+          quality: validQuality,
+          n: 1
         });
 
+        const response = await this.client.images.generate({
+          model: 'gpt-image-1', // Use the actual GPT-Image-1 model
+          prompt: options.prompt,
+          size: validSize as '1024x1024' | '1024x1536' | '1536x1024',
+          quality: validQuality as 'low' | 'medium' | 'high' | 'auto',
+          n: 1
+          // GPT-Image-1 doesn't support response_format parameter
+        });
+
+        console.log('✅ GPT-Image-1 API call successful, response type:', typeof response);
+
+        try {
+          console.log('🔍 GPT-Image-1 Response structure:', JSON.stringify(response, null, 2));
+        } catch (jsonError) {
+          console.log('🔍 GPT-Image-1 Response (cannot stringify):', {
+            hasData: !!response.data,
+            dataLength: response.data?.length,
+            keys: Object.keys(response || {})
+          });
+        }
+
         if (!response.data || response.data.length === 0) {
+          console.log('❌ No response.data or empty array:', {
+            hasData: !!response.data,
+            dataLength: response.data?.length,
+            responseKeys: Object.keys(response || {})
+          });
           throw new Error('No image data returned from GPT-Image-1');
         }
 
-        const imageUrl = response.data[0]?.url;
+        try {
+          console.log('📄 GPT-Image-1 Response data[0]:', JSON.stringify(response.data[0], null, 2));
+        } catch (jsonError) {
+          console.log('📄 GPT-Image-1 Response data[0] (cannot stringify):', {
+            hasUrl: !!response.data[0]?.url,
+            keys: Object.keys(response.data[0] || {})
+          });
+        }
+
+        // GPT-Image-1 returns base64 encoded images, not URLs
+        const firstResult = response.data[0];
+        console.log('🔍 All available fields in response.data[0]:', Object.keys(firstResult || {}));
+        
+        // Check for URL first (if they add URL support later)
+        let imageUrl = firstResult?.url;
+        
+        // If no URL, look for base64 data
+        if (!imageUrl) {
+          const base64Data = firstResult?.b64_json || 
+                           firstResult?.image || 
+                           firstResult?.data;
+                           
+          if (base64Data) {
+            // Convert base64 to data URL
+            imageUrl = `data:image/png;base64,${base64Data}`;
+            console.log('✅ GPT-Image-1 returned base64 data, converted to data URL');
+          }
+        }
+        
+        const revisedPrompt = firstResult?.revised_prompt || 
+                             firstResult?.prompt || 
+                             firstResult?.description ||
+                             options.prompt;
+
+        console.log('🔗 Final imageUrl type:', imageUrl ? (imageUrl.startsWith('data:') ? 'base64 data URL' : 'regular URL') : 'undefined');
+        console.log('📝 Extracted revisedPrompt:', revisedPrompt?.substring(0, 100));
 
         if (!imageUrl) {
-          throw new Error('No image URL returned from GPT-Image-1');
+          console.log('❌ No image URL or base64 data found. Available fields:', Object.keys(firstResult || {}));
+          // Don't log the full object as it's too large with base64 data
+          const safeResult = Object.keys(firstResult || {}).reduce((acc, key) => {
+            const value = firstResult[key];
+            acc[key] = typeof value === 'string' && value.length > 100 ? 
+              `[${value.length} chars: ${value.substring(0, 50)}...]` : value;
+            return acc;
+          }, {} as any);
+          console.log('📄 Safe result object:', safeResult);
+          throw new Error('No image URL or base64 data returned from GPT-Image-1');
         }
 
         console.log('✅ GPT-Image-1 image generated successfully:', imageUrl);
@@ -1331,9 +1497,9 @@ export class OpenAIProvider implements ModelProvider {
         return {
           id: `gpt-img-${Date.now()}`,
           url: imageUrl,
-          prompt: options.prompt,
-          model: options.model,
-          size: options.size || '1024x1024',
+          prompt: revisedPrompt || options.prompt,
+          model: options.model, // Keep original model name even if fallback was used
+          size: validSize,
           createdAt: new Date().toISOString(),
         };
 

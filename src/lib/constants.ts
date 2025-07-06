@@ -372,6 +372,90 @@ export const AI_MODELS: AIModel[] = [
     costPerToken: 0.10,
     available: true,
   },
+  
+  // Video Models - Replicate (Advanced Models)
+  {
+    id: 'kling-video-v1.6',
+    name: 'Kling Video v1.6',
+    provider: 'replicate-video',
+    type: 'video',
+    description: 'Kuaishou AI\'s advanced video generation with high-quality motion - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.25,
+    available: true,
+  },
+  {
+    id: 'pika-labs-v1.0',
+    name: 'Pika Labs v1.0',
+    provider: 'replicate-video',
+    type: 'video',
+    description: 'Pika Labs video generation with cinematic effects - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.20,
+    available: true,
+  },
+  {
+    id: 'stable-video-diffusion-xt',
+    name: 'Stable Video Diffusion XT',
+    provider: 'replicate-video',
+    type: 'video',
+    description: 'Stability AI\'s extended video diffusion model - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.15,
+    available: true,
+  },
+  {
+    id: 'runway-gen3-turbo',
+    name: 'Runway Gen-3 Turbo',
+    provider: 'replicate-video',
+    type: 'video',
+    description: 'RunwayML\'s fastest video generation model - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.30,
+    available: true,
+  },
+  {
+    id: 'zeroscope-v2-xl',
+    name: 'Zeroscope v2 XL',
+    provider: 'replicate-video',
+    type: 'video',
+    description: 'Open-source video generation without watermarks - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.12,
+    available: true,
+  },
+  {
+    id: 'haiper-video-v2',
+    name: 'Haiper Video v2',
+    provider: 'replicate-video',
+    type: 'video',
+    description: 'Haiper AI\'s latest video generation with motion control - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.18,
+    available: true,
+  },
+  
+  // Video Models - Luma AI
+  {
+    id: 'luma-dream-machine-v1.5',
+    name: 'Luma Dream Machine v1.5',
+    provider: 'luma-video',
+    type: 'video',
+    description: 'Luma AI\'s flagship video generation with realistic motion - Premium',
+    maxTokens: 0,
+    costPerToken: 0.35,
+    available: true,
+  },
+  {
+    id: 'luma-ray-v1.0',
+    name: 'Luma Ray v1.0',
+    provider: 'luma-video',
+    type: 'video',
+    description: 'Luma AI\'s fast and cost-effective video generation - 100% available',
+    maxTokens: 0,
+    costPerToken: 0.22,
+    available: true,
+  },
 ];
 
 export const PRICING_PLANS: Plan[] = [
@@ -423,7 +507,7 @@ export const PRICING_PLANS: Plan[] = [
 export const DEFAULT_MODELS = {
   text: 'gpt-3.5-turbo',
   image: 'dall-e-2',
-  video: 'seedance-v1-pro-i2v-720p',
+  video: 'veo-2.0-generate-001', // Google's reliable Veo model as default
 };
 
 export const CREDIT_COSTS = {

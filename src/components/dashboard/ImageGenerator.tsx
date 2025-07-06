@@ -95,6 +95,7 @@ export function ImageGenerator() {
   // Check if model is actually working or just a placeholder
   const isModelWorking = (modelId: string) => {
     return modelId.startsWith('dall-e') || 
+           modelId === 'gpt-image-1' ||
            modelId === 'stable-diffusion-xl' ||
            modelId.startsWith('imagen-'); // Imagen models are 100% available
   };
@@ -131,8 +132,14 @@ export function ImageGenerator() {
         { value: '512x512', label: '512×512 (Medium)' },
         { value: '1024x1024', label: '1024×1024 (Large)' }
       ];
+    } else if (model === 'gpt-image-1') {
+      return [
+        { value: '1024x1024', label: '1024×1024 (Square)' },
+        { value: '1024x1536', label: '1024×1536 (Portrait)' },
+        { value: '1536x1024', label: '1536×1024 (Landscape)' }
+      ];
     } else {
-      return [{ value: '512x512', label: '512×512' }];
+      return [{ value: '1024x1024', label: '1024×1024' }];
     }
   };
 
@@ -142,6 +149,13 @@ export function ImageGenerator() {
     const availableSizes = getAvailableSizes(newModel);
     if (!availableSizes.find(s => s.value === selectedSize)) {
       setSelectedSize(availableSizes[0].value);
+    }
+    
+    // Update quality when model changes
+    if (newModel === 'gpt-image-1') {
+      setSelectedQuality('medium'); // Default to medium for GPT-Image-1
+    } else if (newModel === 'dall-e-3') {
+      setSelectedQuality('standard'); // Default to standard for DALL-E 3
     }
   };
 
@@ -481,8 +495,8 @@ export function ImageGenerator() {
               </Select>
             </div>
 
-            {/* Quality Selection (DALL-E 3 only) */}
-            {selectedModel === 'dall-e-3' && (
+            {/* Quality Selection */}
+            {(selectedModel === 'dall-e-3' || selectedModel === 'gpt-image-1') && (
               <div className="space-y-2">
                 <label className="text-sm font-medium cultural-text-primary">Quality</label>
                 <Select value={selectedQuality} onValueChange={setSelectedQuality}>
@@ -490,8 +504,19 @@ export function ImageGenerator() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="hd">HD (+20 credits)</SelectItem>
+                    {selectedModel === 'dall-e-3' ? (
+                      <>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="hd">HD (+20 credits)</SelectItem>
+                      </>
+                    ) : selectedModel === 'gpt-image-1' ? (
+                      <>
+                        <SelectItem value="low">Low Quality ($0.011-0.016)</SelectItem>
+                        <SelectItem value="medium">Medium Quality ($0.042-0.063)</SelectItem>
+                        <SelectItem value="high">High Quality ($0.167-0.25)</SelectItem>
+                        <SelectItem value="auto">Auto Quality</SelectItem>
+                      </>
+                    ) : null}
                   </SelectContent>
                 </Select>
               </div>

@@ -13,7 +13,8 @@ import {
   Smile,
   AtSign,
   Hash,
-  Loader2
+  Loader2,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarkdownInput } from '@/components/ui/markdown-input';
@@ -24,6 +25,8 @@ interface EnhancedChatInputProps {
   selectedModel: string;
   disabled?: boolean;
   placeholder?: string;
+  webSearchEnabled?: boolean;
+  onWebSearchToggle?: (enabled: boolean) => void;
 }
 
 interface AttachedFile {
@@ -40,7 +43,9 @@ export function EnhancedChatInput({
   onSend,
   selectedModel,
   disabled = false,
-  placeholder = "Type a message..."
+  placeholder = "Type a message...",
+  webSearchEnabled = false,
+  onWebSearchToggle
 }: EnhancedChatInputProps) {
   const [message, setMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -454,6 +459,29 @@ export function EnhancedChatInput({
           )}
         </div>
 
+        {/* Web Search Toggle Button */}
+        {onWebSearchToggle && (
+          <Button
+            variant={webSearchEnabled ? "default" : "outline"}
+            size="sm"
+            onClick={() => onWebSearchToggle(!webSearchEnabled)}
+            disabled={disabled}
+            className={`shrink-0 transition-all duration-200 relative ${
+              webSearchEnabled 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600' 
+                : 'border-gray-300 hover:border-blue-400 hover:text-blue-600'
+            }`}
+            title={webSearchEnabled ? "Web search enabled - Click to disable" : "Web search disabled - Click to enable"}
+          >
+            <div className="relative">
+              🌐
+              {webSearchEnabled && (
+                <Search className="w-2 h-2 absolute -top-1 -right-1 bg-blue-600 rounded-full text-white p-0.5" />
+              )}
+            </div>
+          </Button>
+        )}
+
         {/* Voice Recording Button */}
         <Button
           variant={isRecording ? "destructive" : "ghost"}
@@ -482,6 +510,20 @@ export function EnhancedChatInput({
           <span className="cultural-text-primary">
             Model: <span className="font-medium cultural-text-accent">{selectedModel}</span>
           </span>
+          
+          {/* Web Search Status Indicator */}
+          {onWebSearchToggle && (
+            <div className="flex items-center gap-1">
+              <span className="cultural-text-primary">Web Search:</span>
+              <span className={`font-medium px-1.5 py-0.5 rounded text-xs ${
+                webSearchEnabled 
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              }`}>
+                {webSearchEnabled ? '🌐 ON' : 'OFF'}
+              </span>
+            </div>
+          )}
           
           {/* Shortcut hints */}
           <div className="hidden sm:flex items-center gap-2">

@@ -4,7 +4,16 @@ import { getModelRouter } from '@/lib/model-router';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { prompt, model = 'veo-2.0-generate-001', duration = 5, quality = 'standard', imageUrl } = body;
+    const { 
+      prompt, 
+      model = 'veo-2.0-generate-001', 
+      duration = 5, 
+      quality = 'standard', 
+      imageUrl,
+      aspectRatio = '16:9',
+      frameRate = 24,
+      motionStrength = 3
+    } = body;
 
     console.log('🎬 Video generation request:', { prompt: prompt?.substring(0, 50) + '...', model, duration });
 
@@ -30,7 +39,11 @@ export async function POST(request: NextRequest) {
         prompt,
         model: fallbackModel,
         duration,
-        quality
+        quality,
+        imageUrl,
+        aspectRatio,
+        frameRate,
+        motionStrength
       });
       
       return NextResponse.json({
@@ -56,7 +69,10 @@ export async function POST(request: NextRequest) {
         model,
         duration,
         quality,
-        imageUrl
+        imageUrl,
+        aspectRatio,
+        frameRate,
+        motionStrength
       });
 
     console.log('✅ Video generation successful:', result.id);

@@ -13,6 +13,7 @@ interface AuthContextType {
   refreshUsageStats: () => Promise<void>;
   updateCredits: (amount: number) => void;
   addCredits: (amount: number) => void;
+  refreshUserPlan: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -81,11 +82,15 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       
       console.log('💰 Fallback credits from localStorage:', credits);
       
+      // Fetch user's actual plan from API (async)
+      let userPlan = 'free';
+      
+      // Create the userData first with default plan
       const userData: User = {
         id: clerkUser.id,
         email: clerkUser.emailAddresses[0]?.emailAddress || '',
         name: clerkUser.fullName || clerkUser.firstName || 'User',
-        plan: 'free',
+        plan: userPlan,
         credits: credits,
         createdAt: clerkUser.createdAt || new Date(),
         updatedAt: new Date()
@@ -103,6 +108,28 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
       setUser(userData);
       setUsageStats(usageData);
+      setLoading(false);
+
+      // Then fetch the actual plan asynchronously
+      fetch('/api/user/plan')
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error('Plan fetch failed');
+        })
+        .then(planData => {
+          if (planData.success && planData.data.plan) {
+            const actualPlan = planData.data.plan.toLowerCase();
+            console.log('📋 Fetched user plan from API:', actualPlan);
+            
+            // Update user with actual plan
+            setUser(prevUser => prevUser ? { ...prevUser, plan: actualPlan } : prevUser);
+          }
+        })
+        .catch(error => {
+          console.warn('Failed to fetch user plan from API:', error);
+        });
       
       console.log('✅ User initialized:', userData);
     } else if (!clerkUser && user) {
@@ -110,6 +137,12 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       console.log('👋 User logged out, clearing data');
       setUser(null);
       setUsageStats(null);
+      setLoading(false);
+    }
+
+    // Set loading to false when Clerk is loaded and we've processed the user state
+    if (isLoaded && loading && (user || !clerkUser)) {
+      setLoading(false);
     }
   }, [clerkUser, isLoaded, user]);
 
@@ -216,6 +249,44 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     console.log('💰 New credits:', newCredits, 'saved to localStorage');
   };
 
+  const refreshUserPlan = async () => {
+    if (!user) return;
+    
+    try {
+      console.log('🔄 Refreshing user plan and credits...');
+      const planResponse = await fetch('/api/user/plan');
+      if (planResponse.ok) {
+        const planData = await planResponse.json();
+        if (planData.success && planData.data.plan) {
+          const newPlan = planData.data.plan.toLowerCase();
+          console.log('📋 Updated user plan:', newPlan);
+          
+          // Also get credits from the enhanced credit manager
+          const newCredits = await enhancedCreditManager.getCredits(user.id);
+          console.log('💰 Updated user credits:', newCredits);
+          
+          setUser(prevUser => prevUser ? { 
+            ...prevUser, 
+            plan: newPlan,
+            credits: newCredits
+          } : prevUser);
+          
+          // Also update usage stats
+          setUsageStats(prevStats => prevStats ? {
+            ...prevStats,
+            remainingCredits: newCredits
+          } : prevStats);
+          
+          // Update localStorage
+          localStorage.setItem(`aspendos_credits_${user.id}`, newCredits.toString());
+          console.log('💾 Updated localStorage with new credits:', newCredits);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh user plan and credits:', error);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     usageStats,
@@ -223,6 +294,7 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     refreshUsageStats,
     updateCredits,
     addCredits,
+    refreshUserPlan,
   };
 
   return (

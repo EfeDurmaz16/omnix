@@ -143,6 +143,41 @@ export class VertexAIProvider implements ModelProvider {
         { type: 'function-calling', supported: true }
       ]
     },
+    // Video Models
+    {
+      id: 'veo-3.0-generate-preview',
+      name: 'Veo 3.0 Preview',
+      provider: 'vertex',
+      type: 'video',
+      contextWindow: 0,
+      inputCostPer1kTokens: 0,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      category: 'video-generation',
+      capabilities: [
+        { type: 'video-generation', supported: true },
+        { type: 'text-to-video', supported: true },
+        { type: 'high-quality', supported: true },
+        { type: 'extended-duration', supported: true }
+      ]
+    },
+    {
+      id: 'veo-2.0-generate-001',
+      name: 'Veo 2.0',
+      provider: 'vertex',
+      type: 'video',
+      contextWindow: 0,
+      inputCostPer1kTokens: 0,
+      outputCostPer1kTokens: 0,
+      maxTokens: 0,
+      category: 'video-generation',
+      capabilities: [
+        { type: 'video-generation', supported: true },
+        { type: 'text-to-video', supported: true },
+        { type: 'stable-generation', supported: true },
+        { type: 'cinematic-quality', supported: true }
+      ]
+    },
     {
       id: 'imagen-4.0-fast-generate-preview-06-06',
       name: 'Imagen 4 Fast',

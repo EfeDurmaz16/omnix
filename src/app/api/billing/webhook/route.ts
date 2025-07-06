@@ -139,48 +139,139 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
 
 async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscription | null) {
   try {
-    // Here you would update your database with the new plan
-    // For now, we'll just log what would happen
-    
+    let planName = 'FREE';
+    let subscriptionData = null;
+
     if (!subscription) {
       console.log('📉 Downgrading user to free plan:', clerkUserId);
-      // Update database: SET plan = 'free' WHERE clerk_id = clerkUserId
-      return;
+      planName = 'FREE';
+    } else {
+      // Determine plan based on price ID
+      const priceId = subscription.items.data[0]?.price.id;
+      
+      console.log('🔍 Processing price ID:', priceId);
+      
+      // Map real Stripe price IDs to plan names (updated for ULTRA plan)
+      const priceToPlanMap: Record<string, string> = {
+        // Monthly plans
+        'price_1Rf0s3GfQ4XRggGYLyPcWhKs': 'PRO',
+        'price_1Rf0s4GfQ4XRggGYSB9ExPB6': 'PRO', 
+        'price_1Rf0s5GfQ4XRggGYAmoZRtmz': 'ULTRA',
+        'price_1Rf0s5GfQ4XRggGYNWPGsCZ7': 'ENTERPRISE',
+        // Annual plans
+        'price_1Rf0s4GfQ4XRggGYQGzx0EUS': 'PRO',
+        'price_1Rf0s4GfQ4XRggGYyjhDkBNw': 'PRO',
+        'price_1Rf0s5GfQ4XRggGY5Q7ueU19': 'ULTRA',
+        'price_1Rf0s6GfQ4XRggGYm1of3Nci': 'ENTERPRISE',
+      };
+      
+      planName = priceToPlanMap[priceId] || 'FREE';
+      
+      console.log('📋 Mapped price ID to plan:', { priceId, planName });
+      
+      subscriptionData = {
+        stripeCustomerId: subscription.customer as string,
+        stripeSubscriptionId: subscription.id,
+        subscriptionStatus: subscription.status,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString()
+      };
     }
-
-    // Determine plan based on price ID
-    const priceId = subscription.items.data[0]?.price.id;
-    let planName = 'free';
-    
-    // Map real Stripe price IDs to plan names
-    const priceToPlanMap: Record<string, string> = {
-      // Monthly plans
-      'price_1Rf0s3GfQ4XRggGYLyPcWhKs': 'student',
-      'price_1Rf0s4GfQ4XRggGYSB9ExPB6': 'pro', 
-      'price_1Rf0s5GfQ4XRggGYAmoZRtmz': 'team',
-      'price_1Rf0s5GfQ4XRggGYNWPGsCZ7': 'enterprise',
-      // Annual plans
-      'price_1Rf0s4GfQ4XRggGYQGzx0EUS': 'student',
-      'price_1Rf0s4GfQ4XRggGYyjhDkBNw': 'pro',
-      'price_1Rf0s5GfQ4XRggGY5Q7ueU19': 'team',
-      'price_1Rf0s6GfQ4XRggGYm1of3Nci': 'enterprise',
-    };
-    
-    planName = priceToPlanMap[priceId] || 'free';
     
     console.log('📈 Updating user plan:', clerkUserId, 'to', planName);
     
-    // TODO: Implement actual database update
-    // await updateUserInDatabase(clerkUserId, {
-    //   plan: planName,
-    //   stripeCustomerId: subscription.customer,
-    //   stripeSubscriptionId: subscription.id,
-    //   subscriptionStatus: subscription.status,
-    //   currentPeriodEnd: new Date(subscription.current_period_end * 1000)
-    // });
+    // Call our API to update the user plan
+    try {
+      const apiUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/user/plan`;
+      console.log('🔗 Making API call to:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Include a server-side auth header or use a different auth method
+          'x-clerk-user-id': clerkUserId, // Custom header for webhook auth
+        },
+        body: JSON.stringify({
+          plan: planName,
+          ...subscriptionData
+        })
+      });
+
+      const responseText = await response.text();
+      console.log('🔍 API Response status:', response.status);
+      console.log('🔍 API Response body:', responseText);
+
+      if (!response.ok) {
+        throw new Error(`Plan update API call failed: ${response.status} - ${responseText}`);
+      }
+
+      const result = JSON.parse(responseText);
+      
+      if (result.success) {
+        console.log('✅ User plan updated successfully via API');
+        
+        // Also update credits based on plan
+        await updateUserCredits(clerkUserId, planName);
+      } else {
+        throw new Error(result.error || 'API returned unsuccessful result');
+      }
+
+    } catch (apiError) {
+      console.error('❌ Failed to call plan update API, using direct update:', apiError);
+      
+      // Fallback: direct update using the userPlans Map
+      const { userPlans } = await import('@/app/api/user/plan/route');
+      
+      userPlans.set(clerkUserId, {
+        plan: planName as 'FREE' | 'PRO' | 'ULTRA' | 'ENTERPRISE',
+        ...subscriptionData,
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ User plan updated directly via fallback');
+      
+      // Also update credits based on plan
+      await updateUserCredits(clerkUserId, planName);
+    }
     
   } catch (error) {
     console.error('❌ Failed to update user plan:', error);
+  }
+}
+
+async function updateUserCredits(clerkUserId: string, planName: string) {
+  try {
+    // Set appropriate credits based on plan
+    let credits = 1500; // Default FREE credits
+    switch (planName) {
+      case 'PRO':
+        credits = 3000;
+        break;
+      case 'ULTRA':
+        credits = 5000;
+        break;
+      case 'ENTERPRISE':
+        credits = 10000;
+        break;
+    }
+    
+    console.log('💰 Setting credits for plan:', { planName, credits });
+    
+    // Try to update credits in database
+    try {
+      const { prisma } = await import('@/lib/db');
+      await prisma.user.update({
+        where: { clerkId: clerkUserId },
+        data: { credits: credits }
+      });
+      
+      console.log('✅ Credits updated in database');
+    } catch (dbError) {
+      console.error('❌ Failed to update credits in database:', dbError);
+    }
+    
+  } catch (error) {
+    console.error('❌ Failed to update user credits:', error);
   }
 }
 

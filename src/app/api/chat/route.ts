@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { routeRequest, validateModelAccess } from '@/lib/model-router';
 import { GenerateRequest } from '@/lib/providers/base';
 import { contextManager } from '@/lib/context/AdvancedContextManager';
+import { FirecrawlWebSearch } from '@/lib/search/FirecrawlWebSearch';
+import { enhancedModelRouter } from '@/lib/router/EnhancedModelRouter';
+import { modelCatalog } from '@/lib/catalog/ModelCatalog';
+import { analyticsTracker } from '@/lib/analytics/AnalyticsTracker';
 
 // Rate limiting store (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -20,6 +23,8 @@ interface ChatRequest {
   includeMemory?: boolean;
   voiceChat?: boolean;
   language?: string;
+  enableWebSearch?: boolean;
+  forceWebSearch?: boolean;
   files?: Array<{
     name: string;
     type: string;
@@ -30,11 +35,18 @@ interface ChatRequest {
 }
 
 export async function POST(req: NextRequest) {
+  let userId: string | undefined;
+  let model: string | undefined;
+  let modelInfo: any;
+  let requestStartTime: number | undefined;
+  let body: ChatRequest | undefined;
+
   try {
     console.log('Chat API called');
     
     // Authentication check
-    const { userId } = await auth();
+    const auth_result = await auth();
+    userId = auth_result.userId || undefined;
     console.log('User ID from auth:', userId);
     
     if (!userId) {
@@ -42,8 +54,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Parse request body
-    const body: ChatRequest = await req.json();
-    const { messages, model, sessionId, conversationId, mode, files, stream = false, includeMemory = false, voiceChat = false, language = 'en' } = body;
+    body = await req.json();
+    const { messages, sessionId, conversationId, mode, files, stream = false, includeMemory = false, voiceChat = false, language = 'en', enableWebSearch = false, forceWebSearch = false } = body;
+    model = body.model;
     
     // Debug voice chat requests
     if (voiceChat) {
@@ -98,18 +111,23 @@ export async function POST(req: NextRequest) {
     userRateLimit.count++;
     rateLimitStore.set(userId, userRateLimit);
 
-    // Validate model access
+    // Initialize model catalog and validate model access
     console.log('Validating model access for:', model);
-    const hasAccess = await validateModelAccess(userId, model);
-    console.log('Model access result:', hasAccess);
+    await modelCatalog.initialize();
+    const allModels = await modelCatalog.getAllModels();
+    modelInfo = allModels.find(m => m.id === model);
+    console.log('Model info for', model, ':', modelInfo ? 'found' : 'not found');
     
-    if (!hasAccess) {
-      console.log('Access denied for model:', model);
+    if (!modelInfo) {
+      console.log('Access denied for model:', model, '- model not found in catalog');
       return NextResponse.json(
-        { error: 'Invalid model or access denied' },
+        { error: 'Invalid model or model not available' },
         { status: 403 }
       );
     }
+    
+    // TODO: Add user plan validation here if needed
+    console.log('Model access granted for:', model);
 
     // Content filtering (basic)
     const forbiddenWords = ['hack', 'exploit', 'malware', 'virus'];
@@ -197,13 +215,16 @@ export async function POST(req: NextRequest) {
     
     // Quick mode: Skip heavy RAG operations for faster response
     const useQuickMode = mode === 'flash' || req.nextUrl.searchParams.get('quick') === 'true';
+    // Auto-enable quick mode for very simple queries to improve performance
+    const isSimpleQuery = processedMessages.length > 0 && 
+      processedMessages[processedMessages.length - 1].content.length < 30;
     
     let context;
     let enhancedMessages = processedMessages;
     
-    if (useQuickMode) {
+    if (useQuickMode || isSimpleQuery) {
       // Fast path: minimal context processing
-      console.log('⚡ Quick mode: skipping heavy RAG operations');
+      console.log('⚡ Quick mode: skipping heavy RAG operations', isSimpleQuery ? '(simple query detected)' : '(flash mode)');
       const contextId = conversationId || `quick_${Date.now()}`;
       context = { id: contextId };
     } else {
@@ -216,17 +237,17 @@ export async function POST(req: NextRequest) {
           false // full RAG mode
         );
         
-        // Add timeout to prevent hanging
+        // Add timeout to prevent hanging (reduced to 1s for performance)
         context = await Promise.race([
           contextPromise,
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Context creation timeout')), 5000)
+            setTimeout(() => reject(new Error('Context creation timeout')), 1000)
           )
         ]) as any;
 
         // Add user message to context (non-blocking)
         const userMessage = processedMessages[processedMessages.length - 1];
-        if (userMessage.role === 'user') {
+        if (userMessage.role === 'user' && context && context.id) {
           // Don't await this - let it run in background
           contextManager.addMessage(context.id, {
             role: 'user',
@@ -235,16 +256,38 @@ export async function POST(req: NextRequest) {
           }).catch(error => console.warn('Background message add failed:', error));
         }
 
-        // Get enhanced context with timeout
+        // Get enhanced context with aggressive timeout
         const enhancedPromise = contextManager.getContextForModel(context.id);
-        enhancedMessages = await Promise.race([
+        const ragEnhancedMessages = await Promise.race([
           enhancedPromise,
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Context enhancement timeout')), 3000)
+            setTimeout(() => reject(new Error('Context enhancement timeout')), 1500)
           )
         ]) as any;
         
-        console.log('✅ RAG context enhanced with', enhancedMessages.length, 'messages');
+        // CRITICAL: Always preserve current conversation, just add RAG context
+        if (ragEnhancedMessages && ragEnhancedMessages.length > 0) {
+          // Extract only system/context messages from RAG (not conversation messages)
+          const ragSystemMessages = ragEnhancedMessages.filter((msg: any) => 
+            msg.role === 'system' && (
+              msg.content.includes('Previous conversations') ||
+              msg.content.includes('user memories') ||
+              msg.content.includes('memory') ||
+              msg.content.includes('context')
+            )
+          );
+          
+          // Combine: RAG system context + current conversation
+          enhancedMessages = [...ragSystemMessages, ...processedMessages];
+          console.log('✅ RAG context enhanced:', ragSystemMessages.length, 'system messages +', processedMessages.length, 'conversation messages');
+          if (ragSystemMessages.length > 0) {
+            console.log('🧠 RAG memory content preview:', ragSystemMessages[0].content.substring(0, 200) + '...');
+          }
+        } else {
+          // No RAG context found, use current conversation
+          enhancedMessages = processedMessages;
+          console.log('📝 Using current conversation only (no RAG context found)');
+        }
       } catch (error) {
         console.warn('⚠️ RAG enhancement failed, using basic context:', error);
         // Fallback to basic context
@@ -325,6 +368,55 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Web search enhancement
+    let webSearchResults: any[] = [];
+    if ((enableWebSearch || forceWebSearch) && !useQuickMode) {
+      try {
+        console.log('🔍 Web search requested');
+        const webSearch = new FirecrawlWebSearch();
+        
+        if (webSearch.isAvailable()) {
+          const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0];
+          if (lastUserMessage) {
+            const shouldSearch = forceWebSearch || webSearch.shouldSearchWeb(lastUserMessage.content, '');
+            
+            if (shouldSearch) {
+              console.log('🌐 Performing web search for:', lastUserMessage.content.substring(0, 100));
+              
+              const searchResults = await webSearch.searchWeb(lastUserMessage.content, {
+                maxResults: 3,
+                language: language || 'en'
+              });
+              
+              if (searchResults.length > 0) {
+                webSearchResults = searchResults;
+                
+                const webContext = searchResults
+                  .map(result => `Web source: ${result.title}\nURL: ${result.url}\nContent: ${result.snippet}`)
+                  .join('\n\n');
+
+                const webContextMessage = {
+                  role: 'system' as const,
+                  content: `# Current Web Information:\n\n${webContext}\n\n*Note: Use this current web information to enhance your response with up-to-date facts and sources.*`
+                };
+                
+                enhancedMessages = [webContextMessage, ...enhancedMessages];
+                console.log('✅ Web search context added with', searchResults.length, 'results');
+              } else {
+                console.log('📭 No web search results found');
+              }
+            } else {
+              console.log('🚫 Web search not needed for this query');
+            }
+          }
+        } else {
+          console.warn('⚠️ Web search not available (missing Firecrawl API key)');
+        }
+      } catch (error) {
+        console.warn('⚠️ Web search failed:', error);
+      }
+    }
+
     // Create enhanced request
     const enhancedRequest: GenerateRequest = {
       ...generateRequest,
@@ -336,6 +428,9 @@ export async function POST(req: NextRequest) {
 
     console.log('Routing request to model with RAG context:', model);
     
+    // Track request start time for analytics
+    requestStartTime = performance.now();
+    
     if (stream) {
       // Handle streaming response
       console.log('🌊 Streaming response requested');
@@ -344,37 +439,105 @@ export async function POST(req: NextRequest) {
       const readable = new ReadableStream({
         async start(controller) {
           try {
-            // Use our model router to generate the response
-            const aiResponse = await routeRequest(enhancedRequest);
+            // Use enhanced model router to generate the response
+            const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
             
             // Stream the response character by character for fast typing effect
             const content = aiResponse.content;
             const chunkSize = 3; // characters per chunk for smooth typing
             
+            // Try to stream the content
+            let streamingSuccessful = true;
+            
             for (let i = 0; i < content.length; i += chunkSize) {
               const chunk = content.slice(i, i + chunkSize);
               
-              // Send chunk
-              controller.enqueue(encoder.encode(chunk));
-              
-              // Fast delay for smooth typing effect
-              if (i + chunkSize < content.length) {
-                await new Promise(resolve => setTimeout(resolve, 25));
+              try {
+                // Check if controller is still writable
+                if (controller.desiredSize === null) {
+                  console.log('🛑 Controller closed, stopping stream');
+                  streamingSuccessful = false;
+                  break;
+                }
+                
+                // Send chunk
+                controller.enqueue(encoder.encode(chunk));
+                
+                // Fast delay for smooth typing effect
+                if (i + chunkSize < content.length) {
+                  await new Promise(resolve => setTimeout(resolve, 15)); // Reduced delay
+                }
+              } catch (error) {
+                console.log('🛑 Streaming error, stopping:', error instanceof Error ? error.message : 'Unknown error');
+                streamingSuccessful = false;
+                break;
               }
             }
             
+            // If streaming failed, log the full response for debugging
+            if (!streamingSuccessful) {
+              console.log('⚠️ Streaming was interrupted. Full response was:');
+              console.log('📝 Response content:', content.substring(0, 500) + (content.length > 500 ? '...' : ''));
+            }
+            
             // Add assistant response to context after streaming (non-blocking)
-            if (!useQuickMode && context) {
+            if (!useQuickMode && context && context.id) {
               contextManager.addMessage(context.id, {
                 role: 'assistant',
                 content: aiResponse.content,
                 model: model
               }).catch(error => console.warn('Background context update failed:', error));
             }
+
+            // Track streaming analytics (non-blocking)
+            analyticsTracker.trackTextGeneration({
+              userId,
+              modelId: model,
+              provider: modelInfo.provider,
+              prompt: processedMessages[processedMessages.length - 1]?.content || '',
+              response: aiResponse.content,
+              startTime: requestStartTime,
+              success: true,
+              tokensUsed: aiResponse.usage.totalTokens,
+              cost: aiResponse.usage.estimatedCost,
+              mode,
+              metadata: {
+                stream: true,
+                webSearchUsed: webSearchResults.length > 0,
+                ragEnabled: !useQuickMode && !!context,
+                attachedImages: attachedImages.length
+              }
+            }).catch(error => console.warn('Analytics tracking failed:', error));
             
-            controller.close();
+            try {
+              controller.close();
+            } catch (error) {
+              console.log('🛑 Controller already closed');
+            }
           } catch (error) {
             console.error('Streaming error:', error);
+            
+            // Track streaming error analytics (non-blocking)
+            analyticsTracker.trackTextGeneration({
+              userId,
+              modelId: model,
+              provider: modelInfo.provider,
+              prompt: processedMessages[processedMessages.length - 1]?.content || '',
+              response: '',
+              startTime: requestStartTime,
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown streaming error',
+              tokensUsed: 0,
+              cost: 0,
+              mode,
+              metadata: {
+                stream: true,
+                webSearchUsed: webSearchResults.length > 0,
+                ragEnabled: !useQuickMode && !!context,
+                attachedImages: attachedImages.length
+              }
+            }).catch(analyticsError => console.warn('Analytics tracking failed:', analyticsError));
+            
             controller.error(error);
           }
         }
@@ -388,16 +551,36 @@ export async function POST(req: NextRequest) {
       });
     } else {
       // Handle regular JSON response
-      const aiResponse = await routeRequest(enhancedRequest);
+      const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
 
       // Add assistant response to context (non-blocking)
-      if (!useQuickMode && context) {
+      if (!useQuickMode && context && context.id) {
         contextManager.addMessage(context.id, {
           role: 'assistant',
           content: aiResponse.content,
           model: model
         }).catch(error => console.warn('Background context update failed:', error));
       }
+
+      // Track non-streaming analytics (non-blocking)
+      analyticsTracker.trackTextGeneration({
+        userId,
+        modelId: model,
+        provider: modelInfo.provider,
+        prompt: processedMessages[processedMessages.length - 1]?.content || '',
+        response: aiResponse.content,
+        startTime: requestStartTime,
+        success: true,
+        tokensUsed: aiResponse.usage.totalTokens,
+        cost: aiResponse.usage.estimatedCost,
+        mode,
+        metadata: {
+          stream: false,
+          webSearchUsed: webSearchResults.length > 0,
+          ragEnabled: !useQuickMode && !!context,
+          attachedImages: attachedImages.length
+        }
+      }).catch(error => console.warn('Analytics tracking failed:', error));
 
       console.log('Model router response successful');
 
@@ -412,12 +595,15 @@ export async function POST(req: NextRequest) {
         tokens: aiResponse.usage.totalTokens,
         cost: aiResponse.usage.estimatedCost,
         sessionId: generateRequest.sessionId,
-        conversationId: context.id,
-        memoryEnhanced: !useQuickMode,
+        conversationId: context?.id || 'unknown',
+        memoryEnhanced: !useQuickMode && !!context,
+        webSearchResults: webSearchResults.length > 0 ? webSearchResults : undefined,
+        webSearchEnabled: enableWebSearch || forceWebSearch,
         metadata: {
           ...aiResponse.metadata,
-          ragEnabled: !useQuickMode,
-          contextId: context.id
+          ragEnabled: !useQuickMode && !!context,
+          webSearchUsed: webSearchResults.length > 0,
+          contextId: context?.id || 'unknown'
         }
       };
 
@@ -426,6 +612,29 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Chat API Error:', error);
+    
+    // Track error analytics if we have the required data (non-blocking)
+    if (userId && model && modelInfo) {
+      analyticsTracker.trackTextGeneration({
+        userId,
+        modelId: model,
+        provider: modelInfo.provider,
+        prompt: body?.messages?.[body.messages.length - 1]?.content || '',
+        response: '',
+        startTime: requestStartTime || performance.now(),
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown API error',
+        tokensUsed: 0,
+        cost: 0,
+        mode: body?.mode,
+        metadata: {
+          stream: body?.stream || false,
+          webSearchUsed: false,
+          ragEnabled: false,
+          attachedImages: body?.files?.filter(f => f.type === 'image').length || 0
+        }
+      }).catch(analyticsError => console.warn('Analytics tracking failed:', analyticsError));
+    }
     
     // Detailed error logging for debugging
     if (error instanceof Error) {

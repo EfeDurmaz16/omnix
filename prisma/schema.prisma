@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -28,6 +28,7 @@ model User {
   videos          Video[]
   apiUsage        ApiUsage[]
   subscriptions   Subscription[]
+  agents          Agent[]
 
   @@map("users")
 }
@@ -75,7 +76,7 @@ model Image {
   size        Int?       // File size in bytes
   metadata    Json?      // Generation parameters, style, etc.
   isPublic    Boolean    @default(false)
-  tags        String[]   @default([])
+  tags        Json       @default("[]")
   parentId    String?    // Reference to original image if this is an edited version
   editPrompt  String?    // Prompt used for editing this version
   editOperation Json?    // Details of the edit operation performed
@@ -105,7 +106,7 @@ model Video {
   status      VideoStatus @default(PROCESSING)
   metadata    Json?      // Generation parameters
   isPublic    Boolean    @default(false)
-  tags        String[]   @default([])
+  tags        Json       @default("[]")
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -157,6 +158,57 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model Agent {
+  id               String      @id @default(cuid())
+  userId           String
+  name             String
+  description      String      @default("")
+  avatar           String?
+  personality      Json        // Personality configuration
+  availableTools   Json        @default("[]") // Array of tool IDs
+  systemPrompt     String      @default("")
+  maxTokens        Int         @default(4000)
+  temperature      Float       @default(0.7)
+  topP             Float       @default(0.9)
+  model            String      @default("gpt-4")
+  enabled          Boolean     @default(true)
+  autoStart        Boolean     @default(false)
+  triggerKeywords  Json        @default("[]") // Array of keywords
+  permissions      Json        // Permissions configuration
+  templateId       String?     // Source template if created from template
+  executionCount   Int         @default(0)
+  lastExecutedAt   DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions AgentExecution[]
+
+  @@map("agents")
+}
+
+model AgentExecution {
+  id          String            @id @default(cuid())
+  agentId     String
+  userId      String
+  status      AgentExecutionStatus @default(PENDING)
+  steps       Json              @default("[]") // Array of execution steps
+  totalCost   Float             @default(0.0)
+  tokensUsed  Int               @default(0)
+  result      Json?             // Execution result
+  error       String?           // Error message if failed
+  startTime   DateTime          @default(now())
+  endTime     DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relationships
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("agent_executions")
+}
+
 // Enums
 enum Plan {
   FREE
@@ -188,4 +240,12 @@ enum SubscriptionStatus {
   INCOMPLETE_EXPIRED
   TRIALING
   UNPAID
+}
+
+enum AgentExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

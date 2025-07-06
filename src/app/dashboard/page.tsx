@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ModernChatInterface } from '@/components/chat/ModernChatInterface';
 import { ImageGenerator } from '@/components/dashboard/ImageGenerator';
 import { VideoGenerator } from '@/components/dashboard/VideoGenerator';
-import { AgentBuilder } from '@/components/agents/AgentBuilder';
+import { AgentDashboard } from '@/components/dashboard/AgentDashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Navbar } from '@/components/layout/Navbar';
@@ -53,7 +53,7 @@ export default function DashboardPage() {
 
         <TabsContent value="agents" className="h-[calc(100vh-9rem)] mt-0 overflow-auto">
           <div className="container mx-auto px-4 py-6 cultural-text-primary">
-            <AgentBuilder />
+            <AgentDashboard />
           </div>
         </TabsContent>
 

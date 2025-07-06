@@ -337,7 +337,7 @@ export function AdvancedModelSearch({ onModelSelect, currentModel, onClose }: Mo
           let models: any[] = [];
           if (data.success && data.data && data.data.providers) {
             // Flatten models from all providers
-            models = data.data.providers.flatMap((provider: any) =>
+            const allModels = data.data.providers.flatMap((provider: any) =>
               provider.models.map((model: any) => ({
                 id: model.id,
                 name: model.name,
@@ -356,6 +356,17 @@ export function AdvancedModelSearch({ onModelSelect, currentModel, onClose }: Mo
                 featured: isFeaturedModel(model.id)
               }))
             );
+            
+            // Remove duplicates by model ID (keep first occurrence)
+            const seen = new Set();
+            models = allModels.filter(model => {
+              if (seen.has(model.id)) {
+                console.log(`🔄 Removing duplicate model: ${model.id}`);
+                return false;
+              }
+              seen.add(model.id);
+              return true;
+            });
           }
           
           console.log('🎯 Processed models:', models.length);
@@ -608,9 +619,9 @@ export function AdvancedModelSearch({ onModelSelect, currentModel, onClose }: Mo
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredModels.map((model) => (
+            {filteredModels.map((model, index) => (
               <ModelCard
-                key={model.id}
+                key={`${model.id}-${index}`}
                 model={model}
                 isSelected={currentModel === model.id}
                 onClick={() => onModelSelect(model.id)}

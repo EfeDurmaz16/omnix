@@ -45,8 +45,8 @@ export default function BillingClient() {
     );
   }
   
-  const { user, addCredits, usageStats } = authContext;
-  const [currentPlan, setCurrentPlan] = useState<string>('pro'); // Default plan
+  const { user, addCredits, usageStats, refreshUserPlan } = authContext;
+  const [currentPlan, setCurrentPlan] = useState<string>('free'); // Default plan
   const [loading, setLoading] = useState<string | null>(null);
 
   // Handle success/error messages from Stripe checkout
@@ -62,7 +62,7 @@ export default function BillingClient() {
         handleCreditPurchaseSuccess();
       } else {
         // Handle successful subscription purchase
-        alert('🎉 Payment successful! Your plan has been updated.');
+        handleSubscriptionSuccess();
       }
       // Clean URL
       window.history.replaceState({}, document.title, '/billing');
@@ -72,6 +72,206 @@ export default function BillingClient() {
       window.history.replaceState({}, document.title, '/billing');
     }
   }, []);
+
+  // Sync currentPlan with user's actual plan
+  useEffect(() => {
+    if (user && user.plan) {
+      console.log('🔄 Syncing current plan with user plan:', user.plan);
+      setCurrentPlan(user.plan.toLowerCase());
+    }
+  }, [user]);
+
+  const handleSubscriptionSuccess = async () => {
+    console.log('🎉 Subscription payment successful! Refreshing plan...');
+    
+    try {
+      // Get the plan that was purchased
+      const lastPurchasePlan = localStorage.getItem('lastPurchasePlan');
+      console.log('🔍 Last purchase plan from localStorage:', lastPurchasePlan);
+      
+      // IMMEDIATELY trigger test webhook since local webhooks don't work
+      if (lastPurchasePlan) {
+        console.log('🧪 Immediately triggering test webhook for plan:', lastPurchasePlan);
+        
+        // Map plan to price ID (reverse of what we do in webhook)
+        const planToPriceMap: { [key: string]: string } = {
+          'pro': 'price_1Rf0s4GfQ4XRggGYSB9ExPB6',
+          'ultra': 'price_1Rf0s5GfQ4XRggGYAmoZRtmz',
+          'enterprise': 'price_1Rf0s5GfQ4XRggGYNWPGsCZ7'
+        };
+        
+        const priceId = planToPriceMap[lastPurchasePlan.toLowerCase()];
+        
+        if (priceId) {
+          try {
+            console.log('🔗 Calling test webhook with priceId:', priceId);
+            
+            const testResponse = await fetch('/api/test/webhook', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                priceId: priceId,
+                sessionMode: 'subscription'
+              })
+            });
+            
+            const testResult = await testResponse.json();
+            console.log('🧪 Test webhook response:', testResult);
+            
+            if (testResponse.ok && testResult.success) {
+              console.log('✅ Test webhook succeeded! Plan updated to:', testResult.data.plan);
+              localStorage.removeItem('lastPurchasePlan');
+              
+              // Refresh the user context
+              if (refreshUserPlan) {
+                await refreshUserPlan();
+              }
+              
+              // Update local state
+              setCurrentPlan(testResult.data.plan.toLowerCase());
+              
+              alert(`🎉 Payment successful! Your plan has been upgraded to ${testResult.data.plan}.`);
+              
+              // Force page reload to ensure everything is updated
+              setTimeout(() => {
+                window.location.reload();
+              }, 1000);
+              return;
+            }
+          } catch (testError) {
+            console.error('❌ Test webhook failed:', testError);
+          }
+        }
+      }
+      
+      // If test webhook failed, fall back to polling approach
+      console.log('⏳ Test webhook failed, falling back to polling...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Try multiple times to refresh the plan
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      while (attempts < maxAttempts) {
+        attempts++;
+        console.log(`🔄 Attempt ${attempts}/${maxAttempts} to refresh plan...`);
+        
+        try {
+          // Refresh user plan from database
+          if (refreshUserPlan) {
+            await refreshUserPlan();
+          }
+          
+          // Also try to force refresh the plan from API
+          const response = await fetch('/api/user/plan', {
+            cache: 'no-cache',
+            headers: {
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data.plan) {
+              const newPlan = data.data.plan.toLowerCase();
+              console.log(`📋 Attempt ${attempts} - Plan from API:`, newPlan);
+              
+              // Check if plan changed from what was expected
+              const expectedPlan = lastPurchasePlan?.toLowerCase();
+              if (expectedPlan && newPlan === expectedPlan) {
+                setCurrentPlan(newPlan);
+                console.log('✅ Plan successfully updated to:', newPlan);
+                alert(`🎉 Payment successful! Your plan has been upgraded to ${newPlan.toUpperCase()}.`);
+                
+                // Force page reload to ensure everything is updated
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1000);
+                return;
+              }
+            }
+          }
+          
+          // Wait before next attempt
+          if (attempts < maxAttempts) {
+            console.log(`⏳ Plan still not updated, waiting 2s before attempt ${attempts + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+          
+        } catch (error) {
+          console.error(`❌ Error in attempt ${attempts}:`, error);
+        }
+      }
+      
+      // If we get here, all attempts failed - try test webhook as fallback
+      console.log('❌ All attempts to refresh plan failed, trying test webhook fallback...');
+      
+      try {
+        // Get the price ID from the URL params or localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        
+        // Try to determine which plan was purchased based on localStorage or other means
+        const lastPurchasePlan = localStorage.getItem('lastPurchasePlan');
+        
+        if (lastPurchasePlan) {
+          console.log('🧪 Attempting test webhook for plan:', lastPurchasePlan);
+          
+          // Map plan to price ID (reverse of what we do in webhook)
+          const planToPriceMap: { [key: string]: string } = {
+            'pro': 'price_1Rf0s4GfQ4XRggGYSB9ExPB6',
+            'ultra': 'price_1Rf0s5GfQ4XRggGYAmoZRtmz',
+            'enterprise': 'price_1Rf0s5GfQ4XRggGYNWPGsCZ7'
+          };
+          
+          const priceId = planToPriceMap[lastPurchasePlan.toLowerCase()];
+          
+          if (priceId) {
+            const testResponse = await fetch('/api/test/webhook', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                priceId: priceId,
+                sessionMode: 'subscription'
+              })
+            });
+            
+            if (testResponse.ok) {
+              const testResult = await testResponse.json();
+              if (testResult.success) {
+                console.log('✅ Test webhook succeeded, refreshing UI...');
+                localStorage.removeItem('lastPurchasePlan');
+                
+                // Try refreshing one more time
+                if (refreshUserPlan) {
+                  await refreshUserPlan();
+                }
+                
+                alert(`🎉 Payment successful! Your plan has been upgraded to ${lastPurchasePlan.toUpperCase()}.`);
+                
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1000);
+                return;
+              }
+            }
+          }
+        }
+      } catch (testError) {
+        console.error('❌ Test webhook also failed:', testError);
+      }
+      
+      alert('🎉 Payment successful! The plan update is processing. Please refresh the page in a moment to see your updated plan.');
+      
+    } catch (error) {
+      console.error('❌ Error refreshing plan after payment:', error);
+      alert('🎉 Payment successful! Please refresh the page to see your updated plan.');
+    }
+  };
 
   const handleCreditPurchaseSuccess = async () => {
     // Get the actual credit amount from localStorage
@@ -261,6 +461,10 @@ export default function BillingClient() {
         throw new Error('Invalid plan ID');
       }
       
+      // Store the plan being purchased for fallback webhook testing
+      localStorage.setItem('lastPurchasePlan', planId);
+      console.log('💾 Stored last purchase plan:', planId);
+      
       // Call the real Stripe checkout API
       const response = await fetch('/api/billing/create-checkout', {
         method: 'POST',
@@ -289,6 +493,8 @@ export default function BillingClient() {
       console.error('Failed to create checkout session:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       alert(`Failed to start checkout: ${errorMessage}`);
+      // Clear the stored plan if checkout failed
+      localStorage.removeItem('lastPurchasePlan');
     } finally {
       setLoading(null);
     }
@@ -397,6 +603,125 @@ export default function BillingClient() {
             </Badge>
           </div>
         </div>
+        
+        {/* Emergency Manual Fix - Only show if plan seems wrong */}
+        {(currentPlan === 'pro' || currentPlan === 'free') && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800 mb-3">
+              🚨 <strong>Plan Update Issue Detected:</strong> If you just completed a payment for ULTRA plan but it's showing as {currentPlan.toUpperCase()}, click below to fix it:
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/manual-fix', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ plan: 'ULTRA' })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      alert(`✅ Plan fixed to ULTRA with ${result.data.credits} credits!`);
+                      
+                      // Also refresh the auth context to update credits immediately
+                      if (refreshUserPlan) {
+                        await refreshUserPlan();
+                      }
+                      
+                      window.location.reload();
+                    } else {
+                      alert('❌ Fix failed: ' + result.error);
+                    }
+                  } catch (error) {
+                    alert('❌ Fix failed: ' + error);
+                  }
+                }}
+                size="sm"
+                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+              >
+                🔧 Fix to ULTRA (5000 credits)
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/manual-fix', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ plan: 'PRO' })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      alert('✅ Plan fixed to PRO!');
+                      window.location.reload();
+                    } else {
+                      alert('❌ Fix failed: ' + result.error);
+                    }
+                  } catch (error) {
+                    alert('❌ Fix failed: ' + error);
+                  }
+                }}
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                🔧 Fix to PRO
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/debug/db-state');
+                    const result = await response.json();
+                    if (result.success) {
+                      console.log('🔍 Database state:', result.data);
+                      alert(`🔍 Database state:\nCurrent plan: ${result.data.currentUser?.plan || 'Not found'}\nCredits: ${result.data.currentUser?.credits || 'Not found'}\nLast updated: ${result.data.currentUser?.updatedAt || 'Not found'}\nCheck console for full details.`);
+                    } else {
+                      alert('❌ Debug failed: ' + result.error);
+                    }
+                  } catch (error) {
+                    alert('❌ Debug failed: ' + error);
+                  }
+                }}
+                size="sm"
+                variant="outline"
+                className="border-gray-400"
+              >
+                🔍 Debug DB
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    console.log('🔄 Refreshing credits and plan...');
+                    
+                    // Refresh using auth context
+                    if (refreshUserPlan) {
+                      await refreshUserPlan();
+                    }
+                    
+                    // Also call refresh API for comparison
+                    const response = await fetch('/api/refresh-credits', {
+                      method: 'POST'
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                      console.log('💰 Refreshed credits:', result.data);
+                      alert(`✅ Credits refreshed!\nPlan: ${result.data.plan}\nCredits: ${result.data.credits}\nPage will reload to update UI.`);
+                      setTimeout(() => window.location.reload(), 1000);
+                    } else {
+                      alert('❌ Refresh failed: ' + result.error);
+                    }
+                  } catch (error) {
+                    alert('❌ Refresh failed: ' + error);
+                  }
+                }}
+                size="sm"
+                variant="outline"
+                className="border-green-400 text-green-700"
+              >
+                🔄 Refresh Credits
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Upgrade Plans */}

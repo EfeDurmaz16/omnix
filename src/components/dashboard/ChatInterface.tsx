@@ -20,6 +20,11 @@ interface Message {
   model?: string;
   tokens?: number;
   cost?: number;
+  webSearchResults?: Array<{
+    title: string;
+    url: string;
+    snippet: string;
+  }>;
 }
 
 interface ChatSession {
@@ -109,12 +114,16 @@ export function ChatInterface({
     // Load preferences from localStorage after hydration
     const savedModel = localStorage.getItem('omnix-selected-model');
     const savedPromptMode = localStorage.getItem('omnix-thinking-mode');
+    const savedWebSearch = localStorage.getItem('omnix-web-search-enabled');
     
     if (savedModel) {
       setSelectedModel(savedModel);
     }
     if (savedPromptMode) {
       setPromptMode(savedPromptMode);
+    }
+    if (savedWebSearch) {
+      setWebSearchEnabled(savedWebSearch === 'true');
     }
   }, []);
 
@@ -127,6 +136,11 @@ export function ChatInterface({
   useEffect(() => {
     localStorage.setItem('omnix-thinking-mode', promptMode);
   }, [promptMode]);
+
+  // Persist webSearchEnabled to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-web-search-enabled', webSearchEnabled.toString());
+  }, [webSearchEnabled]);
 
   // Debug sessions changes
   useEffect(() => {
@@ -452,7 +466,7 @@ export function ChatInterface({
           mode: promptMode,
           sessionId: sessionId,
           files: uploadedFiles.map(f => ({ name: f.name, type: f.type, url: f.url })),
-          webSearch: webSearchEnabled
+          enableWebSearch: webSearchEnabled
         }),
       });
 
@@ -495,7 +509,8 @@ export function ChatInterface({
         timestamp: new Date(),
         model: data.model,
         tokens: data.tokens,
-        cost: data.cost
+        cost: data.cost,
+        webSearchResults: data.webSearchResults
       };
 
       // Update session with assistant message
@@ -840,8 +855,53 @@ export function ChatInterface({
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{message.content}</p>
+                    
+                    {/* Web Search Results */}
+                    {message.role === 'assistant' && message.webSearchResults && message.webSearchResults.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-slate-600/30">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center">
+                            <span className="text-emerald-400 text-sm">🌐</span>
+                            <Search className="w-2 h-2 text-emerald-400 ml-1" />
+                          </div>
+                          <span className="text-xs text-emerald-400 font-medium">
+                            Web Sources ({message.webSearchResults.length})
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          {message.webSearchResults.map((result, index) => (
+                            <a
+                              key={index}
+                              href={result.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block p-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg transition-colors border border-slate-600/30 hover:border-emerald-400/30"
+                            >
+                              <div className="text-xs font-medium text-emerald-300 mb-1 line-clamp-1">
+                                {result.title}
+                              </div>
+                              <div className="text-xs text-slate-400 line-clamp-2">
+                                {result.snippet}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1 truncate">
+                                {result.url}
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="mt-2 flex items-center justify-between text-xs opacity-70">
-                      <span>{formatTimestamp(message.timestamp)}</span>
+                      <div className="flex items-center gap-3">
+                        <span>{formatTimestamp(message.timestamp)}</span>
+                        {message.role === 'assistant' && message.webSearchResults && message.webSearchResults.length > 0 && (
+                          <div className="flex items-center gap-1 text-emerald-400">
+                            <span className="text-xs">🌐</span>
+                            <span>Web enhanced</span>
+                          </div>
+                        )}
+                      </div>
                       {message.role === 'assistant' && message.tokens && (
                         <span>{message.tokens} tokens</span>
                       )}
@@ -916,15 +976,23 @@ export function ChatInterface({
                 variant="outline"
                 size="sm"
                 onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                className={`border-slate-700/50 transition-all ${
+                className={`border-slate-700/50 transition-all relative ${
                   webSearchEnabled 
-                    ? 'bg-blue-500/20 border-blue-400/50 text-blue-300 hover:bg-blue-500/30' 
+                    ? 'bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/30 shadow-lg shadow-emerald-500/20' 
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/30'
                 }`}
                 disabled={loading}
-                title="Toggle web search for current information"
+                title={webSearchEnabled ? "Web search enabled - will search for current information" : "Enable web search for real-time information"}
               >
-                <Search className="w-4 h-4" />
+                <div className="relative flex items-center">
+                  <Search className="w-4 h-4" />
+                  <span className={`text-xs absolute -top-1 -right-2 transition-all ${
+                    webSearchEnabled ? 'text-emerald-200' : 'text-slate-400'
+                  }`}>🌐</span>
+                </div>
+                {webSearchEnabled && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                )}
               </Button>
               
               {!isGuest && (

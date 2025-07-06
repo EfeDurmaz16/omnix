@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getModelsForUser, getModelRouter } from '@/lib/model-router';
 import { getAvailableModelsForPlan, getUserPlanLimits } from '@/lib/model-access';
+import { enhancedModelRouter } from '@/lib/router/EnhancedModelRouter';
 
 export async function GET() {
   try {
@@ -14,14 +15,19 @@ export async function GET() {
     // Authenticated users get more detailed access control
     const isAuthenticated = !!userId;
 
-    console.log('Initializing router...');
-    const router = getModelRouter();
-    console.log('Router initialized:', !!router);
+    console.log('Initializing enhanced router...');
+    const router = enhancedModelRouter;
+    console.log('Enhanced router initialized:', !!router);
     
-    // Get all available models
-    console.log('Getting available models...');
+    // Initialize model catalog first
+    const { modelCatalog } = await import('@/lib/catalog/ModelCatalog');
+    await modelCatalog.initialize();
+    console.log('Model catalog initialized');
+    
+    // Get all available models using enhanced router
+    console.log('Getting available models from enhanced router...');
     const allModels = await router.getAvailableModels();
-    console.log('All models from router:', allModels?.length || 0);
+    console.log('All models from enhanced router:', allModels?.length || 0);
     
     // If no models found or very few, add fallback models
     if (!allModels || allModels.length <= 1) {
@@ -274,7 +280,11 @@ export async function GET() {
     
     // Get provider health status
     console.log('Getting provider health...');
-    const providerHealth = await router.getProviderHealth();
+    const providerHealthMap = router.getProviderHealth();
+    const providerHealth: Record<string, boolean> = {};
+    for (const [providerId, health] of providerHealthMap.entries()) {
+      providerHealth[providerId] = health.isHealthy;
+    }
     console.log('Provider health:', providerHealth);
     
     // Group models by provider

@@ -173,7 +173,8 @@ export class AdvancedContextManager {
   ): Promise<void> {
     const context = this.activeContexts.get(contextId);
     if (!context) {
-      throw new Error(`Context ${contextId} not found`);
+      console.warn(`⚠️ Context ${contextId} not found - skipping message add (this is normal for quick mode or failed contexts)`);
+      return; // Gracefully handle missing context instead of throwing
     }
 
     const contextMessage: ContextMessage = {

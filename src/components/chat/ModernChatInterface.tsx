@@ -90,6 +90,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [autoRoutingEnabled, setAutoRoutingEnabled] = useState(false);
   const [showVoiceChat, setShowVoiceChat] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // Load conversations and preferences on mount
   useEffect(() => {
@@ -99,6 +100,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     const savedModel = localStorage.getItem('omnix-selected-model');
     const savedThinkingMode = localStorage.getItem('omnix-thinking-mode');
     const savedAutoRouting = localStorage.getItem('omnix-auto-routing');
+    const savedWebSearch = localStorage.getItem('omnix-web-search-enabled');
     
     if (savedModel) {
       setSelectedModel(savedModel);
@@ -108,6 +110,9 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     }
     if (savedAutoRouting) {
       setAutoRoutingEnabled(savedAutoRouting === 'true');
+    }
+    if (savedWebSearch) {
+      setWebSearchEnabled(savedWebSearch === 'true');
     }
   }, []);
 
@@ -132,6 +137,11 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   useEffect(() => {
     localStorage.setItem('omnix-auto-routing', autoRoutingEnabled.toString());
   }, [autoRoutingEnabled]);
+
+  // Persist webSearchEnabled to localStorage
+  useEffect(() => {
+    localStorage.setItem('omnix-web-search-enabled', webSearchEnabled.toString());
+  }, [webSearchEnabled]);
 
   const loadConversations = async () => {
     const savedConversations = localStorage.getItem('omnix-conversations');
@@ -269,9 +279,15 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     setIsLoading(true);
     setStreamingMessage('');
 
-    // Create abort controller for this request
+    // Create abort controller for this request with longer timeout
     const controller = new AbortController();
     setAbortController(controller);
+    
+    // Set a reasonable timeout for API responses (45 seconds for RAG + web search)
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      console.log('🕐 Request timed out after 45 seconds');
+    }, 45000);
 
     try {
       // Show thinking state for more advanced models
@@ -297,13 +313,16 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
           mode: thinkingMode,
           conversationId: currentConversation?.id,
           files: files || [], // Include processed files
-          stream: true // Request streaming response
+          stream: true, // Request streaming response
+          enableWebSearch: webSearchEnabled // Include web search setting
         }),
         signal: controller.signal // Add abort signal
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get AI response');
+        const errorText = await response.text();
+        console.error('API Error:', response.status, response.statusText, errorText);
+        throw new Error(`Failed to get AI response: ${response.status} ${response.statusText}`);
       }
 
       // Check if response is streaming
@@ -329,10 +348,16 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             console.log('🛑 Streaming aborted by user');
             return;
           }
-          throw error;
+          console.error('❌ Streaming error:', error);
+          // If streaming failed but we have partial content, use it
+          if (fullContent.length > 0) {
+            console.log('📝 Using partial content from interrupted stream:', fullContent.length, 'characters');
+          } else {
+            throw error;
+          }
         }
 
-        // Create final message
+        // Create final message (use fullContent even if streaming was interrupted)
         const assistantMessage: Message = {
           id: `msg_${Date.now()}_ai`,
           role: 'assistant',
@@ -341,7 +366,25 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
           model: optimalModel
         };
 
-        setMessages(prev => [...prev, assistantMessage]);
+        setMessages(prev => {
+          const newMessages = [...prev, assistantMessage];
+          // Update conversation after state is updated
+          if (currentConversation) {
+            const updatedConversation = {
+              ...currentConversation,
+              messages: newMessages,
+              updatedAt: new Date(),
+              title: currentConversation.title === 'New Chat' ? 
+                content.slice(0, 50) + (content.length > 50 ? '...' : '') : 
+                currentConversation.title
+            };
+            setCurrentConversation(updatedConversation);
+            setConversations(prev => 
+              prev.map(conv => conv.id === updatedConversation.id ? updatedConversation : conv)
+            );
+          }
+          return newMessages;
+        });
         setStreamingMessage('');
 
       } else {
@@ -356,34 +399,25 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
           model: optimalModel
         };
 
-        setMessages(prev => [...prev, assistantMessage]);
-      }
-
-      // Update conversation
-      if (currentConversation) {
-        const lastMessage = messages[messages.length - 1];
-        const finalContent = lastMessage?.content || streamingMessage || 'Response generated';
-        
-        const updatedMessages = [...messages, userMessage, {
-          id: `msg_${Date.now()}_ai`,
-          role: 'assistant' as const,
-          content: finalContent,
-          timestamp: new Date(),
-          model: optimalModel
-        }];
-        
-        const updatedConversation = {
-          ...currentConversation,
-          messages: updatedMessages,
-          updatedAt: new Date(),
-          title: currentConversation.title === 'New Chat' ? 
-            content.slice(0, 50) + (content.length > 50 ? '...' : '') : 
-            currentConversation.title
-        };
-        setCurrentConversation(updatedConversation);
-        setConversations(prev => 
-          prev.map(conv => conv.id === updatedConversation.id ? updatedConversation : conv)
-        );
+        setMessages(prev => {
+          const newMessages = [...prev, assistantMessage];
+          // Update conversation after state is updated
+          if (currentConversation) {
+            const updatedConversation = {
+              ...currentConversation,
+              messages: newMessages,
+              updatedAt: new Date(),
+              title: currentConversation.title === 'New Chat' ? 
+                content.slice(0, 50) + (content.length > 50 ? '...' : '') : 
+                currentConversation.title
+            };
+            setCurrentConversation(updatedConversation);
+            setConversations(prev => 
+              prev.map(conv => conv.id === updatedConversation.id ? updatedConversation : conv)
+            );
+          }
+          return newMessages;
+        });
       }
 
     } catch (error) {
@@ -402,6 +436,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
       setIsStreaming(false);
       setAbortController(null);
@@ -479,9 +514,10 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
 
   const getInputPlaceholder = () => {
     const mode = thinkingModes.find(m => m.id === thinkingMode);
+    const webSearchText = webSearchEnabled ? " (web search enabled)" : "";
     return messages.length === 0 
-      ? `Message ${selectedModel} in ${mode?.name} mode...` 
-      : "Type a message...";
+      ? `Message ${selectedModel} in ${mode?.name} mode${webSearchText}...` 
+      : `Type a message${webSearchText}...`;
   };
 
   return (
@@ -538,6 +574,8 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             onAutoRoutingToggle={setAutoRoutingEnabled}
             showVoiceChat={showVoiceChat}
             onVoiceChatToggle={setShowVoiceChat}
+            webSearchEnabled={webSearchEnabled}
+            onWebSearchToggle={setWebSearchEnabled}
           />
         </div>
 
@@ -580,6 +618,8 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
               selectedModel={selectedModel}
               disabled={isLoading}
               placeholder={getInputPlaceholder()}
+              webSearchEnabled={webSearchEnabled}
+              onWebSearchToggle={setWebSearchEnabled}
             />
           </div>
         </div>

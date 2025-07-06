@@ -27,8 +27,14 @@ interface StoredVideo {
 export function VideoGenerator() {
   const { updateCredits } = useAuth();
   const [prompt, setPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState('veo-3.0-generate-preview');
+  const [selectedModel, setSelectedModel] = useState('veo-2.0-generate-001');
   const [imageUrl, setImageUrl] = useState('');
+  const [duration, setDuration] = useState(5);
+  const [quality, setQuality] = useState('standard');
+  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [frameRate, setFrameRate] = useState(24);
+  const [motionStrength, setMotionStrength] = useState(3);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generatedVideos, setGeneratedVideos] = useState<GenerationResult[]>([]);
   const [storedVideos, setStoredVideos] = useState<StoredVideo[]>([]);
@@ -104,8 +110,12 @@ export function VideoGenerator() {
         body: JSON.stringify({
           prompt: prompt,
           model: selectedModel,
-          duration: 5, // 5 seconds for MVP
-          imageUrl: imageUrl || undefined // Include image URL for image-to-video models
+          duration: duration,
+          quality: quality,
+          imageUrl: imageUrl || undefined,
+          aspectRatio: aspectRatio,
+          frameRate: frameRate,
+          motionStrength: motionStrength
         }),
       });
 
@@ -424,23 +434,31 @@ export function VideoGenerator() {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="space-y-4">
+            {/* Model Selection */}
             <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">Model:</span>
+              <span className="text-sm font-medium cultural-text-primary">Model:</span>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-64">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {videoModels.map((model) => {
-                    const isRealModel = model.id.startsWith('veo-') || model.id.startsWith('seedance-');
+                    const isAdvancedModel = model.id.includes('kling') || model.id.includes('pika') || 
+                                           model.id.includes('luma') || model.id.includes('runway') ||
+                                           model.id.includes('haiper') || model.id.includes('stable-video');
+                    const isRealModel = model.id.startsWith('veo-') || model.id.startsWith('seedance-') || isAdvancedModel;
                     return (
                       <SelectItem key={model.id} value={model.id}>
                         <div className="flex items-center space-x-2">
                           <span>{model.name}</span>
-                          {isRealModel ? (
+                          {isAdvancedModel ? (
+                            <Badge variant="default" className="text-xs bg-purple-100 text-purple-800">
+                              🚀 Advanced
+                            </Badge>
+                          ) : isRealModel ? (
                             <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                              ✅ 100% Available
+                              ✅ Available
                             </Badge>
                           ) : (
                             <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800">
@@ -457,6 +475,102 @@ export function VideoGenerator() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Basic Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium cultural-text-primary">Duration (seconds)</label>
+                <Select value={duration.toString()} onValueChange={(value) => setDuration(parseInt(value))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[3, 4, 5, 6, 8, 10].map(dur => (
+                      <SelectItem key={dur} value={dur.toString()}>{dur}s</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium cultural-text-primary">Quality</label>
+                <Select value={quality} onValueChange={setQuality}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="high">High Quality</SelectItem>
+                    <SelectItem value="ultra">Ultra (Premium)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium cultural-text-primary">Aspect Ratio</label>
+                <Select value={aspectRatio} onValueChange={setAspectRatio}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                    <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                    <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                    <SelectItem value="4:3">4:3 (Classic)</SelectItem>
+                    <SelectItem value="21:9">21:9 (Cinematic)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Advanced Controls Toggle */}
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-xs"
+              >
+                {showAdvanced ? 'Hide' : 'Show'} Advanced Settings
+              </Button>
+            </div>
+
+            {/* Advanced Controls */}
+            {showAdvanced && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium cultural-text-primary">Frame Rate (FPS)</label>
+                  <Select value={frameRate.toString()} onValueChange={(value) => setFrameRate(parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[8, 12, 24, 30, 60].map(fps => (
+                        <SelectItem key={fps} value={fps.toString()}>{fps} FPS</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium cultural-text-primary">Motion Strength</label>
+                  <Select value={motionStrength.toString()} onValueChange={(value) => setMotionStrength(parseInt(value))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Subtle (1)</SelectItem>
+                      <SelectItem value="2">Low (2)</SelectItem>
+                      <SelectItem value="3">Medium (3)</SelectItem>
+                      <SelectItem value="4">High (4)</SelectItem>
+                      <SelectItem value="5">Maximum (5)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
 
             <div className="flex items-center space-x-2">
               {/* Commented out buttons - keeping functions for future use */}
@@ -524,7 +638,6 @@ export function VideoGenerator() {
                 )}
               </Button>
             </div>
-          </div>
 
           {/* Video model info - Updated to remove "100% Available" status */}
           <div className="p-3 bg-green-50 border border-green-200 rounded-md">
