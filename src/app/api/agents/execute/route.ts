@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { agentManager } from '@/lib/agents/AgentManager';
+
+const ADK_SERVICE_URL = process.env.ADK_SERVICE_URL || 'http://127.0.0.1:8001';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,40 +21,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Task description is required' }, { status: 400 });
     }
 
-    console.log('🤖 Agent execution request:', { agentId, taskDescription: taskDescription.substring(0, 100) + '...' });
+    console.log('🤖 ADK Agent execution request via service:', { agentId, taskDescription: taskDescription.substring(0, 100) + '...' });
 
-    // Check agent ownership
-    const agent = await agentManager.getAgent(agentId);
-    if (!agent) {
-      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    }
-
-    if (agent.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    // Execute the task
-    const execution = await agentManager.executeAgentTask(agentId, taskDescription, context);
-
-    console.log('✅ Agent execution completed:', execution.id);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        executionId: execution.id,
-        agentId: execution.agentId,
-        status: execution.status,
-        steps: execution.steps.length,
-        totalCost: execution.totalCost,
-        tokensUsed: execution.tokensUsed,
-        result: execution.result,
-        startTime: execution.startTime,
-        endTime: execution.endTime
-      }
+    // Forward request to ADK service
+    const response = await fetch(`${ADK_SERVICE_URL}/agents/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        agentId,
+        taskDescription,
+        context
+      })
     });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`ADK service error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ ADK Agent execution completed via service:', data.data?.executionId);
+
+    return NextResponse.json(data);
+
   } catch (error) {
-    console.error('❌ Agent execution error:', error);
+    console.error('❌ ADK Agent execution error:', error);
     return NextResponse.json(
       { 
         success: false, 

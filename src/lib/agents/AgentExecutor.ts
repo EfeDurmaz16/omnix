@@ -11,6 +11,7 @@ import {
   AgentMemory 
 } from './types';
 import { analyticsTracker } from '../analytics/AnalyticsTracker';
+import ToolRegistry from './tools/ToolRegistry';
 
 export interface AgentExecutorConfig {
   maxExecutionTime: number; // milliseconds
@@ -293,35 +294,28 @@ export class AgentExecutor {
         throw new Error(`Tool ${toolCall.tool} not available for this agent`);
       }
 
-      // Route to appropriate tool handler
-      switch (toolCall.tool) {
-        case 'web-search':
-          return await this.executeWebSearch(toolCall.parameters);
-        
-        case 'fact-checker':
-          return await this.executeFactChecker(toolCall.parameters);
-        
-        case 'data-analyzer':
-          return await this.executeDataAnalyzer(toolCall.parameters);
-        
-        case 'content-generator':
-          return await this.executeContentGenerator(toolCall.parameters);
-        
-        case 'image-generator':
-          return await this.executeImageGenerator(toolCall.parameters);
-        
-        case 'code-executor':
-          return await this.executeCodeExecutor(toolCall.parameters);
-        
-        case 'calendar-api':
-          return await this.executeCalendarAPI(toolCall.parameters);
-        
-        case 'email-sender':
-          return await this.executeEmailSender(toolCall.parameters);
-        
-        default:
-          throw new Error(`Unknown tool: ${toolCall.tool}`);
+      // Check if tool exists in registry
+      if (!ToolRegistry.hasTool(toolCall.tool)) {
+        throw new Error(`Tool ${toolCall.tool} not found in registry`);
       }
+
+      // Use execute method for all tools for now
+      const methodName = 'execute';
+      const parameters = [toolCall.parameters];
+
+      // Execute tool through registry
+      const result = await ToolRegistry.executeTool(
+        toolCall.tool,
+        methodName,
+        Array.isArray(parameters) ? parameters : [parameters]
+      );
+
+      return {
+        success: true,
+        result,
+        tool: toolCall.tool,
+        method: methodName
+      };
 
     } catch (error) {
       console.error(`Tool execution failed: ${toolCall.tool}`, error);
@@ -334,87 +328,17 @@ export class AgentExecutor {
   }
 
   /**
-   * Tool implementations
+   * Get available tools for agent
    */
-  private async executeWebSearch(params: any): Promise<any> {
-    // Mock implementation - integrate with existing web search
-    return {
-      success: true,
-      results: [
-        {
-          title: 'Search Result',
-          url: 'https://example.com',
-          snippet: 'Relevant information found...'
-        }
-      ],
-      query: params.query
-    };
+  getAvailableTools(): string[] {
+    return ToolRegistry.getAllTools().map(tool => tool.id);
   }
 
-  private async executeFactChecker(params: any): Promise<any> {
-    return {
-      success: true,
-      claim: params.claim,
-      verified: true,
-      confidence: 0.85,
-      sources: ['Source 1', 'Source 2']
-    };
-  }
-
-  private async executeDataAnalyzer(params: any): Promise<any> {
-    return {
-      success: true,
-      analysis: 'Data analysis complete',
-      insights: ['Insight 1', 'Insight 2'],
-      data: params.data
-    };
-  }
-
-  private async executeContentGenerator(params: any): Promise<any> {
-    return {
-      success: true,
-      content: `Generated content for: ${params.topic}`,
-      type: params.type || 'article',
-      wordCount: 500
-    };
-  }
-
-  private async executeImageGenerator(params: any): Promise<any> {
-    // Integrate with existing image generation
-    return {
-      success: true,
-      imageUrl: 'https://example.com/generated-image.jpg',
-      prompt: params.prompt,
-      style: params.style
-    };
-  }
-
-  private async executeCodeExecutor(params: any): Promise<any> {
-    return {
-      success: true,
-      output: 'Code executed successfully',
-      code: params.code,
-      language: params.language
-    };
-  }
-
-  private async executeCalendarAPI(params: any): Promise<any> {
-    return {
-      success: true,
-      action: params.action,
-      event: params.event,
-      scheduled: true
-    };
-  }
-
-  private async executeEmailSender(params: any): Promise<any> {
-    return {
-      success: true,
-      to: params.to,
-      subject: params.subject,
-      sent: true,
-      messageId: `msg_${Date.now()}`
-    };
+  /**
+   * Get tool information
+   */
+  getToolInfo(toolId: string): any {
+    return ToolRegistry.getTool(toolId);
   }
 
   /**

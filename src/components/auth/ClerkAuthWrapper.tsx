@@ -82,15 +82,15 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       
       console.log('💰 Fallback credits from localStorage:', credits);
       
-      // Fetch user's actual plan from API (async)
-      let userPlan = 'free';
+      // Get cached plan from localStorage or default to 'free'
+      const cachedPlan = localStorage.getItem(`aspendos_plan_${clerkUser.id}`) || 'free';
       
-      // Create the userData first with default plan
+      // Create the userData with cached plan
       const userData: User = {
         id: clerkUser.id,
         email: clerkUser.emailAddresses[0]?.emailAddress || '',
         name: clerkUser.fullName || clerkUser.firstName || 'User',
-        plan: userPlan,
+        plan: cachedPlan,
         credits: credits,
         createdAt: clerkUser.createdAt || new Date(),
         updatedAt: new Date()
@@ -110,7 +110,7 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       setUsageStats(usageData);
       setLoading(false);
 
-      // Then fetch the actual plan asynchronously
+      // Then fetch the actual plan asynchronously and update cache
       fetch('/api/user/plan')
         .then(response => {
           if (response.ok) {
@@ -122,6 +122,9 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           if (planData.success && planData.data.plan) {
             const actualPlan = planData.data.plan.toLowerCase();
             console.log('📋 Fetched user plan from API:', actualPlan);
+            
+            // Update localStorage cache
+            localStorage.setItem(`aspendos_plan_${clerkUser.id}`, actualPlan);
             
             // Update user with actual plan
             setUser(prevUser => prevUser ? { ...prevUser, plan: actualPlan } : prevUser);
@@ -135,6 +138,11 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     } else if (!clerkUser && user) {
       // User logged out
       console.log('👋 User logged out, clearing data');
+      
+      // Clear cached plan data
+      localStorage.removeItem(`aspendos_plan_${user.id}`);
+      localStorage.removeItem(`aspendos_credits_${user.id}`);
+      
       setUser(null);
       setUsageStats(null);
       setLoading(false);

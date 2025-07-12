@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { agentManager } from '@/lib/agents/AgentManager';
+
+const ADK_SERVICE_URL = process.env.ADK_SERVICE_URL || 'http://127.0.0.1:8001';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,41 +14,19 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const agentId = searchParams.get('id');
 
-    if (agentId) {
-      // Get specific agent
-      const agent = await agentManager.getAgent(agentId);
-      if (!agent) {
-        return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-      }
-      
-      if (agent.userId !== userId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-      }
+    console.log('🔍 Getting agents from ADK service for user:', userId);
 
-      return NextResponse.json({
-        success: true,
-        data: agent
-      });
-    }
-
-    // Get user's agents
-    let agents = await agentManager.getUserAgents(userId);
+    // Forward request to ADK service
+    const response = await fetch(`${ADK_SERVICE_URL}/agents?userId=${userId}${search ? `&search=${search}` : ''}${agentId ? `&id=${agentId}` : ''}`);
     
-    // Apply search filter if provided
-    if (search) {
-      agents = agents.filter(agent => 
-        agent.name.toLowerCase().includes(search.toLowerCase()) ||
-        agent.description.toLowerCase().includes(search.toLowerCase()) ||
-        agent.personality.expertise.some(skill => 
-          skill.toLowerCase().includes(search.toLowerCase())
-        )
-      );
+    if (!response.ok) {
+      throw new Error(`ADK service error: ${response.status}`);
     }
 
-    return NextResponse.json({
-      success: true,
-      data: agents
-    });
+    const data = await response.json();
+    console.log('✅ Retrieved agents from ADK service:', data.data?.length || 0);
+
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error('❌ Get agents error:', error);
@@ -64,33 +43,52 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔵 Agent POST request received');
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
+    console.log('🔵 Request body:', JSON.stringify(body, null, 2));
     const { templateId, config, action } = body;
 
     if (action === 'import') {
-      // Import agents from backup
-      const importedAgents = await agentManager.importAgents(userId, body.data);
+      // Import agents from backup - TODO: Implement for ADK
       return NextResponse.json({
-        success: true,
-        data: importedAgents,
-        message: `Successfully imported ${importedAgents.length} agents`
-      });
+        success: false,
+        error: 'Import functionality not yet implemented for ADK agents'
+      }, { status: 501 });
     }
 
-    // Create new agent
-    const agent = await agentManager.createAgent(userId, config, templateId);
+    // Add userId to config
+    const configWithUserId = {
+      ...config,
+      userId
+    };
 
-    console.log('✅ Agent created:', agent.name);
-
-    return NextResponse.json({
-      success: true,
-      data: agent
+    // Forward request to ADK service
+    console.log('🤖 Creating agent via ADK service');
+    const response = await fetch(`${ADK_SERVICE_URL}/agents`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        templateId,
+        config: configWithUserId
+      })
     });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`ADK service error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Agent created via ADK service:', data.data?.name);
+
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error('❌ Create agent error:', error);
@@ -112,31 +110,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { agentId, updates } = body;
-
-    if (!agentId) {
-      return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 });
-    }
-
-    // Check ownership
-    const existingAgent = agentManager.getAgent(agentId);
-    if (!existingAgent) {
-      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
-    }
-    
-    if (existingAgent.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const updatedAgent = await agentManager.updateAgent(agentId, updates);
-
-    console.log('✅ Agent updated:', updatedAgent.name);
-
+    // For now, return not implemented for ADK agents
     return NextResponse.json({
-      success: true,
-      data: updatedAgent
-    });
+      success: false,
+      error: 'Agent updates not yet implemented for ADK agents'
+    }, { status: 501 });
 
   } catch (error) {
     console.error('❌ Update agent error:', error);
@@ -165,18 +143,22 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 });
     }
 
-    const deleted = await agentManager.deleteAgent(agentId, userId);
-    
-    if (!deleted) {
-      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
+    console.log('🗑️ Deleting agent via ADK service:', agentId);
+
+    // Forward request to ADK service
+    const response = await fetch(`${ADK_SERVICE_URL}/agents/${agentId}?userId=${userId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`ADK service error: ${response.status} - ${errorData.detail || 'Unknown error'}`);
     }
 
-    console.log('✅ Agent deleted:', agentId);
+    const data = await response.json();
+    console.log('✅ Agent deleted via ADK service');
 
-    return NextResponse.json({
-      success: true,
-      message: 'Agent deleted successfully'
-    });
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error('❌ Delete agent error:', error);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { agentManager } from '@/lib/agents/AgentManager';
+
+const ADK_SERVICE_URL = process.env.ADK_SERVICE_URL || 'http://127.0.0.1:8001';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,15 +10,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const templates = agentManager.getAgentTemplates();
+    console.log('📋 Getting ADK agent templates from service');
 
-    return NextResponse.json({
-      success: true,
-      data: templates
-    });
+    // Forward request to ADK service
+    const response = await fetch(`${ADK_SERVICE_URL}/agents/templates`);
+    
+    if (!response.ok) {
+      throw new Error(`ADK service error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Retrieved templates from ADK service:', data.data?.templates?.length || 0);
+
+    return NextResponse.json(data);
 
   } catch (error) {
-    console.error('❌ Get agent templates error:', error);
+    console.error('❌ Get ADK templates error:', error);
     return NextResponse.json(
       { 
         success: false, 

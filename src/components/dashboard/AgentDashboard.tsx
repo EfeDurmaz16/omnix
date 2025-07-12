@@ -93,24 +93,10 @@ interface AgentExecution {
 
 const AVAILABLE_TOOLS = [
   { id: 'web-search', name: 'Web Search', category: 'web' },
-  { id: 'fact-checker', name: 'Fact Checker', category: 'ai' },
-  { id: 'data-analyzer', name: 'Data Analyzer', category: 'utility' },
-  { id: 'content-generator', name: 'Content Generator', category: 'ai' },
-  { id: 'image-generator', name: 'Image Generator', category: 'ai' },
-  { id: 'code-executor', name: 'Code Executor', category: 'utility' },
-  { id: 'calendar-api', name: 'Calendar API', category: 'api' },
+  { id: 'data-analyzer', name: 'Data Analyzer', category: 'data' },
+  { id: 'file-processing', name: 'File Processing', category: 'file' },
   { id: 'email-sender', name: 'Email Sender', category: 'communication' },
-  { id: 'social-media-publisher', name: 'Social Media Publisher', category: 'communication' },
-  { id: 'trend-analyzer', name: 'Trend Analyzer', category: 'ai' },
-  { id: 'citation-generator', name: 'Citation Generator', category: 'utility' },
-  { id: 'github-api', name: 'GitHub API', category: 'api' },
-  { id: 'documentation-generator', name: 'Documentation Generator', category: 'utility' },
-  { id: 'code-analyzer', name: 'Code Analyzer', category: 'utility' },
-  { id: 'chart-generator', name: 'Chart Generator', category: 'utility' },
-  { id: 'statistical-analyzer', name: 'Statistical Analyzer', category: 'ai' },
-  { id: 'ml-model', name: 'ML Model', category: 'ai' },
-  { id: 'reminder-system', name: 'Reminder System', category: 'utility' },
-  { id: 'task-manager', name: 'Task Manager', category: 'utility' }
+  { id: 'gemini-ai', name: 'Gemini AI', category: 'ai' }
 ];
 
 const COMMUNICATION_STYLES = [
@@ -122,6 +108,7 @@ const RESPONSE_LENGTHS = [
 ];
 
 const AI_MODELS = [
+  'gemini-2.0-flash-exp',
   'gpt-4',
   'gpt-4-turbo',
   'gpt-3.5-turbo',
@@ -152,7 +139,7 @@ export function AgentDashboard() {
     systemPrompt: '',
     availableTools: [] as string[],
     triggerKeywords: [] as string[],
-    model: 'gpt-4',
+    model: 'gemini-2.0-flash-exp',
     maxTokens: 4000,
     temperature: 0.7,
     topP: 0.9,
@@ -169,9 +156,9 @@ export function AgentDashboard() {
       proactiveness: 6
     },
     permissions: {
-      canAccessInternet: false,
+      canAccessInternet: true,  // Enable by default
       canModifyFiles: false,
-      canSendEmails: false,
+      canSendEmails: true,      // Enable by default
       canMakePurchases: false,
       canAccessPrivateData: false,
       maxCostPerHour: 5.0
@@ -216,8 +203,10 @@ export function AgentDashboard() {
       
       const data = await response.json();
       if (data.success) {
-        setTemplates(data.data);
-        console.log('✅ Loaded templates:', data.data.length);
+        // Handle ADK service response format
+        const templates = data.data.templates || data.data || [];
+        setTemplates(templates);
+        console.log('✅ Loaded templates:', templates.length);
       }
     } catch (error) {
       console.error('❌ Failed to load templates:', error);
@@ -310,7 +299,15 @@ export function AgentDashboard() {
       }
     } catch (error) {
       console.error('❌ Failed to execute agent task:', error);
-      alert(`Failed to execute task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // If agent not found, reload agents list
+      if (error instanceof Error && error.message.includes('Agent not found')) {
+        console.log('🔄 Agent not found, reloading agents list...');
+        await loadAgents();
+        alert('The agent was not found. The agents list has been refreshed. Please try again with an updated agent.');
+      } else {
+        alert(`Failed to execute task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } finally {
       setExecuting(false);
     }
@@ -367,15 +364,33 @@ export function AgentDashboard() {
 
     const template = templates.find(t => t.name === templateName);
     if (template) {
+      // Set appropriate permissions based on available tools
+      const hasWebSearch = template.tools?.includes('web-search') || template.availableTools?.includes('web-search');
+      const hasEmailSender = template.tools?.includes('email-sender') || template.availableTools?.includes('email-sender');
+      
       setFormData(prev => ({
         ...prev,
         selectedTemplate: templateName,
         name: template.name,
         description: template.description,
-        systemPrompt: template.systemPrompt,
-        availableTools: template.availableTools,
-        triggerKeywords: template.triggerKeywords,
-        personality: template.personality
+        systemPrompt: template.systemPrompt || '',
+        availableTools: template.tools || template.availableTools || [],
+        triggerKeywords: template.triggerKeywords || [],
+        personality: template.personality || {
+          name: template.name,
+          role: template.category || 'Assistant',
+          expertise: template.tools || [],
+          communicationStyle: 'professional',
+          responseLength: 'detailed',
+          creativity: 6,
+          precision: 9,
+          proactiveness: 8
+        },
+        permissions: {
+          ...prev.permissions,
+          canAccessInternet: hasWebSearch || prev.permissions.canAccessInternet,
+          canSendEmails: hasEmailSender || prev.permissions.canSendEmails
+        }
       }));
     }
   };
@@ -405,9 +420,9 @@ export function AgentDashboard() {
         proactiveness: 6
       },
       permissions: {
-        canAccessInternet: false,
+        canAccessInternet: true,  // Enable by default for web search
         canModifyFiles: false,
-        canSendEmails: false,
+        canSendEmails: true,      // Enable by default for email tools
         canMakePurchases: false,
         canAccessPrivateData: false,
         maxCostPerHour: 5.0
@@ -418,7 +433,7 @@ export function AgentDashboard() {
   const filteredAgents = agents.filter(agent =>
     agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     agent.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    agent.personality.expertise.some(skill => 
+    (agent.personality?.expertise || agent.tools || []).some(skill => 
       skill.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
@@ -490,7 +505,7 @@ export function AgentDashboard() {
                               </div>
                             </SelectItem>
                             {templates.map((template) => (
-                              <SelectItem key={template.name} value={template.name} className="text-gray-800 dark:text-white hover:bg-blue-50 dark:hover:bg-blue-900">
+                              <SelectItem key={template.id || template.name} value={template.name} className="text-gray-800 dark:text-white hover:bg-blue-50 dark:hover:bg-blue-900">
                                 <div className="flex items-center gap-2">
                                   <Brain className="h-4 w-4 text-green-600" />
                                   <div>
@@ -935,11 +950,11 @@ export function AgentDashboard() {
                     </div>
                     <div>
                       <h3 className="font-semibold cultural-text-primary">{agent.name}</h3>
-                      <p className="text-xs text-muted-foreground">{agent.personality.role}</p>
+                      <p className="text-xs text-muted-foreground">{agent.personality?.role || 'Assistant'}</p>
                     </div>
                   </div>
                   <div className="flex items-center space-x-1">
-                    {agent.enabled ? (
+                    {agent.enabled !== false ? (
                       <CheckCircle className="h-4 w-4 text-green-500" />
                     ) : (
                       <XCircle className="h-4 w-4 text-red-500" />
@@ -954,20 +969,20 @@ export function AgentDashboard() {
                 </p>
                 
                 <div className="flex flex-wrap gap-1">
-                  {agent.personality.expertise.slice(0, 3).map((skill) => (
+                  {(agent.personality?.expertise || agent.tools || []).slice(0, 3).map((skill) => (
                     <Badge key={skill} variant="secondary" className="text-xs">
                       {skill}
                     </Badge>
                   ))}
-                  {agent.personality.expertise.length > 3 && (
+                  {(agent.personality?.expertise || agent.tools || []).length > 3 && (
                     <Badge variant="outline" className="text-xs">
-                      +{agent.personality.expertise.length - 3}
+                      +{(agent.personality?.expertise || agent.tools || []).length - 3}
                     </Badge>
                   )}
                 </div>
                 
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{agent.availableTools.length} tools</span>
+                  <span>{(agent.availableTools || agent.tools || []).length} tools</span>
                   <span>{agent.model}</span>
                 </div>
                 
@@ -980,7 +995,7 @@ export function AgentDashboard() {
                       setExecutingAgent(agent);
                       setShowExecuteDialog(true);
                     }}
-                    disabled={!agent.enabled}
+                    disabled={agent.enabled === false}
                   >
                     <Play className="mr-2 h-3 w-3" />
                     Execute

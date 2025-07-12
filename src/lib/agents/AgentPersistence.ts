@@ -30,6 +30,7 @@ export class AgentPersistence {
           autoStart: agent.autoStart,
           triggerKeywords: agent.triggerKeywords,
           permissions: agent.permissions,
+          memory: agent.memory,
           templateId: agent.templateId
         }
       });
@@ -100,6 +101,7 @@ export class AgentPersistence {
       if (updates.autoStart !== undefined) updateData.autoStart = updates.autoStart;
       if (updates.triggerKeywords !== undefined) updateData.triggerKeywords = updates.triggerKeywords;
       if (updates.permissions !== undefined) updateData.permissions = updates.permissions;
+      if (updates.memory !== undefined) updateData.memory = updates.memory;
       
       const dbAgent = await prisma.agent.update({
         where: { id: agentId },
@@ -141,12 +143,12 @@ export class AgentPersistence {
           id: execution.id,
           agentId: execution.agentId,
           userId: execution.userId,
+          taskDescription: execution.taskDescription,
           status: execution.status as any,
           steps: execution.steps,
           totalCost: execution.totalCost,
           tokensUsed: execution.tokensUsed,
           result: execution.result,
-          error: execution.error,
           startTime: execution.startTime,
           endTime: execution.endTime
         }
@@ -207,6 +209,12 @@ export class AgentPersistence {
       autoStart: dbAgent.autoStart,
       triggerKeywords: Array.isArray(dbAgent.triggerKeywords) ? dbAgent.triggerKeywords : [],
       permissions: dbAgent.permissions,
+      memory: dbAgent.memory || {
+        conversationHistory: [],
+        userPreferences: {},
+        taskHistory: [],
+        contextualKnowledge: {}
+      },
       userId: dbAgent.userId,
       templateId: dbAgent.templateId,
       createdAt: dbAgent.createdAt.toISOString(),
@@ -222,12 +230,12 @@ export class AgentPersistence {
       id: dbExecution.id,
       agentId: dbExecution.agentId,
       userId: dbExecution.userId,
+      taskDescription: dbExecution.taskDescription,
       status: dbExecution.status,
       steps: Array.isArray(dbExecution.steps) ? dbExecution.steps : [],
       totalCost: dbExecution.totalCost,
       tokensUsed: dbExecution.tokensUsed,
       result: dbExecution.result,
-      error: dbExecution.error,
       startTime: dbExecution.startTime,
       endTime: dbExecution.endTime
     };
