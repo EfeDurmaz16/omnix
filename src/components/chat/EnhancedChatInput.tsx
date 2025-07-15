@@ -111,12 +111,12 @@ export function EnhancedChatInput({
           fileContents.push(`📎 File: ${file.name} (${file.type})`);
         }
       });
-      
+
       if (fileContents.length > 0) {
         finalMessage = fileContents.join('\n\n') + (finalMessage ? '\n\n' + finalMessage : '');
       }
     }
-    
+
     // Include file data for API processing with full content
     const fileData = attachedFiles.map(file => ({
       id: file.id,
@@ -128,7 +128,7 @@ export function EnhancedChatInput({
         (file.type === 'image' ? 'image/jpeg' : undefined),
       content: file.content
     }));
-    
+
     onSend(finalMessage, fileData);
     setMessage('');
     setAttachedFiles([]);
@@ -153,7 +153,7 @@ export function EnhancedChatInput({
     for (const file of Array.from(files)) {
       try {
         console.log('📤 Uploading file:', file.name);
-        
+
         // Create form data
         const formData = new FormData();
         formData.append('file', file);
@@ -170,7 +170,7 @@ export function EnhancedChatInput({
         }
 
         const result = await response.json();
-        
+
         if (result.success) {
           const processedFile: AttachedFile = {
             id: result.data.id,
@@ -181,7 +181,7 @@ export function EnhancedChatInput({
             processed: true,
             content: result.data.content
           };
-          
+
           setAttachedFiles(prev => [...prev, processedFile]);
           console.log('✅ File processed and added:', processedFile.name);
         } else {
@@ -215,7 +215,7 @@ export function EnhancedChatInput({
 
   const handleVoiceCommand = async (command: string, originalText: string) => {
     console.log('🎯 Voice command detected:', command);
-    
+
     switch (command) {
       case 'SEND':
         if (message.trim()) {
@@ -225,23 +225,23 @@ export function EnhancedChatInput({
           setTranscriptionPreview('❌ No message to send');
         }
         break;
-        
+
       case 'CLEAR':
         setMessage('');
         setTranscriptionPreview('✅ Message cleared via voice command');
         break;
-        
+
       case 'NEW_CHAT':
         // Trigger new chat - you'll need to implement this based on your chat system
         window.location.reload(); // Simple implementation
         setTranscriptionPreview('✅ Starting new chat via voice command');
         break;
-        
+
       case 'SWITCH_MODEL':
         setTranscriptionPreview('🔄 Use Ctrl+K to switch models');
         // Could trigger model selector here
         break;
-        
+
       default:
         // If no command recognized, just add the text
         setMessage(prev => prev + (prev ? ' ' : '') + originalText);
@@ -256,10 +256,10 @@ export function EnhancedChatInput({
         setIsRecording(true);
         setTranscriptionPreview('');
         console.log('🎤 Starting voice recording...');
-        
+
         // Import speech recognition dynamically
         const { SpeechRecognition } = await import('@/lib/audio/SpeechRecognition');
-        
+
         if (!SpeechRecognition.isSupported()) {
           alert('Speech recording is not supported in your browser. Please use Chrome, Firefox, or Safari.');
           setIsRecording(false);
@@ -271,7 +271,7 @@ export function EnhancedChatInput({
 
         // Store recorder instance for stopping
         (window as any).__currentRecorder = recorder;
-        
+
       } catch (error) {
         console.error('❌ Failed to start recording:', error);
         alert('Failed to start recording. Please check microphone permissions.');
@@ -283,14 +283,14 @@ export function EnhancedChatInput({
         console.log('🛑 Stopping voice recording...');
         setIsTranscribing(true);
         setTranscriptionPreview('Transcribing...');
-        
+
         const recorder = (window as any).__currentRecorder;
         if (recorder && recorder.recording) {
           const audioBlob = await recorder.stopRecording();
           console.log('📝 Transcribing audio...');
-          
+
           const transcriptionResult = await recorder.transcribe(audioBlob);
-          
+
           // Handle voice commands
           if (transcriptionResult.command) {
             await handleVoiceCommand(transcriptionResult.command, transcriptionResult.text);
@@ -302,35 +302,35 @@ export function EnhancedChatInput({
           } else {
             setTranscriptionPreview('No speech detected');
           }
-          
+
           // Clean up
           delete (window as any).__currentRecorder;
         } else {
           setTranscriptionPreview('No active recording found');
           console.warn('⚠️ No active recording to stop');
         }
-        
+
         setIsRecording(false);
         setIsTranscribing(false);
-        
+
         // Clear preview after 3 seconds
         setTimeout(() => {
           setTranscriptionPreview('');
         }, 3000);
-        
+
       } catch (error) {
         console.error('❌ Recording/transcription failed:', error);
         setTranscriptionPreview('Transcription failed. Please try again.');
         setIsRecording(false);
         setIsTranscribing(false);
-        
+
         // Clean up on error
         const recorder = (window as any).__currentRecorder;
         if (recorder) {
           recorder.cancelRecording();
           delete (window as any).__currentRecorder;
         }
-        
+
         // Clear error message after 3 seconds
         setTimeout(() => {
           setTranscriptionPreview('');
@@ -510,7 +510,7 @@ export function EnhancedChatInput({
           <span className="cultural-text-primary">
             Model: <span className="font-medium cultural-text-accent">{selectedModel}</span>
           </span>
-          
+
           {/* Web Search Status Indicator */}
           {onWebSearchToggle && (
             <div className="flex items-center gap-1">
@@ -526,31 +526,27 @@ export function EnhancedChatInput({
           )}
           
           {/* Shortcut hints */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Enter</kbd>
-              <span className="cultural-text-primary text-xs">send</span>
-            </div>
-            <div className="hidden sm:flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Shift+Enter</kbd>
-              <span className="cultural-text-primary text-xs">new line</span>
-            </div>
-            <div className="hidden md:flex items-center gap-1">
-              <span className="cultural-text-primary text-xs">• Use </span>
-              <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">**bold**</code>
-              <span className="cultural-text-primary text-xs">, </span>
-              <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">*italic*</code>
-              <span className="cultural-text-primary text-xs">, </span>
-              <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">`code`</code>
-            </div>
+          <div className="hidden sm:flex items-center gap-2">
+            <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Enter</kbd>
+            <span className="cultural-text-primary">to send</span>
+            <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Shift+Enter</kbd>
+            <span className="cultural-text-primary">for new line</span>
+            <span className="cultural-text-primary">• Use </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">**bold**</code>
+            <span className="cultural-text-primary">, </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">*italic*</code>
+            <span className="cultural-text-primary">, </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">`code`</code>
+            <span className="cultural-text-primary">, </span>
+            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">```lang</code>
           </div>
         </div>
 
         {/* Model Switcher Hint */}
-        <div className="flex items-center gap-1">
-          <span className="cultural-text-primary text-xs">Press </span>
+        <div className="hidden md:block">
+          <span className="cultural-text-primary">Press </span>
           <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Ctrl+K</kbd>
-          <span className="cultural-text-primary text-xs"> to switch models</span>
+          <span className="cultural-text-primary"> to switch models</span>
         </div>
       </div>
 
@@ -587,4 +583,4 @@ export function EnhancedChatInput({
       )}
     </div>
   );
-} 
+}

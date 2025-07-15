@@ -26,6 +26,88 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Crown, Zap, Users, Building2, CreditCard, DollarSign } from 'lucide-react';
+import { BILLING_PLANS } from '@/lib/stripe';
+
+// Enhanced plan structure with UI components
+const ENHANCED_BILLING_PLANS = [
+  {
+    id: 'free',
+    name: 'Free',
+    price: 0,
+    period: '/month',
+    description: 'Perfect for getting started',
+    icon: Zap,
+    iconColor: 'text-gray-500',
+    culturalStyle: 'bg-gray-100',
+    features: [
+      '100 credits/month',
+      'Basic text models',
+      'Community support'
+    ],
+    videoModels: [],
+    textModels: ['GPT-3.5', 'Claude Haiku']
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 19.99,
+    period: '/month',
+    description: 'For professionals and creators',
+    icon: Crown,
+    iconColor: 'text-blue-500',
+    culturalStyle: 'bg-blue-100',
+    features: [
+      'Unlimited text chat',
+      'All premium models (GPT-4, Claude, Gemini)',
+      '50 image generations/month',
+      'Voice input/output',
+      'Priority support',
+      'API access'
+    ],
+    videoModels: ['Seedance V1 Pro I2V'],
+    textModels: ['GPT-4', 'Claude Sonnet', 'Gemini Pro']
+  },
+  {
+    id: 'ultra',
+    name: 'Ultra',
+    price: 49.99,
+    period: '/month',
+    description: 'For teams and collaborations',
+    icon: Users,
+    iconColor: 'text-purple-500',
+    culturalStyle: 'bg-purple-100',
+    features: [
+      'Everything in Pro',
+      'Team collaboration features',
+      'Shared agent library',
+      'Admin controls',
+      'Usage insights',
+      'Priority support with SLA'
+    ],
+    videoModels: ['Google Veo 2.0', 'Google Veo 3.0', 'All Seedance models'],
+    textModels: ['GPT-4', 'Claude Sonnet', 'Gemini Pro', 'Claude Opus']
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    price: 'Custom',
+    period: '',
+    description: 'For large organizations',
+    icon: Building2,
+    iconColor: 'text-green-500',
+    culturalStyle: 'bg-green-100',
+    features: [
+      'Everything in Ultra',
+      'Custom model deployments',
+      'On-premise options',
+      'Advanced security',
+      'Dedicated support',
+      'Custom integrations'
+    ],
+    videoModels: ['All video models', 'Custom model access'],
+    textModels: ['All text models', 'Custom deployments']
+  }
+];
 
 export default function BillingClient() {
   // Add safety check for useAuth hook
@@ -360,7 +442,7 @@ export default function BillingClient() {
     }
   };
 
-  const plans = BILLING_PLANS;
+  const plans = ENHANCED_BILLING_PLANS;
 
   const handleUpgrade = async (planId: string) => {
     if (planId === 'enterprise') {
@@ -562,7 +644,7 @@ export default function BillingClient() {
                 <div>
                   <h4 className="font-medium text-sm mb-2 cultural-text-primary">Video Models:</h4>
                   <div className="flex flex-wrap gap-1">
-                    {plan.videoModels.map((model, index) => (
+                    {(plan.videoModels || []).map((model, index) => (
                       <Badge key={index} variant="outline" className="text-xs cultural-border">
                         {model}
                       </Badge>
@@ -573,14 +655,14 @@ export default function BillingClient() {
                 <div>
                   <h4 className="font-medium text-sm mb-2 cultural-text-primary">Text Models:</h4>
                   <div className="flex flex-wrap gap-1">
-                    {plan.textModels.slice(0, 2).map((model, index) => (
+                    {(plan.textModels || []).slice(0, 2).map((model, index) => (
                       <Badge key={index} variant="outline" className="text-xs cultural-border">
                         {model}
                       </Badge>
                     ))}
-                    {plan.textModels.length > 2 && (
+                    {(plan.textModels || []).length > 2 && (
                       <Badge variant="outline" className="text-xs cultural-border">
-                        +{plan.textModels.length - 2} more
+                        +{(plan.textModels || []).length - 2} more
                       </Badge>
                     )}
                   </div>

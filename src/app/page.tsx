@@ -28,6 +28,7 @@ import {
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { BILLING_PLANS } from '@/lib/stripe';
 
 export default function HomePage() {
   const { user, isLoaded } = useUser();

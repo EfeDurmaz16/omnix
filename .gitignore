@@ -56,3 +56,10 @@ certificates/
 
 # Data directory for server-side storage
 .data/
+
+
+adk-service/venv
+adk-service/__pycache__/
+adk-service/*.pyc
+
+chroma-venv/
