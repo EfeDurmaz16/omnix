@@ -591,7 +591,7 @@ export function ChatInterface({
   return (
     <div className="flex h-full cultural-bg">
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-96' : 'w-16'} transition-all duration-300 cultural-card backdrop-blur-xl border-r cultural-border flex flex-col h-full`}>
+      <div className={`${sidebarOpen ? 'w-full md:w-96' : 'w-16'} transition-all duration-300 cultural-card backdrop-blur-xl border-r cultural-border flex flex-col h-full`}>
         <div className="p-4 space-y-4 flex-1 min-h-0 flex flex-col">
           {/* New Chat Button */}
           <Button 
@@ -757,18 +757,35 @@ export function ChatInterface({
                                 </p>
                               </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteSession(session.id);
-                              }}
-                              className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
-                              title="Delete chat"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
+                            <div className="flex flex-col space-y-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newTitle = prompt('Enter new title:', session.title);
+                                  if (newTitle) {
+                                    updateSessionTitle(session.id, newTitle);
+                                  }
+                                }}
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 flex-shrink-0"
+                                title="Edit title"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteSession(session.id);
+                                }}
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
+                                title="Delete chat"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       ))

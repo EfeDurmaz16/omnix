@@ -49,6 +49,7 @@ interface Agent {
     proactiveness: number;
   };
   availableTools: string[];
+  tools?: string[];
   systemPrompt: string;
   maxTokens: number;
   temperature: number;
@@ -71,12 +72,18 @@ interface Agent {
 }
 
 interface AgentTemplate {
+  id: string;
   name: string;
   description: string;
-  personality: Agent['personality'];
-  systemPrompt: string;
-  availableTools: string[];
-  triggerKeywords: string[];
+  agent_type?: string;
+  category?: string;
+  personality?: Agent['personality'];
+  systemPrompt?: string;
+  availableTools?: string[];
+  tools?: string[];
+  triggerKeywords?: string[];
+  sub_agents_count?: number;
+  max_iterations?: number;
 }
 
 interface AgentExecution {
@@ -92,11 +99,16 @@ interface AgentExecution {
 }
 
 const AVAILABLE_TOOLS = [
-  { id: 'web-search', name: 'Web Search', category: 'web' },
-  { id: 'data-analyzer', name: 'Data Analyzer', category: 'data' },
-  { id: 'file-processing', name: 'File Processing', category: 'file' },
-  { id: 'email-sender', name: 'Email Sender', category: 'communication' },
-  { id: 'gemini-ai', name: 'Gemini AI', category: 'ai' }
+  { id: 'research_topic', name: 'Research Topic', category: 'research' },
+  { id: 'academic_search', name: 'Academic Search', category: 'research' },
+  { id: 'analyze_sentiment', name: 'Sentiment Analysis', category: 'analysis' },
+  { id: 'generate_summary', name: 'Generate Summary', category: 'processing' },
+  { id: 'classify_content', name: 'Content Classification', category: 'analysis' },
+  { id: 'validate_data', name: 'Data Validation', category: 'validation' },
+  { id: 'get_detailed_weather', name: 'Weather Information', category: 'weather' },
+  { id: 'market_analysis', name: 'Market Analysis', category: 'finance' },
+  { id: 'portfolio_optimization', name: 'Portfolio Optimization', category: 'finance' },
+  { id: 'customer_inquiry_analysis', name: 'Customer Inquiry Analysis', category: 'customer-service' }
 ];
 
 const COMMUNICATION_STYLES = [
@@ -370,18 +382,18 @@ export function AgentDashboard() {
       
       setFormData(prev => ({
         ...prev,
-        selectedTemplate: templateName,
+        selectedTemplate: template.id,
         name: template.name,
         description: template.description,
         systemPrompt: template.systemPrompt || '',
         availableTools: template.tools || template.availableTools || [],
         triggerKeywords: template.triggerKeywords || [],
-        personality: template.personality || {
+        personality: {
           name: template.name,
           role: template.category || 'Assistant',
           expertise: template.tools || [],
-          communicationStyle: 'professional',
-          responseLength: 'detailed',
+          communicationStyle: 'professional' as const,
+          responseLength: 'detailed' as const,
           creativity: 6,
           precision: 9,
           proactiveness: 8

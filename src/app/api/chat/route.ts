@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { GenerateRequest } from '@/lib/providers/base';
-import { contextManager } from '@/lib/context/AdvancedContextManager';
+import { CleanContextManager } from '@/lib/memory/CleanContextManager';
 import { FirecrawlWebSearch } from '@/lib/search/FirecrawlWebSearch';
 import { enhancedModelRouter } from '@/lib/router/EnhancedModelRouter';
 import { modelCatalog } from '@/lib/catalog/ModelCatalog';
@@ -9,6 +9,23 @@ import { analyticsTracker } from '@/lib/analytics/AnalyticsTracker';
 
 // Rate limiting store (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+/**
+ * Clean AI response content by removing XML tags and formatting issues
+ */
+function cleanAIResponse(content: string): string {
+  if (!content) return content;
+  
+  return content
+    .replace(/<\/?answer>/g, '')
+    .replace(/<\/?think>/g, '')
+    .replace(/<\/?thinking>/g, '')
+    .replace(/<\/?reasoning>/g, '')
+    .replace(/<\/?analysis>/g, '')
+    .replace(/<\/?response>/g, '')
+    .replace(/<\/?output>/g, '')
+    .trim();
+}
 
 interface ChatRequest {
   messages: Array<{
@@ -55,14 +72,23 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     body = await req.json();
-    const { messages, sessionId, conversationId, mode, files, stream = false, includeMemory = false, voiceChat = false, language = 'en', enableWebSearch = false, forceWebSearch = false } = body;
+    
+    // Type guard to ensure body is properly parsed
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
+
+    const { messages, sessionId, conversationId, mode, files, stream = false, includeMemory = true, voiceChat = false, language = 'en', enableWebSearch = false, forceWebSearch = false } = body;
     model = body.model;
     
     // Debug voice chat requests
     if (voiceChat) {
       console.log('🎙️ Voice chat request received:', {
-        messageCount: messages.length,
-        lastMessage: messages[messages.length - 1]?.content?.substring(0, 100),
+        messageCount: messages?.length || 0,
+        lastMessage: messages?.[messages.length - 1]?.content?.substring(0, 100),
         language: language,
         includeMemory: includeMemory
       });
@@ -76,9 +102,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!model) {
+    if (!model || typeof model !== 'string') {
       return NextResponse.json(
-        { error: 'Model is required' },
+        { error: 'Model is required and must be a string' },
         { status: 400 }
       );
     }
@@ -149,7 +175,7 @@ export async function POST(req: NextRequest) {
       let messageContent = lastMessage.content;
       
       // Process different file types
-      files.forEach((file) => {
+      files.forEach((file: any) => {
         console.log('📄 Processing file:', file.name, file.type);
         
         if (file.type === 'image' && file.content) {
@@ -164,7 +190,7 @@ export async function POST(req: NextRequest) {
           console.log('🖼️ Image collected for vision processing:', file.name);
           
           // Add image reference to message content
-          const hasVisionCapability = model.includes('gpt-4') || model.includes('claude') || model.includes('gemini') || model.includes('vision');
+          const hasVisionCapability = model ? (model.includes('gpt-4') || model.includes('claude') || model.includes('gemini') || model.includes('vision')) : false;
           if (hasVisionCapability) {
             messageContent = `[Image: ${file.name} - Vision analysis enabled]\n${messageContent}`;
           } else {
@@ -174,13 +200,13 @@ export async function POST(req: NextRequest) {
           // For text files, include the actual content
           console.log('📄 Adding text file content:', file.name);
           messageContent = `[Text File: ${file.name}]\n${file.content}\n\n${messageContent}`;
-        } else if (file.type === 'pdf' && file.content) {
+        } else if ((file.type === 'pdf' || file.type === 'PDF') && file.content) {
           // For PDFs, include the extracted text content
-          console.log('📑 Adding PDF content:', file.name, file.content.length, 'characters');
+          console.log('📑 Adding PDF content:', file.name, file.type, file.content.length, 'characters');
           messageContent = `${file.content}\n\n${messageContent}`;
-        } else if (file.type === 'document' && file.content) {
-          // For Word documents
-          console.log('📋 Adding document content:', file.name);
+        } else if ((file.type === 'document' || file.type === 'Word (DOCX)' || file.type === 'PowerPoint (PPTX)' || file.type === 'Excel (XLSX)' || file.type.includes('Word') || file.type.includes('Excel') || file.type.includes('PowerPoint')) && file.content) {
+          // For Office documents (Word, Excel, PowerPoint)
+          console.log('📋 Adding document content:', file.name, file.type);
           messageContent = `${file.content}\n\n${messageContent}`;
         } else {
           // For other file types
@@ -215,157 +241,175 @@ export async function POST(req: NextRequest) {
     
     // Quick mode: Skip heavy RAG operations for faster response
     const useQuickMode = mode === 'flash' || req.nextUrl.searchParams.get('quick') === 'true';
-    // Auto-enable quick mode for very simple queries to improve performance
-    const isSimpleQuery = processedMessages.length > 0 && 
-      processedMessages[processedMessages.length - 1].content.length < 30;
     
-    let context;
+    console.log('🧠 DEBUG: Chat mode settings:', {
+      mode: mode,
+      useQuickMode: useQuickMode,
+      isFlashMode: mode === 'flash',
+      hasQuickParam: req.nextUrl.searchParams.get('quick') === 'true'
+    });
+    // Auto-enable quick mode for very simple queries to improve performance
+    // BUT exclude memory/context related queries from simple query detection
+    const lastMessageContent = processedMessages.length > 0 ? 
+      processedMessages[processedMessages.length - 1].content.toLowerCase() : '';
+    const isMemoryQuery = lastMessageContent.includes('remember') || 
+                         lastMessageContent.includes('memory') || 
+                         lastMessageContent.includes('previous') || 
+                         lastMessageContent.includes('earlier') ||
+                         lastMessageContent.includes('context') ||
+                         lastMessageContent.includes('our chat') ||
+                         lastMessageContent.includes('conversation') ||
+                         lastMessageContent.includes('know about me') ||
+                         lastMessageContent.includes('who am i') ||
+                         lastMessageContent.includes('what do you know') ||
+                         lastMessageContent.includes('tell me about') ||
+                         lastMessageContent.includes('my profile') ||
+                         lastMessageContent.includes('about myself') ||
+                         lastMessageContent.includes('recall') ||
+                         lastMessageContent.includes('before') ||
+                         lastMessageContent.includes('past') ||
+                         lastMessageContent.includes('history') ||
+                         lastMessageContent.includes('info about') ||
+                         lastMessageContent.includes('information about') ||
+                         lastMessageContent.includes('hatırla') ||  // Turkish: remember
+                         lastMessageContent.includes('önceki') ||   // Turkish: previous
+                         lastMessageContent.includes('geçmiş') ||   // Turkish: past
+                         lastMessageContent.includes('daha önce') || // Turkish: before
+                         lastMessageContent.includes('hakkında') ||  // Turkish: about
+                         lastMessageContent.includes('bana söyle') || // Turkish: tell me
+                         lastMessageContent.includes('bilgi') ||     // Turkish: information
+                         lastMessageContent.includes('kim') ||       // Turkish: who
+                         lastMessageContent.includes('ne biliyorsun') || // Turkish: what do you know
+                         lastMessageContent.includes('araştır') ||   // Turkish: research
+                         lastMessageContent.includes('özetle') ||    // Turkish: summarize
+                         lastMessageContent.includes('analiz') ||    // Turkish: analyze
+                         lastMessageContent.includes('research') ||
+                         lastMessageContent.includes('analyze') ||
+                         lastMessageContent.includes('summarize') ||
+                         lastMessageContent.includes('explain') ||
+                         lastMessageContent.includes('describe') ||
+                         lastMessageContent.includes('study') ||
+                         lastMessageContent.includes('investigate') ||
+                         lastMessageContent.includes('examine') ||
+                         lastMessageContent.includes('review') ||
+                         lastMessageContent.includes('search') ||
+                         lastMessageContent.includes('find') ||
+                         lastMessageContent.includes('look up') ||
+                         lastMessageContent.includes('açıkla') ||    // Turkish: explain
+                         lastMessageContent.includes('incele') ||    // Turkish: examine
+                         lastMessageContent.includes('tanımla') ||   // Turkish: describe
+                         lastMessageContent.includes('çalış') ||     // Turkish: study
+                         lastMessageContent.includes('ara') ||       // Turkish: search
+                         lastMessageContent.includes('bul') ||       // Turkish: find
+                         lastMessageContent.includes('bak') ||        // Turkish: look
+                         lastMessageContent.includes('do you know who i am') ||
+                         lastMessageContent.includes('what do i do') ||
+                         lastMessageContent.includes('tell me about myself') ||
+                         lastMessageContent.includes('my profile') ||
+                         lastMessageContent.includes('about me') ||
+                         lastMessageContent.includes('ben kimim') ||    // Turkish: who am I
+                         lastMessageContent.includes('ne işi yapıyorum') || // Turkish: what work do I do
+                         lastMessageContent.includes('profilim') ||     // Turkish: my profile
+                         lastMessageContent.includes('hakkımda');        // Turkish: about me
+    
+    const isSimpleQuery = processedMessages.length > 0 && 
+      processedMessages[processedMessages.length - 1].content.length < 10 && // Reduced from 30 to 10
+      !isMemoryQuery; // Don't treat memory queries as simple even if they're short
+    
+    // Initialize clean context manager
+    const cleanContextManager = new CleanContextManager();
+    let contextId = conversationId || `chat_${Date.now()}`;
     let enhancedMessages = processedMessages;
     
     if (useQuickMode || isSimpleQuery) {
       // Fast path: minimal context processing
-      console.log('⚡ Quick mode: skipping heavy RAG operations', isSimpleQuery ? '(simple query detected)' : '(flash mode)');
-      const contextId = conversationId || `quick_${Date.now()}`;
-      context = { id: contextId };
+      console.log('⚡ Quick mode: skipping memory operations', isSimpleQuery ? '(simple query detected)' : '(flash mode)');
+      enhancedMessages = processedMessages;
+      
+      // Still add model identity for consistency
+      const modelIdentityMessage = {
+        id: 'model-identity',
+        role: 'system' as const,
+        content: `You are responding as ${model}. Maintain this identity throughout the conversation.`,
+        timestamp: new Date()
+      };
+      enhancedMessages = [modelIdentityMessage, ...enhancedMessages];
     } else {
-      // Full RAG processing (with timeout)
+      // Clean hierarchical memory processing
       try {
-        const contextPromise = contextManager.getOrCreateContext(
+        console.log('🧠 Using clean hierarchical memory system');
+        
+        // Extract chatId from conversationId (format: chat_123 or chat_123_conv_456)
+        const chatId = cleanContextManager.extractChatId(contextId);
+        console.log(`🔍 Chat ID: ${chatId}, Conversation ID: ${contextId}`);
+        
+        // Create context for memory retrieval
+        const memoryContext = {
           userId,
-          conversationId,
-          model,
-          false // full RAG mode
-        );
+          chatId,
+          conversationId: contextId,
+          messages: processedMessages.map(msg => ({
+            id: msg.id || `msg_${Date.now()}`,
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date()
+          })),
+          memoryEnabled: !useQuickMode && includeMemory !== false
+        };
         
-        // Add timeout to prevent hanging (reduced to 1s for performance)
-        context = await Promise.race([
-          contextPromise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Context creation timeout')), 1000)
-          )
-        ]) as any;
-
-        // Add user message to context (non-blocking)
-        const userMessage = processedMessages[processedMessages.length - 1];
-        if (userMessage.role === 'user' && context && context.id) {
-          // Don't await this - let it run in background
-          contextManager.addMessage(context.id, {
-            role: 'user',
-            content: userMessage.content,
-            model: model
-          }).catch(error => console.warn('Background message add failed:', error));
-        }
-
-        // Get enhanced context with aggressive timeout
-        const enhancedPromise = contextManager.getContextForModel(context.id);
-        const ragEnhancedMessages = await Promise.race([
-          enhancedPromise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Context enhancement timeout')), 1500)
-          )
-        ]) as any;
+        console.log('🔧 DEBUG Memory context:', {
+          userId: userId.substring(0, 20) + '...',
+          chatId,
+          conversationId: contextId,
+          messageCount: memoryContext.messages.length,
+          includeMemoryFromRequest: includeMemory,
+          useQuickMode,
+          memoryEnabled: memoryContext.memoryEnabled,
+          lastMessage: memoryContext.messages[memoryContext.messages.length - 1]?.content?.substring(0, 100) + '...'
+        });
         
-        // CRITICAL: Always preserve current conversation, just add RAG context
-        if (ragEnhancedMessages && ragEnhancedMessages.length > 0) {
-          // Extract only system/context messages from RAG (not conversation messages)
-          const ragSystemMessages = ragEnhancedMessages.filter((msg: any) => 
-            msg.role === 'system' && (
-              msg.content.includes('Previous conversations') ||
-              msg.content.includes('user memories') ||
-              msg.content.includes('memory') ||
-              msg.content.includes('context')
-            )
-          );
-          
-          // Combine: RAG system context + current conversation
-          enhancedMessages = [...ragSystemMessages, ...processedMessages];
-          console.log('✅ RAG context enhanced:', ragSystemMessages.length, 'system messages +', processedMessages.length, 'conversation messages');
-          if (ragSystemMessages.length > 0) {
-            console.log('🧠 RAG memory content preview:', ragSystemMessages[0].content.substring(0, 200) + '...');
+        // Get enhanced messages with memory context
+        console.log('🔧 DEBUG: Calling cleanContextManager.getContextWithMemory...');
+        enhancedMessages = await cleanContextManager.getContextWithMemory(memoryContext);
+        console.log('🔧 DEBUG: getContextWithMemory returned:', {
+          originalCount: processedMessages.length,
+          enhancedCount: enhancedMessages.length,
+          memoryInjected: enhancedMessages.length > processedMessages.length
+        });
+
+        // Add model identity system message at the very beginning
+        const modelIdentityMessage = {
+          id: 'model-identity',
+          role: 'system' as const,
+          content: `You are responding as ${model}. Maintain this identity throughout the conversation. If you encounter context about other AI models from previous conversations, ignore those model references but still use the user information and conversation context provided.`,
+          timestamp: new Date()
+        };
+        enhancedMessages = [modelIdentityMessage, ...enhancedMessages];
+        
+        if (enhancedMessages.length > processedMessages.length) {
+          console.log('✅ Clean memory context injected:', enhancedMessages.length - processedMessages.length, 'memory messages added');
+          const memoryMessage = enhancedMessages.find(m => m.id === 'memory-context');
+          if (memoryMessage) {
+            console.log('🧠 Memory content preview:', memoryMessage.content.substring(0, 200) + '...');
           }
         } else {
-          // No RAG context found, use current conversation
-          enhancedMessages = processedMessages;
-          console.log('📝 Using current conversation only (no RAG context found)');
+          console.log('📝 No relevant memory found, using current conversation only');
         }
       } catch (error) {
-        console.warn('⚠️ RAG enhancement failed, using basic context:', error);
-        // Fallback to basic context
-        const contextId = conversationId || `fallback_${Date.now()}`;
-        context = { id: contextId };
+        console.warn('⚠️ Clean memory enhancement failed, using basic context:', error);
         enhancedMessages = processedMessages;
       }
     }
 
-    // Voice chat memory enhancement
-    if (voiceChat && includeMemory && !useQuickMode) {
-      try {
-        console.log('🎙️ Retrieving voice chat memories for context');
-        
-        // Get the user's last message for memory search
-        const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0];
-        if (lastUserMessage) {
-          // Create a simple temporary context and use the existing memory flow
-          const tempContextId = `voice_temp_${Date.now()}`;
-          const tempContext = await contextManager.getOrCreateContext(
-            userId, 
-            tempContextId, 
-            model, 
-            false // Don't use quick mode to enable memory
-          );
-          
-          // Add the voice message to get memory context
-          contextManager.addMessage(tempContext.id, {
-            id: `voice_${Date.now()}`,
-            role: 'user',
-            content: lastUserMessage.content,
-            timestamp: new Date()
-          });
-          
-          // Get the enhanced context which includes memory (returns ContextMessage[] directly)
-          const enhancedTempMessages = await contextManager.getContextForModel(tempContext.id);
-          
-          console.log('🔍 Enhanced context result:', {
-            exists: !!enhancedTempMessages,
-            isArray: Array.isArray(enhancedTempMessages),
-            messageCount: enhancedTempMessages?.length || 0,
-            messageTypes: enhancedTempMessages?.map(m => m?.role) || []
-          });
-          
-          // Check if messages exist and find memory content
-          if (enhancedTempMessages && Array.isArray(enhancedTempMessages) && enhancedTempMessages.length > 0) {
-            // Extract memory from the enhanced messages
-            const memoryMessage = enhancedTempMessages.find(msg => 
-              msg && msg.role === 'system' && msg.content && (
-                msg.content.includes('Previous conversations') ||
-                msg.content.includes('user memories') ||
-                msg.content.includes('memory') ||
-                msg.content.includes('context')
-              )
-            );
-            
-            if (memoryMessage && memoryMessage.content.trim()) {
-              // Use language-aware context formatting
-              const contextMessage = language === 'en' 
-                ? `# Voice Chat Context from Previous Conversations:\n${memoryMessage.content}\n\n*Note: User is speaking via voice chat in ${language.toUpperCase()} - provide natural, conversational responses in the same language.*`
-                : `# Contexto de Chat de Voz de Conversaciones Anteriores:\n${memoryMessage.content}\n\n*Nota: El usuario está hablando por chat de voz en ${language.toUpperCase()} - proporciona respuestas naturales y conversacionales en el mismo idioma.*`;
-              
-              const voiceMemoryMessage = {
-                role: 'system' as const,
-                content: contextMessage
-              };
-              enhancedMessages = [voiceMemoryMessage, ...enhancedMessages];
-              console.log('✅ Voice chat memory context added');
-            } else {
-              console.log('📭 No relevant memory found for voice chat context');
-            }
-          } else {
-            console.warn('⚠️ Enhanced context has no messages, skipping voice memory');
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ Voice chat memory retrieval failed:', error);
-      }
+    // Voice chat memory is already handled by the clean memory system above
+    if (voiceChat && language !== 'en') {
+      // Add language instruction for non-English voice chat
+      const languageInstruction = {
+        role: 'system' as const,
+        content: `*Note: User is speaking via voice chat in ${language.toUpperCase()} - provide natural, conversational responses in the same language.*`
+      };
+      enhancedMessages = [languageInstruction, ...enhancedMessages];
+      console.log('✅ Voice chat language instruction added');
     }
 
     // Web search enhancement
@@ -443,7 +487,7 @@ export async function POST(req: NextRequest) {
             const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
             
             // Stream the response character by character for fast typing effect
-            const content = aiResponse.content;
+            const content = cleanAIResponse(aiResponse.content);
             const chunkSize = 3; // characters per chunk for smooth typing
             
             // Try to stream the content
@@ -480,34 +524,49 @@ export async function POST(req: NextRequest) {
               console.log('📝 Response content:', content.substring(0, 500) + (content.length > 500 ? '...' : ''));
             }
             
-            // Add assistant response to context after streaming (non-blocking)
-            if (!useQuickMode && context && context.id) {
-              contextManager.addMessage(context.id, {
-                role: 'assistant',
-                content: aiResponse.content,
-                model: model
-              }).catch(error => console.warn('Background context update failed:', error));
+            // Store conversation in clean memory system (non-blocking)
+            if (!useQuickMode) {
+              const chatId = cleanContextManager.extractChatId(contextId);
+              const conversationMessages = [
+                ...processedMessages.map(msg => ({
+                  id: msg.id || `msg_${Date.now()}`,
+                  role: msg.role,
+                  content: msg.content,
+                  timestamp: new Date()
+                })),
+                {
+                  id: `response_${Date.now()}`,
+                  role: 'assistant' as const,
+                  content: cleanAIResponse(aiResponse.content),
+                  timestamp: new Date()
+                }
+              ];
+              
+              cleanContextManager.storeConversation(userId, chatId, contextId, conversationMessages)
+                .catch(error => console.warn('Background conversation storage failed:', error));
             }
 
             // Track streaming analytics (non-blocking)
-            analyticsTracker.trackTextGeneration({
-              userId,
-              modelId: model,
-              provider: modelInfo.provider,
-              prompt: processedMessages[processedMessages.length - 1]?.content || '',
-              response: aiResponse.content,
-              startTime: requestStartTime,
-              success: true,
-              tokensUsed: aiResponse.usage.totalTokens,
-              cost: aiResponse.usage.estimatedCost,
-              mode,
-              metadata: {
-                stream: true,
-                webSearchUsed: webSearchResults.length > 0,
-                ragEnabled: !useQuickMode && !!context,
-                attachedImages: attachedImages.length
-              }
-            }).catch(error => console.warn('Analytics tracking failed:', error));
+            if (userId && model && modelInfo && requestStartTime !== undefined) {
+              analyticsTracker.trackTextGeneration({
+                userId,
+                modelId: model,
+                provider: modelInfo.provider,
+                prompt: processedMessages[processedMessages.length - 1]?.content || '',
+                response: cleanAIResponse(aiResponse.content),
+                startTime: requestStartTime,
+                success: true,
+                tokensUsed: aiResponse.usage.totalTokens,
+                cost: aiResponse.usage.estimatedCost,
+                mode,
+                metadata: {
+                  stream: true,
+                  webSearchUsed: webSearchResults.length > 0,
+                  ragEnabled: !useQuickMode && enhancedMessages.length > processedMessages.length,
+                  attachedImages: attachedImages.length
+                }
+              }).catch(error => console.warn('Analytics tracking failed:', error));
+            }
             
             try {
               controller.close();
@@ -518,25 +577,27 @@ export async function POST(req: NextRequest) {
             console.error('Streaming error:', error);
             
             // Track streaming error analytics (non-blocking)
-            analyticsTracker.trackTextGeneration({
-              userId,
-              modelId: model,
-              provider: modelInfo.provider,
-              prompt: processedMessages[processedMessages.length - 1]?.content || '',
-              response: '',
-              startTime: requestStartTime,
-              success: false,
-              error: error instanceof Error ? error.message : 'Unknown streaming error',
-              tokensUsed: 0,
-              cost: 0,
-              mode,
-              metadata: {
-                stream: true,
-                webSearchUsed: webSearchResults.length > 0,
-                ragEnabled: !useQuickMode && !!context,
-                attachedImages: attachedImages.length
-              }
-            }).catch(analyticsError => console.warn('Analytics tracking failed:', analyticsError));
+            if (userId && model && modelInfo && requestStartTime !== undefined) {
+              analyticsTracker.trackTextGeneration({
+                userId,
+                modelId: model,
+                provider: modelInfo.provider,
+                prompt: processedMessages[processedMessages.length - 1]?.content || '',
+                response: '',
+                startTime: requestStartTime,
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown streaming error',
+                tokensUsed: 0,
+                cost: 0,
+                mode,
+                metadata: {
+                  stream: true,
+                  webSearchUsed: webSearchResults.length > 0,
+                  ragEnabled: !useQuickMode && enhancedMessages.length > processedMessages.length,
+                  attachedImages: attachedImages.length
+                }
+              }).catch(analyticsError => console.warn('Analytics tracking failed:', analyticsError));
+            }
             
             controller.error(error);
           }
@@ -553,57 +614,75 @@ export async function POST(req: NextRequest) {
       // Handle regular JSON response
       const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
 
-      // Add assistant response to context (non-blocking)
-      if (!useQuickMode && context && context.id) {
-        contextManager.addMessage(context.id, {
-          role: 'assistant',
-          content: aiResponse.content,
-          model: model
-        }).catch(error => console.warn('Background context update failed:', error));
+      // Store conversation in clean memory system (non-blocking)
+      if (!useQuickMode) {
+        const chatId = cleanContextManager.extractChatId(contextId);
+        const conversationMessages = [
+          ...processedMessages.map(msg => ({
+            id: msg.id || `msg_${Date.now()}`,
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date()
+          })),
+          {
+            id: `response_${Date.now()}`,
+            role: 'assistant' as const,
+            content: cleanAIResponse(aiResponse.content),
+            timestamp: new Date()
+          }
+        ];
+        
+        cleanContextManager.storeConversation(userId, chatId, contextId, conversationMessages)
+          .catch(error => console.warn('Background conversation storage failed:', error));
       }
 
       // Track non-streaming analytics (non-blocking)
-      analyticsTracker.trackTextGeneration({
-        userId,
-        modelId: model,
-        provider: modelInfo.provider,
-        prompt: processedMessages[processedMessages.length - 1]?.content || '',
-        response: aiResponse.content,
-        startTime: requestStartTime,
-        success: true,
-        tokensUsed: aiResponse.usage.totalTokens,
-        cost: aiResponse.usage.estimatedCost,
-        mode,
-        metadata: {
-          stream: false,
-          webSearchUsed: webSearchResults.length > 0,
-          ragEnabled: !useQuickMode && !!context,
-          attachedImages: attachedImages.length
-        }
-      }).catch(error => console.warn('Analytics tracking failed:', error));
+      if (userId && model && modelInfo && requestStartTime !== undefined) {
+        analyticsTracker.trackTextGeneration({
+          userId,
+          modelId: model,
+          provider: modelInfo.provider,
+          prompt: processedMessages[processedMessages.length - 1]?.content || '',
+          response: aiResponse.content,
+          startTime: requestStartTime,
+          success: true,
+          tokensUsed: aiResponse.usage.totalTokens,
+          cost: aiResponse.usage.estimatedCost,
+          mode,
+          metadata: {
+            stream: false,
+            webSearchUsed: webSearchResults.length > 0,
+            ragEnabled: !useQuickMode && !!context,
+            attachedImages: attachedImages.length
+          }
+        }).catch(error => console.warn('Analytics tracking failed:', error));
+      }
 
       console.log('Model router response successful');
 
       // Create response compatible with existing frontend
+      const cleanedContent = cleanAIResponse(aiResponse.content);
       const response = {
         id: aiResponse.id,
         role: 'assistant' as const,
-        message: aiResponse.content, // Frontend expects 'message' field
-        content: aiResponse.content,
+        message: cleanedContent, // Frontend expects 'message' field
+        content: cleanedContent,
         timestamp: new Date().toISOString(),
         model: aiResponse.model,
         tokens: aiResponse.usage.totalTokens,
         cost: aiResponse.usage.estimatedCost,
         sessionId: generateRequest.sessionId,
-        conversationId: context?.id || 'unknown',
-        memoryEnhanced: !useQuickMode && !!context,
+        conversationId: contextId,
+        memoryEnhanced: !useQuickMode && enhancedMessages.length > processedMessages.length,
         webSearchResults: webSearchResults.length > 0 ? webSearchResults : undefined,
         webSearchEnabled: enableWebSearch || forceWebSearch,
         metadata: {
           ...aiResponse.metadata,
-          ragEnabled: !useQuickMode && !!context,
+          ragEnabled: !useQuickMode && enhancedMessages.length > processedMessages.length,
           webSearchUsed: webSearchResults.length > 0,
-          contextId: context?.id || 'unknown'
+          contextId: contextId,
+          crossChatContext: !useQuickMode, // Indicates cross-chat context was used
+          quickMode: useQuickMode
         }
       };
 
@@ -614,14 +693,14 @@ export async function POST(req: NextRequest) {
     console.error('Chat API Error:', error);
     
     // Track error analytics if we have the required data (non-blocking)
-    if (userId && model && modelInfo) {
+    if (userId && model && modelInfo && requestStartTime !== undefined) {
       analyticsTracker.trackTextGeneration({
         userId,
         modelId: model,
         provider: modelInfo.provider,
         prompt: body?.messages?.[body.messages.length - 1]?.content || '',
         response: '',
-        startTime: requestStartTime || performance.now(),
+        startTime: requestStartTime,
         success: false,
         error: error instanceof Error ? error.message : 'Unknown API error',
         tokensUsed: 0,

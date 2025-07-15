@@ -134,8 +134,8 @@ export class ChromaRAG {
       return response.data[0].embedding;
     } catch (error) {
       console.error('Error generating embedding:', error);
-      // Return zero vector as fallback
-      return new Array(1536).fill(0);
+      // Throw error instead of returning zero-filled array which causes similarity issues
+      throw new Error(`Failed to generate embedding: ${error.message}`);
     }
   }
 

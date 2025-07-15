@@ -72,3 +72,67 @@ async def firecrawl_web_search(query: str, num_results: int = 5) -> Dict[str, An
             "error": f"Search failed: {str(e)}",
             "results": []
         }
+
+async def firecrawl_scrape_content(url: str) -> Dict[str, Any]:
+    """Scrape content from a URL using Firecrawl API.
+    
+    Args:
+        url: URL to scrape content from
+        
+    Returns:
+        Dictionary with scraped content
+    """
+    api_key = os.getenv('FIRECRAWL_API_KEY')
+    
+    if not api_key:
+        return {
+            "success": False,
+            "error": "Firecrawl API key not configured",
+            "content": ""
+        }
+    
+    try:
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            "url": url,
+            "formats": ["markdown"],
+            "onlyMainContent": True
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                'https://api.firecrawl.dev/v1/scrape',
+                headers=headers,
+                json=payload,
+                timeout=30.0
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                return {
+                    "success": True,
+                    "url": url,
+                    "title": data.get('data', {}).get('title', 'No title'),
+                    "content": data.get('data', {}).get('markdown', ''),
+                    "description": data.get('data', {}).get('description', ''),
+                    "author": data.get('data', {}).get('author', ''),
+                    "publishDate": data.get('data', {}).get('publishDate', '')
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Firecrawl scrape error: {response.status_code}",
+                    "content": ""
+                }
+                
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Scraping failed: {str(e)}",
+            "content": ""
+        }

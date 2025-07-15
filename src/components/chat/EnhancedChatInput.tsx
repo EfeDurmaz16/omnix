@@ -526,27 +526,31 @@ export function EnhancedChatInput({
           )}
           
           {/* Shortcut hints */}
-          <div className="hidden sm:flex items-center gap-2">
-            <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Enter</kbd>
-            <span className="cultural-text-primary">to send</span>
-            <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Shift+Enter</kbd>
-            <span className="cultural-text-primary">for new line</span>
-            <span className="cultural-text-primary">• Use </span>
-            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">**bold**</code>
-            <span className="cultural-text-primary">, </span>
-            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">*italic*</code>
-            <span className="cultural-text-primary">, </span>
-            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">`code`</code>
-            <span className="cultural-text-primary">, </span>
-            <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">```lang</code>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Enter</kbd>
+              <span className="cultural-text-primary text-xs">send</span>
+            </div>
+            <div className="hidden sm:flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Shift+Enter</kbd>
+              <span className="cultural-text-primary text-xs">new line</span>
+            </div>
+            <div className="hidden md:flex items-center gap-1">
+              <span className="cultural-text-primary text-xs">• Use </span>
+              <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">**bold**</code>
+              <span className="cultural-text-primary text-xs">, </span>
+              <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">*italic*</code>
+              <span className="cultural-text-primary text-xs">, </span>
+              <code className="px-1 py-0.5 cultural-card rounded text-xs cultural-border">`code`</code>
+            </div>
           </div>
         </div>
 
         {/* Model Switcher Hint */}
-        <div className="hidden md:block">
-          <span className="cultural-text-primary">Press </span>
+        <div className="flex items-center gap-1">
+          <span className="cultural-text-primary text-xs">Press </span>
           <kbd className="px-1.5 py-0.5 cultural-card rounded text-xs cultural-border">Ctrl+K</kbd>
-          <span className="cultural-text-primary"> to switch models</span>
+          <span className="cultural-text-primary text-xs"> to switch models</span>
         </div>
       </div>
 

@@ -11,11 +11,14 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
+
+# Import file processor
+from file_processor import file_processor
 
 # Load environment variables from .env file
 load_dotenv()
@@ -60,6 +63,15 @@ class ExecutionResult(BaseModel):
     totalCost: float = 0.0
     tokensUsed: int = 0
 
+class FileProcessingResult(BaseModel):
+    success: bool
+    markdown: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    processing_info: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    filename: Optional[str] = None
+    mime_type: Optional[str] = None
+
 # In-memory storage for agents and executions
 agents_store: Dict[str, Dict[str, Any]] = {}
 executions_store: Dict[str, ExecutionResult] = {}
@@ -69,6 +81,8 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     print("🚀 Starting OmniX ADK Service")
     print("📊 Using real tools: Firecrawl + SMTP")
+    print(f"📁 File processing: MarkItDown with {len(file_processor.get_supported_types())} supported types")
+    print("✅ Services ready: ADK Agents + File Processing")
     yield
     print("👋 Shutting down OmniX ADK Service")
 
@@ -97,7 +111,19 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "agents_count": len(agents_store),
-        "executions_count": len(executions_store)
+        "executions_count": len(executions_store),
+        "capabilities": [
+            "Google ADK Agent execution",
+            "File processing with MarkItDown",
+            "Document conversion to markdown",
+            "OCR for images",
+            "Audio transcription",
+            "Email and archive processing"
+        ],
+        "file_processing": {
+            "supported_types": len(file_processor.get_supported_types()),
+            "processor": "MarkItDown v0.0.1a2"
+        }
     }
 
 @app.get("/health")
@@ -271,6 +297,75 @@ async def execute_agent(request: AgentExecuteRequest):
         executions_store[execution_id] = execution
         
         raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(e)}")
+
+# File Processing Endpoints
+
+@app.post("/files/process", response_model=FileProcessingResult)
+async def process_file(file: UploadFile = File(...)):
+    """
+    Process a file using MarkItDown and convert to markdown
+    Supports: PDF, Word, PowerPoint, Excel, Images (OCR), Audio (transcription), and more
+    """
+    try:
+        # Read file content
+        file_content = await file.read()
+        
+        # Get MIME type
+        mime_type = file.content_type or file_processor.get_mime_type(file.filename)
+        
+        # Process the file
+        result = await file_processor.process_file(
+            file_content=file_content,
+            filename=file.filename,
+            mime_type=mime_type
+        )
+        
+        return FileProcessingResult(**result)
+        
+    except Exception as e:
+        return FileProcessingResult(
+            success=False,
+            error=f"File processing failed: {str(e)}",
+            filename=file.filename,
+            mime_type=file.content_type
+        )
+
+@app.get("/files/supported-types")
+async def get_supported_file_types():
+    """Get all supported file types"""
+    return {
+        "success": True,
+        "supported_types": file_processor.get_supported_types(),
+        "total_supported": len(file_processor.get_supported_types()),
+        "processor": "MarkItDown",
+        "capabilities": [
+            "Document conversion (PDF, Word, PowerPoint, Excel)",
+            "Image OCR and EXIF metadata extraction",
+            "Audio transcription (WAV, MP3)",
+            "Archive processing (ZIP)",
+            "E-book conversion (EPUB)",
+            "Email message processing",
+            "Code file processing",
+            "Text and data format conversion"
+        ]
+    }
+
+@app.post("/files/info")
+async def get_file_info(file: UploadFile = File(...)):
+    """Get information about a file without processing it"""
+    try:
+        file_info = file_processor.get_file_info(file.filename)
+        file_info['size_bytes'] = len(await file.read())
+        return {
+            "success": True,
+            "file_info": file_info
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to get file info: {str(e)}",
+            "filename": file.filename
+        }
 
 async def run_adk_agent(task_description: str, tool_names: List[str]) -> str:
     """Run the real Google ADK agent with the given task."""

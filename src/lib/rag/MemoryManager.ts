@@ -1,6 +1,7 @@
 import { EnhancedGCPVectorStore, ExtractedMemory } from './EnhancedGCPVectorStore';
 import { AdvancedContextManager, ConversationContext, ContextMessage } from '../context/AdvancedContextManager';
 import { getModelRouter } from '../model-router';
+import { userService } from '../user/UserService';
 
 export interface MemoryExtractionResult {
   preferences: ExtractedMemory[];
@@ -79,19 +80,77 @@ export class MemoryManager {
   ): Promise<ExtractedMemory[]> {
     const memories: ExtractedMemory[] = [];
     
-    // Process user messages for memory extraction
-    const userMessages = conversation.messages.filter(msg => msg.role === 'user');
+    // Process both user and assistant messages for comprehensive memory extraction
+    const allMessages = conversation.messages.filter(msg => msg.role === 'user' || msg.role === 'assistant');
+    console.log(`🧠 Processing ${allMessages.length} messages for memory extraction`);
     
-    for (const message of userMessages) {
+    for (const message of allMessages) {
       try {
         const extracted = await this.extractMemoryTypes(message.content, conversation.id);
-        memories.push(...extracted);
+        if (extracted.length > 0) {
+          console.log(`✅ Extracted ${extracted.length} memories from ${message.role} message`);
+          memories.push(...extracted);
+        }
       } catch (error) {
         console.warn('Failed to extract memories from message:', message.id, error);
       }
     }
     
+    // Also create a conversation summary as a topic memory
+    try {
+      const conversationSummary = await this.createConversationTopicSummary(conversation);
+      if (conversationSummary) {
+        memories.push({
+          type: 'topic',
+          content: conversationSummary,
+          confidence: 0.8,
+          extractedFrom: conversation.id,
+          timestamp: new Date()
+        });
+        console.log(`✅ Created conversation summary memory: ${conversationSummary.substring(0, 100)}...`);
+      }
+    } catch (error) {
+      console.warn('Failed to create conversation summary:', error);
+    }
+    
+    console.log(`🧠 Total memories extracted: ${memories.length}`);
     return memories;
+  }
+
+  /**
+   * Create a summary of the conversation as a topic memory
+   */
+  private async createConversationTopicSummary(conversation: ConversationContext): Promise<string | null> {
+    try {
+      const messages = conversation.messages.slice(-10); // Last 10 messages
+      const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      
+      const prompt = `Create a concise summary of this conversation that captures the main topics, concepts, and information discussed:
+
+${conversationText}
+
+Focus on:
+- Main topics/subjects discussed
+- Key concepts explained
+- Problems solved
+- Information shared
+- Questions asked and answered
+
+Summary (2-3 sentences):`;
+
+      const response = await this.modelRouter.generateText({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        maxTokens: 200,
+      });
+
+      const summary = response.content.trim();
+      return summary.length > 10 ? summary : null;
+    } catch (error) {
+      console.error('Failed to create conversation topic summary:', error);
+      return null;
+    }
   }
 
   /**
@@ -103,7 +162,7 @@ export class MemoryManager {
     }
 
     try {
-      const prompt = `Analyze this user message and extract any important information about the user:
+      const prompt = `Analyze this user message and extract any important information for future conversations:
 
 Message: "${content}"
 
@@ -112,17 +171,20 @@ Extract and categorize any:
 2. Skills/expertise (I work in, I'm experienced with, I know how to, I've worked on)
 3. Personal facts (My name is, I live in, I am, I have, I work at)
 4. Goals/objectives (I want to, I'm trying to, I plan to, I need to)
+5. Topics discussed (talking about X, learning about Y, working on Z project)
+6. Questions asked (asking about concepts, seeking help with problems)
+7. Shared knowledge (user explained X, user knows about Y, user mentioned Z)
 
 Return a JSON array of objects with this format:
 [
   {
-    "type": "preference|skill|fact|goal",
+    "type": "preference|skill|fact|goal|topic|question|knowledge",
     "content": "extracted information",
     "confidence": 0.0-1.0
   }
 ]
 
-Only include items that are clearly about the user personally. Return empty array [] if nothing relevant found.`;
+Include both personal information AND general conversation topics/knowledge. Be comprehensive but accurate.`;
 
       const response = await this.modelRouter.generateText({
         model: 'gpt-4o-mini', // Cost-effective for extraction
@@ -133,8 +195,8 @@ Only include items that are clearly about the user personally. Return empty arra
 
       const extracted = this.parseMemoryExtraction(response.content, conversationId);
       
-      // Filter out low-confidence extractions
-      return extracted.filter(memory => memory.confidence >= 0.6);
+      // Filter out very low-confidence extractions (lowered threshold for better recall)
+      return extracted.filter(memory => memory.confidence >= 0.4);
     } catch (error) {
       console.error('Failed to extract memory types:', error);
       return [];
@@ -162,7 +224,7 @@ Only include items that are clearly about the user personally. Return empty arra
         .filter(item => 
           item.type && 
           item.content && 
-          ['preference', 'skill', 'fact', 'goal'].includes(item.type)
+          ['preference', 'skill', 'fact', 'goal', 'topic', 'question', 'knowledge'].includes(item.type)
         )
         .map(item => ({
           type: item.type as ExtractedMemory['type'],
@@ -178,12 +240,27 @@ Only include items that are clearly about the user personally. Return empty arra
   }
 
   /**
+   * Extract chat ID from conversation ID for hierarchical memory search
+   */
+  private extractChatIdFromConversationId(conversationId: string): string {
+    // Extract chat identifier from conversation ID
+    // Format might be: "chat_123_session_456" -> "chat_123"
+    const parts = conversationId.split('_');
+    if (parts.length >= 2 && parts[0] === 'chat') {
+      return `${parts[0]}_${parts[1]}`;
+    }
+    // Fallback: use first part or whole ID
+    return parts[0] || conversationId;
+  }
+
+  /**
    * Get relevant memories for enhancing user context (OPTIMIZED)
    */
   async getRelevantMemoriesForContext(
     userId: string, 
     query: string,
-    contextType: 'conversation' | 'preference' | 'skill' = 'conversation'
+    contextType: 'conversation' | 'preference' | 'skill' = 'conversation',
+    currentConversationId?: string
   ): Promise<{ 
     conversationMemories: any[];
     userMemories: ExtractedMemory[];
@@ -203,19 +280,88 @@ Only include items that are clearly about the user personally. Return empty arra
         return { conversationMemories: [], userMemories: [], formatted: '' };
       }
 
-      // Reduce search results for faster response
+      // Search both conversation and user memories with configurable limits
+      const userPlan = await userService.getUserPlan(userId);
+      
+      // Separate the non-blocking cleanup from the memory searches
+      this.vectorStore.scheduleUserCleanup(userId, userPlan).catch(error => 
+        console.warn('Background cleanup failed:', error)
+      );
+      
+      console.log(`🔍 Starting memory search for user ${userId} with plan ${userPlan}`);
+      
+      // Extract current chat ID for hierarchical search
+      const currentChatId = currentConversationId ? 
+        this.extractChatIdFromConversationId(currentConversationId) : 
+        undefined;
+      
+      console.log(`🔍 Hierarchical search with current chat: ${currentChatId || 'none'}`);
+      
       const [conversationMemories, userMemories] = await Promise.all([
-        this.vectorStore.searchRelevantMemories(userId, query, 3), // Reduced from 5 to 3
-        this.vectorStore.searchUserMemories(userId, query, undefined, 2) // Reduced from 3 to 2
+        this.vectorStore.searchRelevantMemories(userId, query, 5, userPlan, currentChatId), // Hierarchical search
+        this.vectorStore.searchUserMemories(userId, query, undefined, 3), // User-specific memories
       ]);
+      
+      console.log(`🔍 Raw memory search results:`, {
+        conversationCount: conversationMemories?.length || 0,
+        userCount: userMemories?.length || 0,
+        conversationSample: conversationMemories?.slice(0, 1),
+        userSample: userMemories?.slice(0, 1)
+      });
+      
+      // Enhanced debugging for user memories
+      if (userMemories && userMemories.length > 0) {
+        console.log(`✅ User memories found:`, userMemories.map(m => ({
+          type: m.type,
+          content: m.content.substring(0, 100) + '...',
+          confidence: m.confidence,
+          timestamp: m.timestamp
+        })));
+      } else {
+        console.log(`⚠️ No user memories returned from vector store`);
+      }
 
       const elapsedTime = performance.now() - startTime;
       console.log(`⏱️ Memory search completed in ${elapsedTime.toFixed(2)}ms`);
       console.log(`📊 Memory search results: ${conversationMemories.length} conversation memories, ${userMemories.length} user memories`);
 
-      const formatted = this.formatMemoriesForContext(conversationMemories, userMemories);
+      let formatted = this.formatMemoriesForContext(conversationMemories, userMemories);
       
+      // If no memories found, try to get basic user profile information
       if (formatted.length === 0) {
+        console.log('🔍 No specific memories found, searching for basic user profile');
+        const profileMemories = await this.vectorStore.searchUserMemories(userId, 'user profile personal info', 'fact', 5);
+        if (profileMemories.length > 0) {
+          formatted = this.formatMemoriesForContext([], profileMemories);
+          console.log('✅ Found basic user profile information as fallback');
+        } else {
+          console.log('⚠️ No user profile information found');
+        }
+      }
+      
+      // Enhance memory with profile fallback if we have memories but they're sparse
+      if (formatted.length > 0 && formatted.length < 200) {
+        console.log('🔍 Enhancing memory with profile fallback');
+        const enhancedMemories = await this.vectorStore.searchUserMemories(userId, 'name age location education work', 'fact', 3);
+        if (enhancedMemories.length > 0) {
+          const enhancedFormatted = this.formatMemoriesForContext([], enhancedMemories);
+          if (enhancedFormatted.length > 0) {
+            formatted = enhancedFormatted + '\n\n' + formatted;
+            console.log('✅ Enhanced memory with additional profile information');
+          }
+        }
+      }
+      
+      console.log('🔍 Memory search result summary:', {
+        conversationMemories: conversationMemories.length,
+        userMemories: userMemories.length,
+        formattedLength: formatted.length,
+        hasContent: formatted.length > 0
+      });
+      
+      if (formatted.length > 0) {
+        console.log('📋 Formatted memory preview:', formatted.substring(0, 300) + '...');
+      } else {
         console.log('⚠️ No relevant memories found or empty formatted response');
       }
 
@@ -242,34 +388,88 @@ Only include items that are clearly about the user personally. Return empty arra
     conversationMemories: any[],
     userMemories: ExtractedMemory[]
   ): string {
+    console.log('🔧 formatMemoriesForContext called with:', {
+      conversationMemoriesCount: conversationMemories.length,
+      userMemoriesCount: userMemories.length,
+      conversationMemoriesSample: conversationMemories.slice(0, 2),
+      userMemoriesSample: userMemories.slice(0, 2)
+    });
+
     let formatted = '';
 
     if (userMemories.length > 0) {
-      formatted += '**User Context:**\n';
+      console.log('🔧 Processing user memories...');
+      formatted += '# User Profile Information\n\n';
       
       const preferences = userMemories.filter(m => m.type === 'preference');
       const skills = userMemories.filter(m => m.type === 'skill');
       const facts = userMemories.filter(m => m.type === 'fact');
+      const goals = userMemories.filter(m => m.type === 'goal');
+      const topics = userMemories.filter(m => m.type === 'topic');
+      const questions = userMemories.filter(m => m.type === 'question');
+      const knowledge = userMemories.filter(m => m.type === 'knowledge');
       
+      console.log('🔧 Memory breakdown:', {
+        preferences: preferences.length,
+        skills: skills.length,
+        facts: facts.length,
+        goals: goals.length,
+        topics: topics.length,
+        questions: questions.length,
+        knowledge: knowledge.length
+      });
+      
+      if (facts.length > 0) {
+        console.log('🔧 Adding facts section:', facts.map(f => f.content));
+        formatted += `**Personal Information:**\n${facts.map(f => `- ${f.content}`).join('\n')}\n\n`;
+      }
       if (preferences.length > 0) {
-        formatted += `Preferences: ${preferences.map(p => p.content).join('; ')}\n`;
+        console.log('🔧 Adding preferences section:', preferences.map(p => p.content));
+        formatted += `**User Preferences:**\n${preferences.map(p => `- ${p.content}`).join('\n')}\n\n`;
       }
       if (skills.length > 0) {
-        formatted += `Skills: ${skills.map(s => s.content).join('; ')}\n`;
+        console.log('🔧 Adding skills section:', skills.map(s => s.content));
+        formatted += `**Skills & Expertise:**\n${skills.map(s => `- ${s.content}`).join('\n')}\n\n`;
       }
-      if (facts.length > 0) {
-        formatted += `Background: ${facts.map(f => f.content).join('; ')}\n`;
+      if (goals.length > 0) {
+        console.log('🔧 Adding goals section:', goals.map(g => g.content));
+        formatted += `**Goals & Objectives:**\n${goals.map(g => `- ${g.content}`).join('\n')}\n\n`;
       }
+      if (topics.length > 0) {
+        console.log('🔧 Adding topics section:', topics.map(t => t.content));
+        formatted += `**Topics Previously Discussed:**\n${topics.map(t => `- ${t.content}`).join('\n')}\n\n`;
+      }
+      if (questions.length > 0) {
+        console.log('🔧 Adding questions section:', questions.map(q => q.content));
+        formatted += `**Questions Previously Asked:**\n${questions.map(q => `- ${q.content}`).join('\n')}\n\n`;
+      }
+      if (knowledge.length > 0) {
+        console.log('🔧 Adding knowledge section:', knowledge.map(k => k.content));
+        formatted += `**Knowledge Shared:**\n${knowledge.map(k => `- ${k.content}`).join('\n')}\n\n`;
+      }
+    } else {
+      console.log('⚠️ No user memories to format');
     }
 
     if (conversationMemories.length > 0) {
-      formatted += '\n**Relevant Previous Conversations:**\n';
+      console.log('🔧 Adding conversation memories section');
+      formatted += '# Relevant Previous Conversations\n\n';
       formatted += conversationMemories
-        .map((mem, idx) => `${idx + 1}. ${mem.content.substring(0, 150)}...`)
-        .join('\n');
+        .map((mem, idx) => `${idx + 1}. ${mem.content.substring(0, 200)}...`)
+        .join('\n\n');
+    } else {
+      console.log('⚠️ No conversation memories to format');
     }
 
-    return formatted.trim();
+    const finalFormatted = formatted.trim();
+    console.log('🔧 formatMemoriesForContext result:', {
+      originalLength: formatted.length,
+      trimmedLength: finalFormatted.length,
+      isEmpty: finalFormatted === '',
+      preview: finalFormatted.substring(0, 200) + '...'
+    });
+
+    return finalFormatted;
   }
 
   /**

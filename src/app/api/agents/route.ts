@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
-const ADK_SERVICE_URL = process.env.ADK_SERVICE_URL || 'http://127.0.0.1:8001';
+const ADK_SERVICE_URL = process.env.ADK_SERVICE_URL || 'http://127.0.0.1:8002';
 
 export async function GET(request: NextRequest) {
   try {

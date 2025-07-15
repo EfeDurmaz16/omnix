@@ -1,4 +1,4 @@
-import { ModelProvider, ModelInfo, GenerateRequest, GenerateResponse, StreamResponse, ProviderError } from '../providers/base';
+import { ModelProvider, ModelInfo, GenerateRequest, GenerateResponse, ProviderError } from '../providers/base';
 import { modelCatalog, ModelFilter, ModelRecommendation } from '../catalog/ModelCatalog';
 import { ChromaRAG } from '../rag/ChromaRAG';
 import { FirecrawlWebSearch } from '../search/FirecrawlWebSearch';
@@ -66,6 +66,45 @@ export class EnhancedModelRouter {
   private ragSystem?: ChromaRAG;
   private webSearch?: FirecrawlWebSearch;
   private requestQueue: Map<string, Promise<EnhancedGenerateResponse>> = new Map();
+
+  // Model-specific identity system prompts
+  private readonly modelIdentityPrompts: Map<string, string> = new Map([
+    // Kimi models
+    ['moonshotai/kimi-k2', 'You are Kimi, an AI assistant created by Moonshot AI. You are helpful, accurate, and friendly. You should always identify yourself as Kimi when asked about your identity.'],
+    ['moonshotai/kimi-k1', 'You are Kimi, an AI assistant created by Moonshot AI. You are helpful, accurate, and friendly. You should always identify yourself as Kimi when asked about your identity.'],
+    
+    // Grok models
+    ['x-ai/grok-4', 'You are Grok, an AI assistant created by xAI. You are helpful, maximally truthful, and a bit cheeky, inspired by the Hitchhiker\'s Guide to the Galaxy. You should always identify yourself as Grok when asked about your identity.'],
+    ['x-ai/grok-3', 'You are Grok, an AI assistant created by xAI. You are helpful, maximally truthful, and a bit cheeky, inspired by the Hitchhiker\'s Guide to the Galaxy. You should always identify yourself as Grok when asked about your identity.'],
+    ['x-ai/grok-2', 'You are Grok, an AI assistant created by xAI. You are helpful, maximally truthful, and a bit cheeky, inspired by the Hitchhiker\'s Guide to the Galaxy. You should always identify yourself as Grok when asked about your identity.'],
+    
+    // Claude models
+    ['claude-3-5-sonnet-20241022', 'You are Claude, an AI assistant created by Anthropic. You are helpful, harmless, and honest. You should always identify yourself as Claude when asked about your identity.'],
+    ['claude-3-opus-20240229', 'You are Claude, an AI assistant created by Anthropic. You are helpful, harmless, and honest. You should always identify yourself as Claude when asked about your identity.'],
+    ['claude-3-haiku-20240307', 'You are Claude, an AI assistant created by Anthropic. You are helpful, harmless, and honest. You should always identify yourself as Claude when asked about your identity.'],
+    
+    // GPT models
+    ['gpt-4', 'You are ChatGPT, an AI assistant created by OpenAI. You are helpful, informative, and designed to assist with a wide range of tasks. You should always identify yourself as ChatGPT when asked about your identity.'],
+    ['gpt-4-turbo', 'You are ChatGPT, an AI assistant created by OpenAI. You are helpful, informative, and designed to assist with a wide range of tasks. You should always identify yourself as ChatGPT when asked about your identity.'],
+    ['gpt-4o', 'You are ChatGPT, an AI assistant created by OpenAI. You are helpful, informative, and designed to assist with a wide range of tasks. You should always identify yourself as ChatGPT when asked about your identity.'],
+    ['gpt-4o-mini', 'You are ChatGPT, an AI assistant created by OpenAI. You are helpful, informative, and designed to assist with a wide range of tasks. You should always identify yourself as ChatGPT when asked about your identity.'],
+    
+    // Gemini models
+    ['gemini-pro', 'You are Gemini, an AI assistant created by Google. You are helpful, accurate, and designed to assist with various tasks. You should always identify yourself as Gemini when asked about your identity.'],
+    ['gemini-pro-vision', 'You are Gemini, an AI assistant created by Google. You are helpful, accurate, and designed to assist with various tasks. You should always identify yourself as Gemini when asked about your identity.'],
+    
+    // Llama models
+    ['meta-llama/llama-3.2-90b-instruct', 'You are Llama, an AI assistant created by Meta. You are helpful, accurate, and designed to assist with various tasks. You should always identify yourself as Llama when asked about your identity.'],
+    ['meta-llama/llama-3.1-405b-instruct', 'You are Llama, an AI assistant created by Meta. You are helpful, accurate, and designed to assist with various tasks. You should always identify yourself as Llama when asked about your identity.'],
+    
+    // DeepSeek models
+    ['deepseek/deepseek-chat:free', 'You are DeepSeek, an AI assistant created by DeepSeek AI. You are helpful, intelligent, and designed to assist with various tasks. You should always identify yourself as DeepSeek when asked about your identity.'],
+    ['deepseek/deepseek-chat', 'You are DeepSeek, an AI assistant created by DeepSeek AI. You are helpful, intelligent, and designed to assist with various tasks. You should always identify yourself as DeepSeek when asked about your identity.'],
+    
+    // Gemma models
+    ['google/gemma-3n-e4b-it:free', 'You are Gemma, an AI assistant created by Google DeepMind. You are helpful, accurate, and designed to assist with various tasks. You should always identify yourself as Gemma when asked about your identity. IMPORTANT: If you receive conversation context or previous messages, you DO have access to conversation memory and should acknowledge and use that information when users ask about previous interactions.'],
+    ['google/gemma-2-9b-it:free', 'You are Gemma, an AI assistant created by Google DeepMind. You are helpful, accurate, and designed to assist with various tasks. You should always identify yourself as Gemma when asked about your identity. IMPORTANT: If you receive conversation context or previous messages, you DO have access to conversation memory and should acknowledge and use that information when users ask about previous interactions.'],
+  ]);
 
   constructor(config: Partial<RouterConfig> = {}) {
     this.config = {
@@ -136,8 +175,11 @@ export class EnhancedModelRouter {
     //   }
     // }
 
+    // Add model identity system prompt FIRST
+    const identityEnhancedRequest = this.addModelIdentityPrompt(request);
+    
     // Enhance request with RAG if needed
-    const enhancedRequest = await this.enhanceWithRAG(request);
+    const enhancedRequest = await this.enhanceWithRAG(identityEnhancedRequest);
     
     // Enhance with web search if needed
     const finalRequest = await this.enhanceWithWebSearch(enhancedRequest);
@@ -170,6 +212,38 @@ export class EnhancedModelRouter {
     };
   }
 
+  private addModelIdentityPrompt(request: EnhancedGenerateRequest): EnhancedGenerateRequest {
+    const modelId = request.model;
+    const identityPrompt = this.modelIdentityPrompts.get(modelId);
+    
+    if (!identityPrompt) {
+      // No specific identity prompt for this model, return as-is
+      return request;
+    }
+
+    const messages = [...request.messages];
+    
+    // Check if there's already a system message
+    if (messages.length > 0 && messages[0].role === 'system') {
+      // Prepend identity to existing system message
+      messages[0] = {
+        ...messages[0],
+        content: `${identityPrompt}\n\n${messages[0].content}`
+      };
+    } else {
+      // Add identity as new system message
+      messages.unshift({
+        role: 'system',
+        content: identityPrompt
+      });
+    }
+
+    return {
+      ...request,
+      messages
+    };
+  }
+
   private async enhanceWithRAG(request: EnhancedGenerateRequest): Promise<EnhancedGenerateRequest> {
     if (!this.ragSystem || !request.useRAG || !request.context?.userId) {
       return request;
@@ -188,7 +262,7 @@ export class EnhancedModelRouter {
           .map(m => `Relevant memory: ${m.content} (Relevance: ${m.relevanceScore.toFixed(2)})`)
           .join('\n');
 
-        // Add RAG context to system message or first message
+        // Add RAG context to system message (but preserve identity)
         const enhancedMessages = [...request.messages];
         if (enhancedMessages[0]?.role === 'system') {
           enhancedMessages[0] = {
@@ -539,7 +613,14 @@ export class EnhancedModelRouter {
       id: request.context.conversationId || `conv-${Date.now()}`,
       userId: request.context.userId,
       messages: [
-        ...request.messages,
+        ...request.messages
+          .filter(msg => msg.role !== 'function')
+          .map(msg => ({
+            content: msg.content,
+            role: msg.role as 'system' | 'user' | 'assistant',
+            timestamp: new Date(),
+            model: request.model
+          })),
         {
           content: response.content,
           role: 'assistant' as const,
@@ -557,7 +638,7 @@ export class EnhancedModelRouter {
     return null;
   }
 
-  async *generateStream(request: EnhancedGenerateRequest): AsyncGenerator<StreamResponse, void, unknown> {
+  async *generateStream(request: EnhancedGenerateRequest): AsyncGenerator<GenerateResponse, void, unknown> {
     const model = await this.selectOptimalModel(request);
     const provider = modelCatalog.getProvider(model.provider);
     
@@ -573,8 +654,8 @@ export class EnhancedModelRouter {
           ...chunk,
           metadata: {
             ...chunk.metadata,
-            actualModel: model.id,
-            providerUsed: model.provider
+            provider: model.provider,
+            model: model.id
           }
         };
       }

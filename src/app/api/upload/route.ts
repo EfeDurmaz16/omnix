@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { markItDownService } from '@/lib/files/MarkItDownService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +26,55 @@ export async function POST(request: NextRequest) {
 
     let processedContent = '';
     let fileType = 'unknown';
+    let processingMethod = 'legacy';
+    let metadata: any = {};
+
+    // Try MarkItDown first (if available and supported)
+    try {
+      const isHealthy = await markItDownService.checkHealth();
+      const isSupported = await markItDownService.isSupported(file);
+      
+      if (isHealthy && isSupported) {
+        console.log('🚀 Using MarkItDown for file processing');
+        const result = await markItDownService.processFile(file);
+        
+        if (result.success && result.markdown) {
+          processedContent = result.markdown;
+          fileType = result.metadata?.file_type || 'unknown';
+          processingMethod = 'markitdown';
+          metadata = result.metadata || {};
+          
+          console.log('✅ MarkItDown processing successful:', {
+            fileType,
+            contentLength: processedContent.length,
+            processor: result.processing_info?.processor
+          });
+          
+          const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+          
+          return NextResponse.json({
+            success: true,
+            data: {
+              id: fileId,
+              name: file.name,
+              type: fileType,
+              size: file.size,
+              mimeType: file.type,
+              content: processedContent,
+              processed: true,
+              processingMethod,
+              metadata,
+              timestamp: new Date().toISOString()
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ MarkItDown processing failed, falling back to legacy:', error);
+    }
+
+    // Fallback to legacy processing
+    console.log('📄 Using legacy file processing');
 
     // Process different file types
     if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
@@ -139,7 +189,7 @@ I'm ready to help once you provide the text content!`;
 
     const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    console.log('✅ File processed successfully:', fileId, fileType);
+    console.log('✅ File processed successfully:', fileId, fileType, processingMethod);
 
     return NextResponse.json({
       success: true,
@@ -154,7 +204,9 @@ I'm ready to help once you provide the text content!`;
             'image/jpeg') : 
           file.type,
         content: processedContent,
-        processed: true
+        processed: true,
+        processingMethod,
+        metadata
       }
     });
 

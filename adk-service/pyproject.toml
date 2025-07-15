@@ -1,13 +1,14 @@
-[project]
+[tool.poetry]
 name = "omnix-adk-service"
 version = "0.1.0"
 description = "ADK-based agent service for OmniX"
-authors = [{ name = "OmniX", email = "noreply@omnix.ai" }]
+authors = ["OmniX <noreply@omnix.ai>"]
 license = "Apache License 2.0"
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 google-adk = "^1.0.0"
 google-genai = "^1.9.0"
 pydantic = "^2.10.6"
@@ -20,6 +21,8 @@ fastapi = "^0.115.0"
 uvicorn = "^0.34.0"
 httpx = "^0.28.0"
 requests = "^2.32.3"
+python-multipart = "^0.0.9"
+markitdown = { version = "^0.0.1a2", extras = ["all"] }
 
 [tool.poetry.group.dev]
 optional = true

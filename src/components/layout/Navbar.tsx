@@ -27,13 +27,15 @@ export function Navbar() {
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Billing', href: '/billing' },
     { name: 'Themes', href: '/themes' },
+    { name: 'Profile', href: '/profile' },
+    { name: 'Settings', href: '/settings' },
+    { name: 'Usage', href: '/usage' },
   ];
 
   const userNavigation = [
     { name: 'Profile', href: '/profile' },
     { name: 'Settings', href: '/settings' },
     { name: 'Usage', href: '/usage' },
-    { name: 'Billing', href: '/billing' },
   ];
 
   return (

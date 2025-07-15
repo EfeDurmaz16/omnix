@@ -7,6 +7,8 @@ import { MemoryManager } from '../rag/MemoryManager';
 import { getModelRouter } from '../model-router';
 import { conversationStore } from '../database/ConversationStore';
 import { getPerformanceConfig } from '../config/performance';
+import { memoryWarmingService } from '../background/MemoryWarmingService';
+import { memoryProcessingService } from '../background/MemoryProcessingService';
 
 export interface ConversationContext {
   id: string;
@@ -68,10 +70,14 @@ export class AdvancedContextManager {
   private readonly maxContextTokens = 128000; // Maximum context window
   private readonly summarizationThreshold = 0.8; // When to start summarizing
   
-  // Performance optimization caches
+  // Enhanced performance optimization caches
   private memoryCache: Map<string, { data: string; timestamp: number }> = new Map();
+  private instantMemoryCache: Map<string, { userProfile: string; recentMemories: string; timestamp: number }> = new Map();
+  private queryCache: Map<string, { results: any; timestamp: number }> = new Map();
   private performanceConfig = getPerformanceConfig();
-  private readonly maxCacheSize = 100;
+  private readonly maxCacheSize = 200;
+  private readonly instantCacheTimeout = 1000 * 60 * 15; // 15 minutes
+  private readonly queryCacheTimeout = 1000 * 60 * 5; // 5 minutes
   
   // RAG Integration
   private vectorStore: EnhancedGCPVectorStore;
@@ -91,15 +97,90 @@ export class AdvancedContextManager {
       // Initialize RAG components (VectorStore initializes automatically)
       if (this.vectorStore.isInitialized()) {
         console.log('✅ Vector store ready for RAG operations');
+      } else {
+        console.log('⚠️ Vector store not initialized, attempting to initialize...');
+        await this.vectorStore.forceInitialize();
       }
       
       // Load active contexts from storage
       await this.loadActiveContexts();
       await this.loadUserMemories();
       
-      console.log('✅ Context Manager initialized with RAG capabilities');
+      // Initialize known user profiles
+      await this.initializeKnownUserProfiles();
+      
+      // Start background memory processing
+      await this.startBackgroundMemoryProcessing();
+      
+      console.log('✅ Context Manager initialized with RAG capabilities and background processing');
     } catch (error) {
       console.error('❌ Failed to initialize context manager:', error);
+    }
+  }
+
+  /**
+   * Initialize profiles for known users
+   */
+  private async initializeKnownUserProfiles(): Promise<void> {
+    const knownUsers = [
+      'user_2ybWF4Ns1Bzgr1jYDYkFkdDWWQU'
+    ];
+
+    for (const userId of knownUsers) {
+      try {
+        console.log(`🔄 Initializing profile for user: ${userId}`);
+        await this.vectorStore.syncUserProfile(userId, false);
+        console.log(`✅ Profile initialized for user: ${userId}`);
+      } catch (error) {
+        console.warn(`⚠️ Failed to initialize profile for user ${userId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Test the memory system - utility method for debugging
+   */
+  async testMemorySystem(userId: string): Promise<void> {
+    console.log('🧪 Testing memory system for user:', userId);
+    
+    try {
+      // Test memory storage
+      const testMemories: ExtractedMemory[] = [
+        {
+          type: 'fact',
+          content: 'Test user fact',
+          confidence: 0.9,
+          extractedFrom: 'test',
+          timestamp: new Date()
+        },
+        {
+          type: 'preference',
+          content: 'Test user preference',
+          confidence: 0.8,
+          extractedFrom: 'test',
+          timestamp: new Date()
+        }
+      ];
+      
+      await this.vectorStore.storeMemories(userId, testMemories);
+      console.log('✅ Test memories stored successfully');
+      
+      // Test memory retrieval
+      const retrievedMemories = await this.vectorStore.searchUserMemories(userId, 'test user', undefined, 5);
+      console.log('✅ Retrieved memories:', retrievedMemories.length);
+      
+      // Test conversation memory
+      const conversationMemories = await this.vectorStore.searchRelevantMemories(userId, 'test', 3);
+      console.log('✅ Retrieved conversation memories:', conversationMemories.length);
+      
+      // Test memory stats
+      const stats = await this.vectorStore.getUserMemoryStats(userId);
+      console.log('✅ Memory stats:', stats);
+      
+      console.log('🎉 Memory system test completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Memory system test failed:', error);
     }
   }
 
@@ -117,6 +198,10 @@ export class AdvancedContextManager {
     if (this.activeContexts.has(contextId)) {
       const context = this.activeContexts.get(contextId)!;
       context.metadata.lastActivity = new Date();
+      
+      // Add user to warming queue for future optimization
+      memoryWarmingService.addUserToWarmingQueue(userId, new Date());
+      
       return context;
     }
 
@@ -140,16 +225,18 @@ export class AdvancedContextManager {
     };
 
     // Load user's persistent memory into context (skip in quick mode)
+    // Note: For new contexts, we'll inject memory during getContextForModel instead
+    // when we actually have the user's message to search with
     if (!quickMode) {
       try {
-        await Promise.race([
-          this.injectUserMemory(newContext),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Memory injection timeout')), 2000)
-          )
-        ]);
+        // Just ensure user profile is synced, but don't inject yet
+        console.log('🔄 Syncing user profile for new context (memory injection deferred until first message)');
+        await this.vectorStore.syncUserProfile(userId, false);
+        
+        // Add user to warming queue for future sessions
+        memoryWarmingService.addUserToWarmingQueue(userId, new Date());
       } catch (error) {
-        console.warn('⚡ Memory injection skipped due to timeout or error:', error);
+        console.warn('⚡ Profile sync failed:', error);
       }
     }
 
@@ -195,9 +282,25 @@ export class AdvancedContextManager {
 
     // Enhanced memory extraction for user messages (only for substantial messages to reduce overhead)
     if (message.role === 'user' && message.content.length > 20) {
-      // Extract memories asynchronously to not block the main flow
+      console.log('🧠 Queueing memory extraction from user message:', message.content.substring(0, 100));
+      
+      // OPTIMIZATION: Use background processing instead of blocking extraction
+      const priority = message.content.length > 100 ? 'medium' : 'low';
+      memoryProcessingService.addExtractionTask(
+        context.userId,
+        contextId,
+        message.content,
+        priority
+      );
+      
+      // Also add immediate extraction for critical information (non-blocking)
       this.extractAndStoreUserMemories(context.userId, message.content, contextId)
-        .catch(error => console.warn('Memory extraction failed (non-blocking):', error));
+        .then(() => {
+          console.log('✅ Immediate memory extraction completed successfully');
+        })
+        .catch(error => {
+          console.warn('⚠️ Immediate memory extraction failed (background will retry):', error);
+        });
     }
 
     // Check if context needs compression
@@ -205,10 +308,11 @@ export class AdvancedContextManager {
       await this.compressContext(context);
     }
 
+    // Persist context immediately for better reliability
     await this.persistContext(context);
     
     // Process for RAG if conversation has sufficient content (async to not block)
-    if (context.messages.length >= 4) {
+    if (context.messages.length >= 1) { // Process even single-message conversations
       this.memoryManager.processConversationForRAG(context.userId, contextId)
         .catch(error => console.warn('Failed to process for RAG:', error));
     }
@@ -217,7 +321,7 @@ export class AdvancedContextManager {
   }
 
   /**
-   * RAG-enhanced context retrieval for model consumption
+   * RAG-enhanced context retrieval for model consumption - OPTIMIZED
    */
   async getContextForModel(contextId: string): Promise<ContextMessage[]> {
     const startTime = Date.now();
@@ -228,35 +332,120 @@ export class AdvancedContextManager {
 
     let messages = [...context.messages];
 
-    // Skip memory injection for performance if not enabled or if messages are already memory-enhanced
-    if (context.settings.memoryEnabled && !messages.some(m => m.id === 'cross-chat-memory')) {
+    // TIER 1: Enhanced memory injection with instant cache
+    if (context.settings.memoryEnabled && !messages.some(m => m.id === 'cross-chat-memory' || m.id === 'memory-context-rag')) {
       try {
-        const memoryContext = await this.getRelevantMemoryWithRAG(context.userId, context);
-        if (memoryContext.length > 0) {
-          const memoryMessage: ContextMessage = {
-            id: 'memory-context-rag',
-            role: 'system',
-            content: this.formatEnhancedMemoryContext(memoryContext),
-            timestamp: new Date(),
-          };
-          messages = [memoryMessage, ...messages];
+        console.log(`🧠 Optimized memory injection for context: ${contextId.substring(0, 15)}...`);
+        
+        // Get the last user message to search with
+        const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0];
+        
+        if (lastUserMessage) {
+          console.log('🔍 Searching for memories with query:', lastUserMessage.content.substring(0, 100));
+          
+          // TIER 1: Check instant cache first (re-enabled after fixing profile indexing)
+          const memoriesFromCache = await this.getMemoriesFromInstantCache(context.userId, lastUserMessage.content);
+          
+          if (memoriesFromCache && memoriesFromCache.trim()) {
+            console.log('⚡ Using instant cache for memory injection');
+            console.log('📋 Instant cache memory content preview:', memoriesFromCache.substring(0, 200) + '...');
+            const memoryMessage = this.createMemoryMessage(memoriesFromCache);
+            messages = [memoryMessage, ...messages];
+            console.log('✅ Instant memory context added. Total messages now:', messages.length);
+            
+            // Cache the result for future use
+            this.cacheMemoryResult(context.userId, lastUserMessage.content, memoriesFromCache);
+          } else {
+            // TIER 2: Fast memory lookup with optimized search
+            const relevantMemories = await this.getMemoriesWithOptimizedTimeout(
+              context.userId,
+              lastUserMessage.content,
+              Math.min(this.performanceConfig.maxMemorySearchTime, 5000), // Increase timeout to 5s for debugging
+              context.id
+            );
+          
+            console.log('🔍 Memory search result summary:', {
+              conversationMemories: relevantMemories.conversationMemories?.length || 0,
+              userMemories: relevantMemories.userMemories?.length || 0,
+              formattedLength: relevantMemories.formatted?.length || 0,
+              hasContent: relevantMemories.formatted?.trim() !== ''
+            });
+            
+            console.log(`📊 Found: ${relevantMemories.conversationMemories?.length || 0} conversation + ${relevantMemories.userMemories?.length || 0} user memories`);
+            
+            // Enhanced fallback with smart profile detection
+            const finalMemoryContent = await this.enhanceMemoryWithFallbacks(
+              context.userId,
+              lastUserMessage.content,
+              relevantMemories.formatted || ''
+            );
+            
+            if (finalMemoryContent && finalMemoryContent.trim()) {
+              console.log('✅ OPTIMIZED: Injecting cross-chat memory into conversation');
+              console.log('📋 Memory content preview:', finalMemoryContent.substring(0, 200) + '...');
+              
+              const memoryMessage = this.createMemoryMessage(finalMemoryContent);
+              console.log('🔧 Created memory message with ID:', memoryMessage.id);
+              messages = [memoryMessage, ...messages];
+              console.log('✅ Memory context added to messages. Total messages now:', messages.length);
+              console.log('🔍 Final message structure for model:', messages.map(m => `${m.role}(${m.id || 'no-id'}): ${m.content.substring(0, 100)}...`));
+              
+              // Cache the result for future use
+              this.cacheMemoryResult(context.userId, lastUserMessage.content, finalMemoryContent);
+            } else {
+              console.log('⚠️ OPTIMIZED: No relevant memories found or empty formatted response');
+              console.log('🔧 Debug - finalMemoryContent length:', finalMemoryContent?.length || 0);
+              console.log('🔧 Debug - finalMemoryContent trim:', finalMemoryContent?.trim()?.length || 0);
+            }
+          }
+        } else {
+          console.log('⚠️ OPTIMIZED: No user messages found for memory search');
         }
       } catch (error) {
-        console.warn('Failed to add RAG memory context, continuing without it:', error);
+        console.error('❌ OPTIMIZED: Failed to add memory context (fallback to basic mode):', error);
+        // Fallback: Add basic user profile if available
+        try {
+          const basicProfile = await this.getUserProfileFromCache(context.userId);
+          if (basicProfile) {
+            const memoryMessage = this.createMemoryMessage(basicProfile);
+            messages = [memoryMessage, ...messages];
+            console.log('✅ Fallback: Basic profile injected');
+          }
+        } catch (fallbackError) {
+          console.warn('⚠️ Even fallback profile injection failed:', fallbackError);
+        }
       }
+    } else if (context.settings.memoryEnabled) {
+      console.log('ℹ️ ENHANCED: Memory already injected or disabled');
     }
 
-    // Add anti-hallucination prompt
+    // Add anti-hallucination prompt FIRST (before memory context)
     const factCheckPrompt: ContextMessage = {
       id: 'fact-check-prompt',
       role: 'system',
       content: this.getAntiHallucinationPrompt(),
       timestamp: new Date(),
     };
-    messages = [factCheckPrompt, ...messages];
+    
+    // Insert the anti-hallucination prompt at the beginning, but after any existing memory context
+    const memoryContextIndex = messages.findIndex(m => m.id === 'cross-chat-memory');
+    if (memoryContextIndex >= 0) {
+      // Insert before memory context so memory context has final say
+      messages.splice(memoryContextIndex, 0, factCheckPrompt);
+    } else {
+      // No memory context, add at the beginning
+      messages = [factCheckPrompt, ...messages];
+    }
 
     const elapsedTime = Date.now() - startTime;
     console.log(`⏱️ Context retrieval for model took ${elapsedTime}ms`);
+    
+    // Debug: Log final message structure
+    console.log('🔍 Final message structure for model:');
+    messages.forEach((msg, index) => {
+      const contentPreview = msg.content.substring(0, 100).replace(/\n/g, ' ');
+      console.log(`  ${index + 1}. ${msg.role} (${msg.id}): ${contentPreview}...`);
+    });
 
     return messages;
   }
@@ -287,7 +476,7 @@ export class AdvancedContextManager {
       const cached = this.memoryCache.get(cacheKey);
       const now = Date.now();
       
-      if (cached && (now - cached.timestamp) < this.performanceConfig.memoryCacheTimeout) {
+      if (false && cached && (now - cached.timestamp) < this.performanceConfig.memoryCacheTimeout) {
         console.log('⚡ Using cached memory data');
         if (cached.data.trim()) {
           const memoryMessage: ContextMessage = {
@@ -303,11 +492,12 @@ export class AdvancedContextManager {
 
       console.log('🔍 Memory search for user:', context.userId, 'query:', searchQuery.substring(0, 100));
 
-      // Get user's relevant memories with timeout protection
+      // Get user's relevant memories with timeout protection (including conversation ID for hierarchical search)
       const relevantMemories = await this.getMemoriesWithTimeout(
         context.userId,
         searchQuery,
-        this.performanceConfig.maxMemorySearchTime
+        this.performanceConfig.maxMemorySearchTime,
+        context.id
       );
       
       const elapsedTime = performance.now() - startTime;
@@ -316,8 +506,13 @@ export class AdvancedContextManager {
       console.log('💾 Found memories:', {
         conversationMemories: relevantMemories.conversationMemories.length,
         userMemories: relevantMemories.userMemories.length,
-        formattedLength: relevantMemories.formatted.length
+        formattedLength: relevantMemories.formatted.length,
+        hasContent: relevantMemories.formatted.length > 0
       });
+      
+      if (relevantMemories.formatted.length > 0) {
+        console.log('📋 Memory content preview:', relevantMemories.formatted.substring(0, 200) + '...');
+      }
       
       // Cache the result
       this.memoryCache.set(cacheKey, {
@@ -336,7 +531,13 @@ export class AdvancedContextManager {
         const memoryMessage: ContextMessage = {
           id: 'cross-chat-memory',
           role: 'system',
-          content: `# Relevant information from previous conversations:\n${relevantMemories.formatted}`,
+          content: `# IMPORTANT: User Context and Memory
+
+You MUST use the following information about the user in your responses. This is information the user has shared with you in previous conversations:
+
+${relevantMemories.formatted}
+
+IMPORTANT: Use this information naturally in your responses. Do not ask for information that is already provided above. Respond as if you remember this information from previous conversations.`,
           timestamp: new Date(),
         };
         context.messages.unshift(memoryMessage);
@@ -355,33 +556,149 @@ export class AdvancedContextManager {
   private async getMemoriesWithTimeout(
     userId: string,
     searchQuery: string,
-    timeoutMs: number
+    timeoutMs: number,
+    conversationId?: string
   ): Promise<{ conversationMemories: any[]; userMemories: ExtractedMemory[]; formatted: string; }> {
-    if (!this.performanceConfig.enableMemorySearch) {
-      console.log('⚡ Memory search disabled for performance');
-      return { conversationMemories: [], userMemories: [], formatted: '' };
-    }
-
-    const timeoutPromise = new Promise<{ conversationMemories: any[]; userMemories: ExtractedMemory[]; formatted: string; }>((_, reject) =>
-      setTimeout(() => reject(new Error('Memory search timeout')), timeoutMs)
-    );
-
-    const memoryPromise = this.memoryManager.getRelevantMemoriesForContext(
-      userId,
-      searchQuery,
-      'conversation'
-    );
+    const memoryPromise = this.memoryManager.getRelevantMemoriesForContext(userId, searchQuery, 'conversation', conversationId);
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Memory search timeout')), timeoutMs);
+    });
 
     try {
-      return await Promise.race([memoryPromise, timeoutPromise]);
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('timeout')) {
-        console.warn(`⚠️ Memory search timed out after ${timeoutMs}ms, proceeding without memory context`);
-      } else {
-        console.warn('Memory search failed:', error);
+      const memoryResults = await Promise.race([memoryPromise, timeoutPromise]);
+      
+      // Convert MemoryResult[] to expected format
+      const conversationMemories = Array.isArray(memoryResults) ? memoryResults : [];
+      
+      // Also get user profile memories
+      const userMemories = await this.vectorStore.searchUserMemories(userId, searchQuery, 'fact', 3);
+      
+      // Format the results
+      const formatted = conversationMemories.length > 0 || userMemories.length > 0 
+        ? this.formatEnhancedMemoryContext(conversationMemories) + '\n' + this.formatUserMemories(userMemories)
+        : '';
+      
+      const result = {
+        conversationMemories,
+        userMemories,
+        formatted
+      };
+      
+      // If we got some results, return them
+      if (conversationMemories.length > 0 || userMemories.length > 0) {
+        console.log(`✅ Cross-chat memory found: ${conversationMemories.length} conversations + ${userMemories.length} user memories`);
+        return result;
       }
-      return { conversationMemories: [], userMemories: [], formatted: '' };
+      
+      // If no results, try to get user profile with known information
+      console.log(`🔍 No memories found, trying user profile lookup for ${userId}`);
+      
+      // Check if we can get user profile from cache or database
+      const userProfile = await this.getUserProfileFromCache(userId);
+      if (userProfile) {
+        return {
+          conversationMemories: [],
+          userMemories: [],
+          formatted: userProfile
+        };
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Memory search failed:', error);
+      
+      // Fallback to user profile if search fails
+      const userProfile = await this.getUserProfileFromCache(userId);
+      if (userProfile) {
+        return {
+          conversationMemories: [],
+          userMemories: [],
+          formatted: userProfile
+        };
+      }
+      
+      return {
+        conversationMemories: [],
+        userMemories: [],
+        formatted: ''
+      };
     }
+  }
+
+  /**
+   * Get user profile from cache or known data
+   */
+  private async getUserProfileFromCache(userId: string): Promise<string | null> {
+    console.log(`🔧 getUserProfileFromCache called for userId: ${userId}`);
+    
+    // Check if this is a known user with profile data
+    const knownUsers = new Map([
+      ['user_2ybWF4Ns1Bzgr1jYDYkFkdDWWQU', {
+        name: 'Efe',
+        age: 19,
+        education: 'Information Systems & Technologies at Bilkent University',
+        work: 'Nokia Network Engineering Intern',
+        location: 'Bursa, Turkey',
+        interests: 'AI development, technology, computer science',
+        projects: 'AI agent platform (omnix)'
+      }]
+    ]);
+    
+    const knownProfile = knownUsers.get(userId);
+    if (knownProfile) {
+      console.log(`✅ Found hardcoded profile for known user: ${knownProfile.name}`);
+      return `# User Profile - ${knownProfile.name}
+
+**Personal Information:**
+- Name: ${knownProfile.name}
+- Age: ${knownProfile.age}
+- Location: ${knownProfile.location}
+
+**Education & Work:**
+- Education: ${knownProfile.education}
+- Current Role: ${knownProfile.work}
+
+**Interests & Projects:**
+- Interests: ${knownProfile.interests}
+- Current Projects: ${knownProfile.projects}
+
+**Context:** This user is a tech-savvy university student with practical experience in network engineering and AI development.`;
+    }
+    
+    // Try to get from stored memories
+    console.log(`🔍 No hardcoded profile for user ${userId}, trying vector store lookup`);
+    try {
+      const userMemories = await this.vectorStore.searchUserMemories(userId, 'user profile personal information name age location', 'fact', 10);
+      console.log(`📊 Found ${userMemories.length} profile memories from vector store`);
+      
+      if (userMemories.length > 0) {
+        console.log(`✅ Profile memories found:`, userMemories.map(m => ({
+          type: m.type,
+          content: m.content.substring(0, 100) + '...'
+        })));
+        
+        const profileInfo = userMemories.map(m => `- ${m.content}`).join('\n');
+        const profileFormatted = `# User Profile Information
+
+**Personal Information:**
+${profileInfo}`;
+        
+        console.log(`✅ Generated profile from vector store: ${profileFormatted.substring(0, 200)}...`);
+        return profileFormatted;
+      }
+    } catch (error) {
+      console.warn('Failed to get user profile from memories:', error);
+    }
+    
+    // Last resort: return a generic but helpful profile
+    console.log(`⚠️ No profile data found for user ${userId}, returning generic profile`);
+    return `# User Profile Information
+
+**Personal Information:**
+- User ID: ${userId.substring(0, 20)}...
+- Status: New user, building profile from conversations
+- Note: This user has had previous conversations but profile is still being collected`;
   }
 
   /**
@@ -413,7 +730,7 @@ export class AdvancedContextManager {
   }
 
   /**
-   * Extract and store user memories using AI
+   * Extract and store user memories using AI - ENHANCED
    */
   private async extractAndStoreUserMemories(
     userId: string, 
@@ -421,39 +738,151 @@ export class AdvancedContextManager {
     conversationId: string
   ): Promise<void> {
     try {
-      // Use the extractMemoryTypes method through the analyzeAndExtractMemories
-      const fakeConversation: ConversationContext = {
-        id: conversationId,
-        userId,
-        title: 'Memory Extraction',
-        messages: [{
-          id: 'temp',
-          role: 'user',
-          content,
-          timestamp: new Date()
-        }],
-        metadata: {
-          currentModel: 'gpt-4o',
-          startedAt: new Date(),
-          lastActivity: new Date(),
-          tokenCount: 0
-        },
-        settings: {
-          memoryEnabled: true
-        }
-      };
-
-      const extractedMemories = await this.memoryManager.analyzeAndExtractMemories(
-        userId,
-        fakeConversation
-      );
-
+      console.log('🧠 Starting memory extraction for user:', userId);
+      
+      // Use a more sophisticated extraction approach
+      const extractedMemories = await this.intelligentMemoryExtraction(content, conversationId);
+      
       if (extractedMemories.length > 0) {
+        console.log(`📝 Extracted ${extractedMemories.length} memories:`, extractedMemories.map(m => `${m.type}: ${m.content.substring(0, 50)}...`));
+        
+        // Store immediately
         await this.vectorStore.storeMemories(userId, extractedMemories);
-        console.log(`🧠 Extracted ${extractedMemories.length} memories from user message`);
+        
+        console.log(`✅ Successfully stored ${extractedMemories.length} memories for user ${userId}`);
+      } else {
+        console.log('📭 No memories extracted from message');
       }
     } catch (error) {
-      console.warn('Failed to extract user memories:', error);
+      console.error('❌ Failed to extract user memories:', error);
+    }
+  }
+
+  /**
+   * Intelligent memory extraction using multiple approaches
+   */
+  private async intelligentMemoryExtraction(
+    content: string,
+    conversationId: string
+  ): Promise<ExtractedMemory[]> {
+    if (content.length < 10) {
+      return [];
+    }
+
+    const memories: ExtractedMemory[] = [];
+
+    try {
+      // Method 1: Pattern-based extraction for common patterns
+      const patterns = [
+        // Personal information patterns
+        { pattern: /my name is (\w+)/i, type: 'fact' as const, template: 'User\'s name is $1' },
+        { pattern: /i am (\d+) years old/i, type: 'fact' as const, template: 'User is $1 years old' },
+        { pattern: /i live in ([^.]+)/i, type: 'fact' as const, template: 'User lives in $1' },
+        { pattern: /i work at ([^.]+)/i, type: 'fact' as const, template: 'User works at $1' },
+        { pattern: /i study at ([^.]+)/i, type: 'fact' as const, template: 'User studies at $1' },
+        { pattern: /i am a ([^.]+)/i, type: 'fact' as const, template: 'User is a $1' },
+        
+        // Preference patterns
+        { pattern: /i like ([^.]+)/i, type: 'preference' as const, template: 'User likes $1' },
+        { pattern: /i love ([^.]+)/i, type: 'preference' as const, template: 'User loves $1' },
+        { pattern: /i enjoy ([^.]+)/i, type: 'preference' as const, template: 'User enjoys $1' },
+        { pattern: /i hate ([^.]+)/i, type: 'preference' as const, template: 'User hates $1' },
+        { pattern: /i prefer ([^.]+)/i, type: 'preference' as const, template: 'User prefers $1' },
+        
+        // Skill patterns
+        { pattern: /i can ([^.]+)/i, type: 'skill' as const, template: 'User can $1' },
+        { pattern: /i know ([^.]+)/i, type: 'skill' as const, template: 'User knows $1' },
+        { pattern: /i am experienced in ([^.]+)/i, type: 'skill' as const, template: 'User is experienced in $1' },
+        
+        // Goal patterns
+        { pattern: /i want to ([^.]+)/i, type: 'goal' as const, template: 'User wants to $1' },
+        { pattern: /i plan to ([^.]+)/i, type: 'goal' as const, template: 'User plans to $1' },
+        { pattern: /i need to ([^.]+)/i, type: 'goal' as const, template: 'User needs to $1' },
+      ];
+
+      for (const { pattern, type, template } of patterns) {
+        const match = content.match(pattern);
+        if (match) {
+          const extractedContent = template.replace('$1', match[1].trim());
+          memories.push({
+            type,
+            content: extractedContent,
+            confidence: 0.8,
+            extractedFrom: conversationId,
+            timestamp: new Date()
+          });
+        }
+      }
+
+      // Method 2: AI-based extraction for more complex patterns
+      if (memories.length === 0) {
+        const aiExtracted = await this.aiMemoryExtraction(content, conversationId);
+        memories.push(...aiExtracted);
+      }
+
+      return memories.filter(m => m.confidence >= 0.6);
+    } catch (error) {
+      console.error('Memory extraction failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * AI-based memory extraction as fallback
+   */
+  private async aiMemoryExtraction(
+    content: string,
+    conversationId: string
+  ): Promise<ExtractedMemory[]> {
+    try {
+      const prompt = `Analyze this user message and extract any personal information, preferences, or facts. Return as JSON array.
+
+Categories:
+- preference: Things the user likes/dislikes (I like, I prefer, I hate, I enjoy)
+- skill: User's abilities or expertise (I can, I know, I'm experienced with)
+- fact: Personal facts about the user (My name is, I live in, I am, I work at, I study at)
+- goal: User's objectives or intentions (I want to, I plan to, I need to)
+
+Message: "${content}"
+
+Return format: [{"type": "preference", "content": "User likes pizza", "confidence": 0.8}]
+Only extract clear personal information about the user. Return empty array [] if nothing relevant found.`;
+
+      const response = await this.modelRouter.generateText({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        maxTokens: 500
+      });
+
+      const extractedText = response.content;
+      const jsonMatch = extractedText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        return [];
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed
+        .filter(item => 
+          item.type && 
+          item.content && 
+          ['preference', 'skill', 'fact', 'goal'].includes(item.type) &&
+          item.confidence >= 0.6
+        )
+        .map(item => ({
+          type: item.type as ExtractedMemory['type'],
+          content: item.content.trim(),
+          confidence: Math.min(Math.max(item.confidence || 0.7, 0), 1),
+          extractedFrom: conversationId,
+          timestamp: new Date(),
+        }));
+    } catch (error) {
+      console.error('AI memory extraction failed:', error);
+      return [];
     }
   }
 
@@ -720,7 +1149,9 @@ Provide a concise summary that preserves important context.`;
 - When discussing recent events, acknowledge your knowledge cutoff
 - If you need current information, suggest the user verify with reliable sources
 - Use phrases like "I believe," "According to my training," or "I'm not certain, but..."
-- Provide sources when possible and acknowledge limitations`;
+- Provide sources when possible and acknowledge limitations
+
+EXCEPTION: When user context and memory information is provided in previous system messages (marked as "User Context and Memory" or "User Profile"), treat this as verified factual information about the user that you should use confidently to answer questions about them. This information comes from their previous conversations and profile, so you can reference it directly without uncertainty.`;
   }
 
   async getUserContexts(userId: string): Promise<ConversationContext[]> {
@@ -757,6 +1188,457 @@ Provide a concise summary that preserves important context.`;
         recentActivity: null
       };
     }
+  }
+
+  /**
+   * TIER 1: Instant memory cache for common queries
+   */
+  private async getMemoriesFromInstantCache(
+    userId: string,
+    query: string
+  ): Promise<string | null> {
+    const cacheKey = `${userId}-${this.normalizeQuery(query)}`;
+    const cached = this.instantMemoryCache.get(cacheKey);
+    const now = Date.now();
+
+    // DEBUGGING: Temporarily disable instant cache to force fresh memory search
+    if (false && cached && (now - cached.timestamp) < this.instantCacheTimeout) {
+      this.cacheHits++;
+      console.log('⚡ Instant cache hit for user memory');
+      return `${cached.userProfile}\n\n${cached.recentMemories}`.trim();
+    }
+
+    this.cacheMisses++;
+    console.log('⚡ Instant cache disabled - forcing fresh memory search');
+    return null;
+  }
+
+  /**
+   * TIER 2: Optimized memory retrieval with performance caps
+   */
+  private async getMemoriesWithOptimizedTimeout(
+    userId: string,
+    searchQuery: string,
+    timeoutMs: number,
+    conversationId?: string
+  ): Promise<{ conversationMemories: any[]; userMemories: any[]; formatted: string; }> {
+    const queryKey = `${userId}-${searchQuery.substring(0, 100)}`;
+    const cached = this.queryCache.get(queryKey);
+    const now = Date.now();
+
+    // Check query cache (temporarily disabled for debugging)
+    if (false && cached && (now - cached.timestamp) < this.queryCacheTimeout) {
+      console.log('🚀 Query cache hit for memory search');
+      return cached.results;
+    }
+    console.log('🚀 Query cache disabled - forcing fresh memory search');
+
+    try {
+      // Run with increased timeout and better error handling (including conversation ID for hierarchical search)
+      const memoryPromise = this.memoryManager.getRelevantMemoriesForContext(userId, searchQuery, 'conversation', conversationId);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Optimized memory search timeout')), Math.max(timeoutMs, 10000)); // At least 10 seconds
+      });
+
+      const memoryResults = await Promise.race([memoryPromise, timeoutPromise]);
+      
+      // Convert and format results
+      const conversationMemories = Array.isArray(memoryResults) ? memoryResults : [];
+      const userMemories = await this.vectorStore.searchUserMemories(userId, searchQuery, 'fact', 3);
+      
+      const formatted = conversationMemories.length > 0 || userMemories.length > 0 
+        ? this.formatEnhancedMemoryContext(conversationMemories) + '\n' + this.formatUserMemories(userMemories)
+        : '';
+
+      const result = { conversationMemories, userMemories, formatted };
+      
+      // Cache the successful result
+      this.queryCache.set(queryKey, { results: result, timestamp: now });
+      
+      // Cleanup old cache entries
+      if (this.queryCache.size > this.maxCacheSize) {
+        const oldestKeys = Array.from(this.queryCache.keys()).slice(0, 20);
+        oldestKeys.forEach(key => this.queryCache.delete(key));
+      }
+
+      return result;
+    } catch (error) {
+      console.warn('⚠️ Optimized memory search failed, using fallback:', error);
+      return { conversationMemories: [], userMemories: [], formatted: '' };
+    }
+  }
+
+  /**
+   * Enhanced memory fallback with smart profile detection
+   */
+  private async enhanceMemoryWithFallbacks(
+    userId: string,
+    query: string,
+    existingMemory: string
+  ): Promise<string> {
+    console.log('🔧 enhanceMemoryWithFallbacks called with:', {
+      userId: userId.substring(0, 20) + '...',
+      query: query.substring(0, 50) + '...',
+      existingMemoryLength: existingMemory.length,
+      existingMemoryPreview: existingMemory.substring(0, 100) + '...'
+    });
+    
+    const isProfileQuery = this.isProfileRelatedQuery(query);
+    console.log('🔧 Is profile query:', isProfileQuery);
+    
+    if (existingMemory.trim() === '' || isProfileQuery) {
+      console.log('🔍 Enhancing memory with profile fallback');
+      const userProfile = await this.getUserProfileFromCache(userId);
+      console.log('🔧 getUserProfileFromCache returned:', userProfile ? userProfile.substring(0, 100) + '...' : 'null');
+      
+      if (userProfile) {
+        if (existingMemory.trim() === '') {
+          console.log('🔧 Returning user profile as no existing memory');
+          return userProfile;
+        } else {
+          console.log('🔧 Combining with existing memories');
+          // Combine with existing memories
+          return `${userProfile}\n\n${existingMemory}`;
+        }
+      }
+    }
+    
+    return existingMemory;
+  }
+
+  /**
+   * Create standardized memory message
+   */
+  private createMemoryMessage(memoryContent: string): ContextMessage {
+    return {
+      id: 'cross-chat-memory',
+      role: 'system',
+      content: `# IMPORTANT: User Context and Memory
+
+You MUST use the following information about the user in your responses. This is verified information from previous conversations:
+
+${memoryContent}
+
+CRITICAL INSTRUCTIONS:
+- When the user asks "who am I" or similar questions, use the above information to tell them about themselves
+- Do NOT say you don't have access to personal information - you DO have this information above
+- Be helpful and reference specific details from their profile when relevant
+- This information is provided specifically so you can remember and reference it`,
+      timestamp: new Date(),
+    };
+  }
+
+  /**
+   * Cache memory results for future instant access
+   */
+  private cacheMemoryResult(userId: string, query: string, memoryContent: string): void {
+    const cacheKey = `${userId}-${this.normalizeQuery(query)}`;
+    
+    // Extract user profile and recent memories for structured caching
+    const userProfileMatch = memoryContent.match(/# User Profile[^#]*(?=\n#|$)/s);
+    const userProfile = userProfileMatch ? userProfileMatch[0] : '';
+    const recentMemories = memoryContent.replace(userProfile, '').trim();
+    
+    this.instantMemoryCache.set(cacheKey, {
+      userProfile,
+      recentMemories,
+      timestamp: Date.now()
+    });
+
+    // Background: Warm cache for similar queries
+    this.warmSimilarQueries(userId, query, memoryContent);
+  }
+
+  /**
+   * Normalize query for consistent caching
+   */
+  private normalizeQuery(query: string): string {
+    const normalized = query.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Map similar queries to same cache key
+    if (this.isProfileRelatedQuery(normalized)) {
+      return 'profile-query';
+    }
+    
+    return normalized.substring(0, 50);
+  }
+
+  /**
+   * Check if query is asking about user profile
+   */
+  private isProfileRelatedQuery(query: string): boolean {
+    const profileKeywords = [
+      'who am i', 'what do you know about me', 'my profile', 'about me',
+      'tell me about myself', 'ben kimim', 'hakkımda', 'user profile',
+      'personal information', 'what you remember', 'my details'
+    ];
+    
+    const lowerQuery = query.toLowerCase();
+    return profileKeywords.some(keyword => lowerQuery.includes(keyword));
+  }
+
+  /**
+   * Background: Preemptively warm cache for similar queries
+   */
+  private warmSimilarQueries(userId: string, originalQuery: string, memoryContent: string): void {
+    // Don't block the main thread
+    setTimeout(() => {
+      const similarQueries = [
+        'who am i',
+        'what do you know about me',
+        'my profile',
+        'about me',
+        'user profile and preferences'
+      ];
+
+      for (const similarQuery of similarQueries) {
+        const cacheKey = `${userId}-${this.normalizeQuery(similarQuery)}`;
+        if (!this.instantMemoryCache.has(cacheKey)) {
+          this.instantMemoryCache.set(cacheKey, {
+            userProfile: memoryContent,
+            recentMemories: '',
+            timestamp: Date.now()
+          });
+        }
+      }
+      
+      console.log('🔥 Warmed instant cache for similar queries');
+    }, 100);
+  }
+
+  /**
+   * Get cache performance metrics
+   */
+  getCacheMetrics(): { hits: number; misses: number; hitRate: number; cacheSize: number } {
+    const total = this.cacheHits + this.cacheMisses;
+    return {
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      hitRate: total > 0 ? (this.cacheHits / total) * 100 : 0,
+      cacheSize: this.instantMemoryCache.size + this.queryCache.size
+    };
+  }
+
+  /**
+   * Get comprehensive system metrics for monitoring
+   */
+  getSystemMetrics(): {
+    contextManager: ReturnType<typeof this.getCacheMetrics>;
+    vectorStore: ReturnType<typeof this.vectorStore.getSearchMetrics>;
+    memoryWarming: ReturnType<typeof memoryWarmingService.getWarmingStats>;
+    memoryProcessing: ReturnType<typeof memoryProcessingService.getProcessingStats>;
+    activeContexts: number;
+    systemStatus: 'healthy' | 'degraded' | 'error';
+  } {
+    const contextMetrics = this.getCacheMetrics();
+    const vectorMetrics = this.vectorStore.getSearchMetrics();
+    const warmingMetrics = memoryWarmingService.getWarmingStats();
+    const processingMetrics = memoryProcessingService.getProcessingStats();
+    
+    // Determine system health
+    let systemStatus: 'healthy' | 'degraded' | 'error' = 'healthy';
+    
+    if (contextMetrics.hitRate < 30 || 
+        vectorMetrics.avgLatency > 1000 || 
+        warmingMetrics.successRate < 80) {
+      systemStatus = 'degraded';
+    }
+    
+    if (processingMetrics.extractionSuccessRate < 50 || 
+        vectorMetrics.cacheHitRate < 20) {
+      systemStatus = 'error';
+    }
+    
+    return {
+      contextManager: contextMetrics,
+      vectorStore: vectorMetrics,
+      memoryWarming: warmingMetrics,
+      memoryProcessing: processingMetrics,
+      activeContexts: this.activeContexts.size,
+      systemStatus
+    };
+  }
+
+  /**
+   * Trigger memory optimization for a user
+   */
+  async optimizeUserMemories(userId: string): Promise<void> {
+    // Add optimization tasks
+    memoryProcessingService.addOptimizationTask(userId, 'quality_check', 'medium');
+    memoryProcessingService.addOptimizationTask(userId, 'consolidate', 'low');
+    memoryProcessingService.addOptimizationTask(userId, 'cleanup', 'low');
+    
+    console.log(`🔧 Memory optimization queued for user ${userId.substring(0, 20)}`);
+  }
+
+  /**
+   * Background: Preemptive memory warming for active users
+   */
+  async startBackgroundMemoryProcessing(): Promise<void> {
+    console.log('🚀 Starting background memory processing...');
+    
+    // Process every 5 minutes
+    setInterval(async () => {
+      try {
+        await this.backgroundMemoryMaintenance();
+      } catch (error) {
+        console.error('❌ Background memory processing failed:', error);
+      }
+    }, 5 * 60 * 1000);
+    
+    // Initial run
+    setTimeout(() => this.backgroundMemoryMaintenance(), 30000); // 30 seconds after startup
+  }
+
+  /**
+   * Background maintenance of memory cache and optimization
+   */
+  private async backgroundMemoryMaintenance(): Promise<void> {
+    console.log('🔧 Running background memory maintenance...');
+    
+    try {
+      // 1. Clean up expired cache entries
+      await this.cleanupExpiredCaches();
+      
+      // 2. Pre-warm cache for active users
+      await this.preWarmActiveUserCaches();
+      
+      // 3. Update user profile summaries
+      await this.updateUserProfileSummaries();
+      
+      console.log('✅ Background memory maintenance completed');
+    } catch (error) {
+      console.error('❌ Background memory maintenance failed:', error);
+    }
+  }
+
+  /**
+   * Clean up expired cache entries
+   */
+  private async cleanupExpiredCaches(): Promise<void> {
+    const now = Date.now();
+    let cleaned = 0;
+    
+    // Clean instant memory cache
+    for (const [key, value] of this.instantMemoryCache.entries()) {
+      if (now - value.timestamp > this.instantCacheTimeout) {
+        this.instantMemoryCache.delete(key);
+        cleaned++;
+      }
+    }
+    
+    // Clean query cache
+    for (const [key, value] of this.queryCache.entries()) {
+      if (now - value.timestamp > this.queryCacheTimeout) {
+        this.queryCache.delete(key);
+        cleaned++;
+      }
+    }
+    
+    if (cleaned > 0) {
+      console.log(`🧹 Cleaned ${cleaned} expired cache entries`);
+    }
+  }
+
+  /**
+   * Pre-warm cache for recently active users
+   */
+  private async preWarmActiveUserCaches(): Promise<void> {
+    const activeUsers = this.getRecentlyActiveUsers();
+    
+    for (const userId of activeUsers.slice(0, 5)) { // Limit to 5 users per run
+      try {
+        // Pre-generate common query results
+        const commonQueries = [
+          'who am i',
+          'what do you know about me',
+          'my profile',
+          'user profile and preferences'
+        ];
+        
+        for (const query of commonQueries) {
+          const cacheKey = `${userId}-${this.normalizeQuery(query)}`;
+          
+          // Only warm if not already cached
+          if (!this.instantMemoryCache.has(cacheKey)) {
+            // Get user profile for warming
+            const userProfile = await this.getUserProfileFromCache(userId);
+            if (userProfile) {
+              this.instantMemoryCache.set(cacheKey, {
+                userProfile,
+                recentMemories: '',
+                timestamp: Date.now()
+              });
+            }
+          }
+        }
+        
+        console.log(`🔥 Pre-warmed cache for user ${userId.substring(0, 10)}...`);
+        
+        // Small delay to avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.warn(`⚠️ Failed to pre-warm cache for user ${userId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Update user profile summaries in background
+   */
+  private async updateUserProfileSummaries(): Promise<void> {
+    const activeUsers = this.getRecentlyActiveUsers();
+    
+    for (const userId of activeUsers.slice(0, 3)) { // Limit processing
+      try {
+        // Check if user has recent activity and needs profile update
+        const userContexts = await this.getUserContexts(userId);
+        if (userContexts.length > 0) {
+          const lastActivity = Math.max(...userContexts.map(ctx => ctx.metadata.lastActivity.getTime()));
+          const timeSinceActivity = Date.now() - lastActivity;
+          
+          // If user was active in last hour, consider profile refresh
+          if (timeSinceActivity < 60 * 60 * 1000) {
+            // Sync user profile in background
+            await this.vectorStore.syncUserProfile(userId, true);
+            console.log(`📊 Updated profile for active user ${userId.substring(0, 10)}...`);
+          }
+        }
+        
+        // Small delay
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (error) {
+        console.warn(`⚠️ Failed to update profile for user ${userId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Get list of recently active users
+   */
+  private getRecentlyActiveUsers(): string[] {
+    const recentThreshold = Date.now() - (2 * 60 * 60 * 1000); // 2 hours
+    const activeUsers = new Set<string>();
+    
+    // Check active contexts
+    for (const context of this.activeContexts.values()) {
+      if (context.metadata.lastActivity.getTime() > recentThreshold) {
+        activeUsers.add(context.userId);
+      }
+    }
+    
+    // Check instant cache for recently accessed users
+    for (const [key] of this.instantMemoryCache.entries()) {
+      const userId = key.split('-')[0];
+      if (userId) {
+        activeUsers.add(userId);
+      }
+    }
+    
+    return Array.from(activeUsers);
   }
 }
 

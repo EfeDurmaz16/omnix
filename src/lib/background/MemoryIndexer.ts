@@ -135,31 +135,147 @@ export class MemoryIndexer {
   private async indexUserProfile(userId: string): Promise<void> {
     const profileCacheKey = `profile_${userId}`;
     
+    // Clear cache to force reindexing (temporary for debugging)
+    userProfileCache.delete(profileCacheKey);
+    
     // Check if already cached
     if (userProfileCache.has(profileCacheKey)) {
       console.log(`📦 User profile for ${userId} already cached`);
       return;
     }
 
-    // Generate profile data (in real implementation, this would query the database)
-    const profileData = [{
-      content: "User profile: 19-year-old CTIS student at Bilkent University, Nokia intern, interested in technology and AI development",
-      relevanceScore: 0.95,
-      conversationId: 'indexed-profile',
-      timestamp: new Date().toISOString(),
-      model: 'background-indexer',
-      messageId: 'indexed-profile',
-      metadata: { 
-        similarity: 0.95, 
-        role: 'system',
-        storageType: 'background-indexed',
-        indexedAt: new Date().toISOString()
-      },
-    }];
+    try {
+      // Get user profile from database
+      const userProfile = await this.getUserProfileFromDatabase(userId);
+      
+      if (!userProfile) {
+        console.log(`⚠️ No profile found for user ${userId}`);
+        return;
+      }
 
-    // Cache the profile data
-    userProfileCache.set(profileCacheKey, profileData);
-    console.log(`💾 Indexed user profile for ${userId}`);
+      const profileData = [{
+        content: userProfile,
+        relevanceScore: 0.95,
+        conversationId: 'indexed-profile',
+        timestamp: new Date().toISOString(),
+        model: 'background-indexer',
+        messageId: 'indexed-profile',
+        metadata: { 
+          similarity: 0.95, 
+          role: 'system',
+          storageType: 'background-indexed',
+          indexedAt: new Date().toISOString(),
+          userId: userId
+        },
+      }];
+
+      // Cache the profile data
+      userProfileCache.set(profileCacheKey, profileData);
+      console.log(`💾 Indexed user profile for ${userId}: ${userProfile.substring(0, 100)}...`);
+    } catch (error) {
+      console.error(`❌ Failed to index user profile for ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Get user profile from database or localStorage
+   */
+  private async getUserProfileFromDatabase(userId: string): Promise<string | null> {
+    try {
+      // First try to get from server-side file storage
+      if (typeof window === 'undefined') {
+        try {
+          const path = require('path');
+          const fs = require('fs');
+          const profilePath = path.join(process.cwd(), '.data', `profile_${userId}.json`);
+          
+          if (fs.existsSync(profilePath)) {
+            const profileData = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+            console.log(`📂 Found server-side profile for ${userId}`);
+            return this.formatUserProfile(profileData);
+          }
+        } catch (fsError) {
+          console.warn('Could not read server-side profile:', fsError);
+        }
+      }
+
+      // Try to get from localStorage (client-side)
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(`aspendos_user_profile_${userId}`);
+        if (stored) {
+          const profile = JSON.parse(stored);
+          console.log(`📱 Found localStorage profile for ${userId}`);
+          return this.formatUserProfile(profile);
+        }
+      }
+
+      // Try to get from database service
+      const { databaseService } = await import('../database/DatabaseService');
+      const userData = await databaseService.getUserByClerkId(userId);
+      
+      if (userData) {
+        console.log(`🗄️ Found database profile for ${userId}`);
+        return this.formatUserProfile(userData);
+      }
+
+      console.log(`⚠️ No user data found for ${userId}`);
+      return null;
+    } catch (error) {
+      console.error(`❌ Error getting user profile for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Format user profile data into a readable string
+   */
+  private formatUserProfile(userData: any): string {
+    const parts = [];
+    
+    // Handle direct profile data (from profile API)
+    if (userData.age) parts.push(`Age: ${userData.age}`);
+    if (userData.location) parts.push(`Location: ${userData.location}`);
+    if (userData.occupation) parts.push(`Occupation: ${userData.occupation}`);
+    if (userData.interests) parts.push(`Interests: ${userData.interests}`);
+    if (userData.bio) parts.push(`Bio: ${userData.bio}`);
+    if (userData.university) parts.push(`University: ${userData.university}`);
+    if (userData.company) parts.push(`Company: ${userData.company}`);
+    
+    // Handle database user data
+    if (userData.name) {
+      parts.push(`Name: ${userData.name}`);
+    }
+    
+    if (userData.email) {
+      parts.push(`Email: ${userData.email}`);
+    }
+    
+    if (userData.plan) {
+      parts.push(`Plan: ${userData.plan}`);
+    }
+    
+    if (userData.createdAt) {
+      parts.push(`Member since: ${new Date(userData.createdAt).toLocaleDateString()}`);
+    }
+
+    // Add any nested profile fields if they exist
+    if (userData.profile) {
+      if (userData.profile.age) parts.push(`Age: ${userData.profile.age}`);
+      if (userData.profile.location) parts.push(`Location: ${userData.profile.location}`);
+      if (userData.profile.occupation) parts.push(`Occupation: ${userData.profile.occupation}`);
+      if (userData.profile.interests) parts.push(`Interests: ${userData.profile.interests}`);
+      if (userData.profile.bio) parts.push(`Bio: ${userData.profile.bio}`);
+      if (userData.profile.university) parts.push(`University: ${userData.profile.university}`);
+      if (userData.profile.company) parts.push(`Company: ${userData.profile.company}`);
+    }
+
+    // Handle preferences
+    if (userData.preferences) {
+      if (userData.preferences.language) parts.push(`Language: ${userData.preferences.language}`);
+      if (userData.preferences.timezone) parts.push(`Timezone: ${userData.preferences.timezone}`);
+    }
+
+    return parts.length > 0 ? `User Profile - ${parts.join(', ')}` : 'User Profile - No profile information available';
   }
 
   /**
@@ -187,9 +303,9 @@ export class MemoryIndexer {
       const cacheKey = query.length <= 100 ? query : query.substring(0, 100);
       
       if (!embeddingCache.has(cacheKey)) {
-        // Generate dummy embedding for common queries (in real implementation, call OpenAI)
-        const dummyEmbedding = Array(1536).fill(0).map(() => Math.random() * 0.1);
-        embeddingCache.set(cacheKey, dummyEmbedding);
+        // Skip dummy embeddings - they cause cosine similarity issues
+        // TODO: Implement proper embedding generation here if needed
+        // For now, let real embeddings be generated on demand
         indexedCount++;
       }
     }

@@ -517,31 +517,8 @@ export default function HomePage() {
               <span className="text-accent">Multimodal AI</span>
             </h2>
             
-            {/* Simple Pricing Grid */}
             <div className="grid md:grid-cols-3 gap-6 mt-12">
-              {[
-                {
-                  name: "Free",
-                  price: "$0",
-                  features: ["5 messages/day", "GPT-3.5, Claude Haiku", "Basic features"],
-                  cta: "Start Free",
-                  popular: false
-                },
-                {
-                  name: "Pro",
-                  price: "$20",
-                  features: ["Unlimited chat", "All text models", "Image generation", "Priority support"],
-                  cta: "Upgrade to Pro",
-                  popular: true
-                },
-                {
-                  name: "Ultra", 
-                  price: "$50",
-                  features: ["Everything in Pro", "Video generation", "All premium models", "API access"],
-                  cta: "Go Ultra",
-                  popular: false
-                }
-              ].map((plan, index) => (
+              {BILLING_PLANS.filter(p => ['student', 'pro', 'team'].includes(p.id)).map((plan, index) => (
                 <Card key={index} className={`relative cultural-card cultural-border ${plan.popular ? 'ring-2 ring-blue-500' : ''}`}>
                   {plan.popular && (
                     <Badge className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white">
@@ -551,11 +528,11 @@ export default function HomePage() {
                   <CardContent className="p-6 text-center">
                     <h3 className="text-xl font-bold mb-2 cultural-text-primary">{plan.name}</h3>
                     <div className="text-3xl font-bold mb-4">
-                      {plan.price}
+                      ${plan.monthlyPrice}
                       <span className="text-sm cultural-text-muted">/month</span>
                     </div>
                     <ul className="space-y-2 mb-6 text-sm cultural-text-muted">
-                      {plan.features.map((feature, fIndex) => (
+                      {plan.features.slice(0, 4).map((feature, fIndex) => (
                         <li key={fIndex} className="flex items-center justify-center">
                           <Check className="w-4 h-4 mr-2 text-green-400" />
                           {feature}
@@ -564,7 +541,7 @@ export default function HomePage() {
                     </ul>
                     <Link href={user ? "/billing" : "/signup"}>
                       <Button className={`w-full ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                        {plan.cta}
+                        {plan.id === 'student' ? 'Start Learning' : `Upgrade to ${plan.name}`}
                       </Button>
                     </Link>
                   </CardContent>

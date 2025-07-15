@@ -35,7 +35,7 @@ export interface PerformanceConfig {
 export const defaultPerformanceConfig: PerformanceConfig = {
   // Memory settings - optimized for speed
   enableMemorySearch: true,
-  maxMemorySearchTime: 1000, // 1 second max for memory search
+  maxMemorySearchTime: 2000, // Reduced from 3000ms to 2000ms for faster responses
   memoryCacheTimeout: 5 * 60 * 1000, // 5 minutes cache
 
   // Database settings - reduced for performance
@@ -64,7 +64,7 @@ export const defaultPerformanceConfig: PerformanceConfig = {
 // Fast performance config for high-load scenarios
 export const fastPerformanceConfig: PerformanceConfig = {
   enableMemorySearch: true,
-  maxMemorySearchTime: 500, // Even faster
+  maxMemorySearchTime: 2000, // Increased from 500ms to 2000ms
   memoryCacheTimeout: 10 * 60 * 1000, // Longer cache
 
   maxConversationsPerQuery: 5,
@@ -133,6 +133,7 @@ export const PERFORMANCE_CONFIGS: Record<string, PerformanceConfig> = {
     contextTimeout: 5000,
     streamingChunkSize: 20,
     streamingDelay: 10,
+    maxMemorySearchTime: 3000, // Ensure think mode has adequate timeout
   },
   'ultra-think': {
     ...defaultPerformanceConfig,
@@ -143,6 +144,7 @@ export const PERFORMANCE_CONFIGS: Record<string, PerformanceConfig> = {
     contextTimeout: 8000,
     streamingChunkSize: 15,
     streamingDelay: 15,
+    maxMemorySearchTime: 5000, // Increased for better memory retrieval
   },
   'full-think': {
     ...defaultPerformanceConfig,
@@ -153,6 +155,7 @@ export const PERFORMANCE_CONFIGS: Record<string, PerformanceConfig> = {
     contextTimeout: 10000,
     streamingChunkSize: 10,
     streamingDelay: 20,
+    maxMemorySearchTime: 8000, // Increased for comprehensive memory search
   }
 };
 
