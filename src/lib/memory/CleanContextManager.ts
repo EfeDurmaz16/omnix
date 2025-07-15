@@ -73,11 +73,18 @@ export class CleanContextManager {
         const memoryMessage: SimpleMessage = {
           id: 'memory-context',
           role: 'system',
-          content: `# Previous Context
+          content: `# User Context & Previous Conversations
 
 ${formattedMemory}
 
-This is context from previous conversations with this user. Use it naturally to maintain continuity, but don't explicitly reference it unless relevant to the current conversation.`,
+IMPORTANT: This is persistent context about this user from previous conversations. You should:
+1. Use this information naturally to provide personalized responses
+2. Remember details about the user's background, work, interests, and previous discussions
+3. When the user asks "who am I" or about their background, refer to this context
+4. Don't say "I don't have access to personal information" when the context is provided above
+5. Maintain continuity with previous conversations using this context
+
+Respond as if you have an ongoing relationship with this user based on the context provided.`,
           timestamp: new Date()
         };
 
