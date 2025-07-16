@@ -9,7 +9,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { email, plan } = await request.json();
+    const body = await request.text();
+    if (!body) {
+      return NextResponse.json({ error: 'Request body is required' }, { status: 400 });
+    }
+    
+    const { email, plan } = JSON.parse(body);
     
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });

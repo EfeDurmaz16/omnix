@@ -26,6 +26,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { format } from 'date-fns';
 import { useModelInfo } from '@/hooks/useModelInfo';
+import { MathRenderer } from './MathRenderer';
 
 interface Message {
   id: string;
@@ -248,47 +249,7 @@ function MessageBubble({
           ) : (
             /* Normal Display Mode */
             <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
-              <ReactMarkdown
-                components={{
-                  code: ({ node, inline, className, children, ...props }) => {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const language = match ? match[1] : '';
-                    
-                    return !inline && language ? (
-                      <div className="relative">
-                        {/* Language label */}
-                        <div className="flex items-center justify-between bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
-                          <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-300 uppercase">
-                            {language}
-                          </span>
-                          <button
-                            onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
-                            className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                            title="Copy code"
-                          >
-                            Copy
-                          </button>
-                        </div>
-                        <SyntaxHighlighter
-                          style={document.documentElement.classList.contains('dark') ? oneDark : oneLight}
-                          language={language}
-                          PreTag="div"
-                          className="!rounded-t-none rounded-b-lg !bg-gray-100 dark:!bg-gray-800 !border !border-gray-300 dark:!border-gray-600 !border-t-0 !mt-0"
-                          {...props}
-                        >
-                          {String(children).replace(/\n$/, '')}
-                        </SyntaxHighlighter>
-                      </div>
-                    ) : (
-                      <code className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-300 dark:border-gray-600" {...props}>
-                        {children}
-                      </code>
-                    );
-                  }
-                }}
-              >
-                {message.content}
-              </ReactMarkdown>
+              <MathRenderer content={message.content} />
             </div>
           )}
         </div>
@@ -514,47 +475,7 @@ function StreamingMessage({
 
         <div className="bg-muted rounded-lg p-4 mr-12">
           <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
-            <ReactMarkdown
-              components={{
-                code: ({ node, inline, className, children, ...props }) => {
-                  const match = /language-(\w+)/.exec(className || '');
-                  const language = match ? match[1] : '';
-                  
-                  return !inline && language ? (
-                    <div className="relative">
-                      {/* Language label */}
-                      <div className="flex items-center justify-between bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
-                        <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-300 uppercase">
-                          {language}
-                        </span>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
-                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                          title="Copy code"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <SyntaxHighlighter
-                        style={document.documentElement.classList.contains('dark') ? oneDark : oneLight}
-                        language={language}
-                        PreTag="div"
-                        className="!rounded-t-none rounded-b-lg !bg-gray-100 dark:!bg-gray-800 !border !border-gray-300 dark:!border-gray-600 !border-t-0 !mt-0"
-                        {...props}
-                      >
-                        {String(children).replace(/\n$/, '')}
-                      </SyntaxHighlighter>
-                    </div>
-                  ) : (
-                    <code className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-300 dark:border-gray-600" {...props}>
-                      {children}
-                    </code>
-                  );
-                }
-              }}
-            >
-              {streamingMessage}
-            </ReactMarkdown>
+            <MathRenderer content={streamingMessage} />
             {/* Typing cursor */}
             <span className="inline-block w-3 h-5 bg-primary ml-1 animate-pulse" style={{ animationDuration: '1s' }} />
           </div>

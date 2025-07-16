@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { GenerateRequest } from '@/lib/providers/base';
+import { EnhancedGenerateRequest } from '@/lib/router/EnhancedModelRouter';
 import { CleanContextManager } from '@/lib/memory/CleanContextManager';
 import { FirecrawlWebSearch } from '@/lib/search/FirecrawlWebSearch';
 import { enhancedModelRouter } from '@/lib/router/EnhancedModelRouter';
@@ -10,6 +11,9 @@ import { validateAndSanitize, chatRequestSchema, checkRateLimit, rateLimits } fr
 import { createSecureResponse, createErrorResponse, validateOrigin, validateRequestSize, logSecurityEvent } from '@/lib/security/apiSecurity';
 import { sanitizeHtml } from '@/lib/security/inputValidation';
 import { creditCostCalculator } from '@/lib/pricing/CreditCostCalculator';
+
+// Extend timeout for long responses
+export const maxDuration = 300; // 5 minutes
 
 // Rate limiting is now handled by the security middleware
 
@@ -444,14 +448,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create enhanced request
-    const enhancedRequest: GenerateRequest = {
+    // Create enhanced request with proper context
+    const enhancedRequest: EnhancedGenerateRequest = {
       ...generateRequest,
       messages: enhancedMessages.map(msg => ({
         role: msg.role,
         content: msg.content
-      }))
+      })),
+      context: {
+        userId,
+        sessionId: `session-${Date.now()}`,
+        conversationId: `conv-${Date.now()}`,
+        preferences: {
+          preferredProviders: [],
+          maxCostPerRequest: 1000,
+          qualityOverSpeed: true
+        }
+      }
     };
+    
+    // Debug: Log the messages being sent to ensure system prompt is included
+    console.log('🔍 Messages sent to AI:', JSON.stringify(enhancedRequest.messages, null, 2));
 
     console.log('Routing request to model with RAG context:', model);
     
@@ -507,7 +524,7 @@ export async function POST(req: NextRequest) {
                 
                 // Fast delay for smooth typing effect
                 if (i + chunkSize < content.length) {
-                  await new Promise(resolve => setTimeout(resolve, 15)); // Reduced delay
+                  await new Promise(resolve => setTimeout(resolve, 15)); // Optimized delay for smooth streaming
                 }
               } catch (error) {
                 console.log('🛑 Streaming error, stopping:', error instanceof Error ? error.message : 'Unknown error');
@@ -582,7 +599,9 @@ export async function POST(req: NextRequest) {
             }
             
             try {
-              controller.close();
+              if (controller.desiredSize !== null) {
+                controller.close();
+              }
             } catch (error) {
               console.log('🛑 Controller already closed');
             }

@@ -19,10 +19,9 @@ export async function GET() {
     const router = enhancedModelRouter;
     console.log('Enhanced router initialized:', !!router);
     
-    // Initialize model catalog first
+    // Import model catalog (singleton, already initialized)
     const { modelCatalog } = await import('@/lib/catalog/ModelCatalog');
-    await modelCatalog.initialize();
-    console.log('Model catalog initialized');
+    console.log('Model catalog imported');
     
     // Get all available models using enhanced router
     console.log('Getting available models from enhanced router...');

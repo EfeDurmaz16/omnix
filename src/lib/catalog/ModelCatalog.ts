@@ -583,5 +583,10 @@ export class ModelCatalog {
   }
 }
 
-// Singleton instance
+// Singleton instance with auto-initialization
 export const modelCatalog = new ModelCatalog();
+
+// Auto-initialize the catalog when the module is loaded
+modelCatalog.initialize().catch(error => {
+  console.error('❌ Failed to auto-initialize model catalog:', error);
+});

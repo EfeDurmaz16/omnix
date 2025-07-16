@@ -347,15 +347,21 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
           }
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
-            console.log('🛑 Streaming aborted by user');
-            return;
-          }
-          console.error('❌ Streaming error:', error);
-          // If streaming failed but we have partial content, use it
-          if (fullContent.length > 0) {
-            console.log('📝 Using partial content from interrupted stream:', fullContent.length, 'characters');
+            console.log('🛑 Streaming aborted by user or timeout');
+            // Don't return early - preserve any partial content we received
+            if (fullContent.length > 0) {
+              console.log('📝 Preserving partial content from aborted stream:', fullContent.length, 'characters');
+            } else {
+              console.log('🚫 No partial content to preserve');
+            }
           } else {
-            throw error;
+            console.error('❌ Streaming error:', error);
+            // If streaming failed but we have partial content, use it
+            if (fullContent.length > 0) {
+              console.log('📝 Using partial content from interrupted stream:', fullContent.length, 'characters');
+            } else {
+              throw error;
+            }
           }
         }
 

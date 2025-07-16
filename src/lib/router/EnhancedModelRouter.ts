@@ -223,18 +223,27 @@ export class EnhancedModelRouter {
 
     const messages = [...request.messages];
     
+    // Add language enforcement and capability clarification to all models
+    const languageEnforcement = "IMPORTANT: Always respond in English unless the user explicitly requests a different language.";
+    const capabilityEnforcement = "IMPORTANT: You CAN read, analyze, and process files that users upload including PDFs, images, documents, and other file types. When users upload files, you should analyze their content and provide helpful responses about them. Do not say you cannot read files.";
+    const mathEnforcement = "CRITICAL MATH RULES - READ THIS CAREFULLY: When writing mathematical expressions, you MUST use proper LaTeX syntax. NEVER EVER use $1$ as a placeholder. Examples of what to write: For logarithms write $\\log_b(x)$ or $\\ln(x)$. For square roots write $\\sqrt{x}$. For derivatives write $\\frac{d}{dx}(x^2) = 2x$. For integrals write $\\int x^2 dx = \\frac{x^3}{3} + C$. For fractions write $\\frac{1}{x}$. For exponentials write $e^x$. FORBIDDEN: Do not write $1$, do not write empty expressions, do not use placeholders. Write the actual mathematical expression every time.";
+    const fullPrompt = `${identityPrompt}\n\n${languageEnforcement}\n\n${capabilityEnforcement}\n\n${mathEnforcement}`;
+    
+    // Debug: Log the system prompt to verify it's being applied
+    console.log('🔍 System prompt applied:', fullPrompt);
+    
     // Check if there's already a system message
     if (messages.length > 0 && messages[0].role === 'system') {
       // Prepend identity to existing system message
       messages[0] = {
         ...messages[0],
-        content: `${identityPrompt}\n\n${messages[0].content}`
+        content: `${fullPrompt}\n\n${messages[0].content}`
       };
     } else {
       // Add identity as new system message
       messages.unshift({
         role: 'system',
-        content: identityPrompt
+        content: fullPrompt
       });
     }
 

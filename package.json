@@ -18,6 +18,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
     "@anthropic-ai/vertex-sdk": "^0.11.4",
+    "@chroma-core/default-embed": "^0.1.8",
     "@clerk/nextjs": "^6.22.0",
     "@elastic/elasticsearch": "^9.0.3",
     "@google-cloud/aiplatform": "^4.2.0",
@@ -52,6 +53,7 @@
     "dotenv": "^17.0.0",
     "framer-motion": "^12.19.2",
     "google-auth-library": "^10.1.0",
+    "katex": "^0.16.22",
     "lucide-react": "^0.515.0",
     "next": "^15.3.5",
     "next-themes": "^0.4.6",
@@ -61,6 +63,7 @@
     "prisma": "^6.11.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-katex": "^3.1.0",
     "react-markdown": "^10.1.0",
     "react-pdf-js": "^5.1.0",
     "react-syntax-highlighter": "^15.6.1",
@@ -72,6 +75,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@types/katex": "^0.16.7",
     "@types/node": "^20",
     "@types/pdfjs-dist": "^2.10.378",
     "@types/react": "^18.3.23",
