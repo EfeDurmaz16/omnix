@@ -13,6 +13,7 @@ import { RealtimeVoiceChat } from './RealtimeVoiceChat';
 import { AdvancedModelSearch } from '../models/AdvancedModelSearch';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
 import { autoRouter } from '@/lib/routing/AutoRouter';
+import { useModelInfo } from '@/hooks/useModelInfo';
 
 interface Message {
   id: string;
@@ -89,6 +90,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   const [streamingMessage, setStreamingMessage] = useState('');
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [autoRoutingEnabled, setAutoRoutingEnabled] = useState(false);
+  const modelInfo = useModelInfo(selectedModel);
   const [showVoiceChat, setShowVoiceChat] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
@@ -491,6 +493,18 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     }
   };
 
+  const handleEditConversation = (conversationId: string, newTitle: string) => {
+    setConversations(prev => prev.map(conv => 
+      conv.id === conversationId 
+        ? { ...conv, title: newTitle }
+        : conv
+    ));
+    // Update current conversation if it's the one being edited
+    if (currentConversation?.id === conversationId) {
+      setCurrentConversation(prev => prev ? { ...prev, title: newTitle } : null);
+    }
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -516,7 +530,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     const mode = thinkingModes.find(m => m.id === thinkingMode);
     const webSearchText = webSearchEnabled ? " (web search enabled)" : "";
     return messages.length === 0 
-      ? `Message ${selectedModel} in ${mode?.name} mode${webSearchText}...` 
+      ? `Message ${modelInfo.displayName} in ${mode?.name} mode${webSearchText}...` 
       : `Type a message${webSearchText}...`;
   };
 
@@ -549,6 +563,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
                 onSelectConversation={handleConversationSelect}
                 onNewConversation={handleNewConversation}
                 onDeleteConversation={handleDeleteConversation}
+                onEditConversation={handleEditConversation}
                 onClose={() => setSidebarOpen(false)}
               />
             </motion.div>

@@ -53,7 +53,7 @@ Budget-Friendly Options for Scale:
 │   ├── Qwen 3 - Alibaba's latest with hybrid reasoning
 │   ├── Ernie 4.5 - Baidu's foundational model
 │   └── Qwen 2.5-Max - Claims to surpass DeepSeek
-│   └── Hunyuan A13B- Chinese model
+│   └── Hunyuan A13B- Advanced reasoning model
 ├── Open Source Alternatives
 │   ├── FLUX.1 Schnell, Kontext Dev - Apache 2.0 license
 │   ├── Stable Diffusion 3.5 Medium - Community license
@@ -991,8 +991,8 @@ Advanced Provider Integrations:
 │   ├── Low-latency conversational AI
 │   └── Cost-efficient bulk processing
 ├── DeepSeek & Mistral (Cost-efficient models)
-│   ├── European AI compliance (Mistral)
-│   ├── Cost-efficient Chinese models (DeepSeek)
+│   ├── GDPR-compliant models (Mistral)
+│   ├── Ultra-low cost reasoning models (DeepSeek)
 │   ├── Specialized coding and math models
 │   └── Multi-language support
 └── Provider Redundancy

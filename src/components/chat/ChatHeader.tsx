@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ImportExportButton } from '@/components/import-export/ImportExportButton';
 import { Switch } from '@/components/ui/switch';
+import { useModelInfo } from '@/hooks/useModelInfo';
 
 interface ChatHeaderProps {
   selectedModel: string;
@@ -78,17 +79,7 @@ export function ChatHeader({
     { id: 'gemini-pro', name: 'Gemini Pro', icon: Star, tier: 'standard' }
   ];
 
-  const getModelInfo = (modelId: string) => {
-    const modelMap: Record<string, { name: string; provider: string; tier: string; isNew?: boolean }> = {
-      'gpt-4o': { name: 'GPT-4o', provider: 'OpenAI', tier: 'premium' },
-      'claude-3.5-sonnet': { name: 'Claude 3.5 Sonnet', provider: 'Anthropic', tier: 'standard' },
-      'o3': { name: 'o3', provider: 'OpenAI', tier: 'flagship', isNew: true },
-      'gemini-pro': { name: 'Gemini Pro', provider: 'Google', tier: 'standard' }
-    };
-    return modelMap[modelId] || { name: modelId, provider: 'Unknown', tier: 'standard' };
-  };
-
-  const modelInfo = getModelInfo(selectedModel);
+  const modelInfo = useModelInfo(selectedModel);
 
   const getTierColor = (tier: string) => {
     switch (tier) {
@@ -132,7 +123,7 @@ export function ChatHeader({
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${getTierColor(modelInfo.tier)}`} />
-                <span className="font-medium truncate">{modelInfo.name}</span>
+                <span className="font-medium truncate">{modelInfo.displayName}</span>
                 {modelInfo.isNew && (
                   <Badge variant="secondary" className="text-xs py-0 px-1.5">
                     New

@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MarkdownInput } from '@/components/ui/markdown-input';
 import { Badge } from '@/components/ui/badge';
+import { useModelInfo } from '@/hooks/useModelInfo';
 
 interface EnhancedChatInputProps {
   onSend: (message: string, files?: any[]) => void;
@@ -54,6 +55,7 @@ export function EnhancedChatInput({
   const [rows, setRows] = useState(1);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [transcriptionPreview, setTranscriptionPreview] = useState('');
+  const modelInfo = useModelInfo(selectedModel);
   const [isTranscribing, setIsTranscribing] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -508,7 +510,7 @@ export function EnhancedChatInput({
       <div className="flex items-center justify-between text-xs text-muted-foreground cultural-bg rounded-lg p-2">
         <div className="flex items-center gap-4">
           <span className="cultural-text-primary">
-            Model: <span className="font-medium cultural-text-accent">{selectedModel}</span>
+            Model: <span className="font-medium cultural-text-accent">{modelInfo.displayName}</span>
           </span>
 
           {/* Web Search Status Indicator */}

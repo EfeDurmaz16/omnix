@@ -129,8 +129,8 @@ New Integrations:
 - ElevenLabs (voice/audio generation)
 - Higgsfield (advanced video AI)
 - Groq (ultra-fast inference)
-- DeepSeek (cost-efficient Chinese models)
-- Mistral (European AI compliance)
+- DeepSeek (ultra-low cost reasoning models)
+- Mistral (GDPR-compliant AI models)
 - Sora (when API becomes available)
 - Multiple endpoints per provider for redundancy
 

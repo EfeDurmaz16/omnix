@@ -39,6 +39,7 @@ interface ChatSidebarProps {
   onSelectConversation: (conversation: Conversation) => void;
   onNewConversation: () => void;
   onDeleteConversation: (conversationId: string) => void;
+  onEditConversation: (conversationId: string, newTitle: string) => void;
   onClose: () => void;
 }
 
@@ -48,6 +49,7 @@ export function ChatSidebar({
   onSelectConversation,
   onNewConversation,
   onDeleteConversation,
+  onEditConversation,
   onClose
 }: ChatSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -165,6 +167,7 @@ export function ChatSidebar({
                     isActive={currentConversation?.id === conversation.id}
                     onClick={() => onSelectConversation(conversation)}
                     onDelete={() => onDeleteConversation(conversation.id)}
+                    onEdit={(newTitle) => onEditConversation(conversation.id, newTitle)}
                   />
                 ))}
               </div>
@@ -190,10 +193,13 @@ interface ConversationItemProps {
   isActive: boolean;
   onClick: () => void;
   onDelete: () => void;
+  onEdit: (newTitle: string) => void;
 }
 
-function ConversationItem({ conversation, isActive, onClick, onDelete }: ConversationItemProps) {
+function ConversationItem({ conversation, isActive, onClick, onDelete, onEdit }: ConversationItemProps) {
   const [showActions, setShowActions] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(conversation.title);
 
   const getModelDisplay = (model: string) => {
     const modelMap: Record<string, string> = {
@@ -203,6 +209,19 @@ function ConversationItem({ conversation, isActive, onClick, onDelete }: Convers
       'gemini-pro': 'Gemini Pro',
     };
     return modelMap[model] || model;
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editTitle.trim() && editTitle !== conversation.title) {
+      onEdit(editTitle.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleEditCancel = () => {
+    setEditTitle(conversation.title);
+    setIsEditing(false);
   };
 
   return (
@@ -222,12 +241,29 @@ function ConversationItem({ conversation, isActive, onClick, onDelete }: Convers
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h4 className={`
-            text-sm font-medium truncate
-            ${isActive ? 'text-primary' : 'text-foreground'}
-          `}>
-            {conversation.title}
-          </h4>
+          {isEditing ? (
+            <form onSubmit={handleEditSubmit} className="flex items-center gap-2">
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="h-6 text-sm"
+                autoFocus
+                onBlur={handleEditCancel}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    handleEditCancel();
+                  }
+                }}
+              />
+            </form>
+          ) : (
+            <h4 className={`
+              text-sm font-medium truncate
+              ${isActive ? 'text-primary' : 'text-foreground'}
+            `}>
+              {conversation.title}
+            </h4>
+          )}
           
           <div className="flex items-center gap-2 mt-1">
             <span className="text-xs text-muted-foreground">
@@ -254,7 +290,7 @@ function ConversationItem({ conversation, isActive, onClick, onDelete }: Convers
                size="sm"
                onClick={(e) => {
                  e.stopPropagation();
-                 // Handle edit
+                 setIsEditing(true);
                }}
              >
                <Edit className="h-3 w-3" />
@@ -271,18 +307,19 @@ function ConversationItem({ conversation, isActive, onClick, onDelete }: Convers
              </Button>
           </div>
         )}
+        
+        {/* Message count indicator - positioned to avoid overlap with actions */}
+        {conversation.messages.length > 0 && (
+          <div className={`absolute top-2 transition-all duration-200 ${showActions ? 'right-20' : 'right-2'}`}>
+            <div className="bg-muted rounded-full px-1.5 py-0.5">
+              <span className="text-xs text-muted-foreground">
+                {conversation.messages.length}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Message count indicator */}
-      {conversation.messages.length > 0 && (
-        <div className="absolute top-2 right-2">
-          <div className="bg-muted rounded-full px-1.5 py-0.5">
-            <span className="text-xs text-muted-foreground">
-              {conversation.messages.length}
-            </span>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 } 

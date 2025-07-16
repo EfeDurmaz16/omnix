@@ -25,6 +25,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { format } from 'date-fns';
+import { useModelInfo } from '@/hooks/useModelInfo';
 
 interface Message {
   id: string;
@@ -74,16 +75,7 @@ export function MessagesContainer({
     }
   };
 
-  const getModelDisplay = (model?: string) => {
-    if (!model) return 'AI';
-    const modelMap: Record<string, string> = {
-      'gpt-4o': 'GPT-4o',
-      'claude-3.5-sonnet': 'Claude 3.5',
-      'o3': 'o3',
-      'gemini-pro': 'Gemini Pro'
-    };
-    return modelMap[model] || model;
-  };
+  // This function will be replaced by useModelInfo hook in individual components
 
   if (messages.length === 0) {
     return (
@@ -159,6 +151,7 @@ function MessageBubble({
   const isUser = message.role === 'user';
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
+  const modelInfo = useModelInfo(message.model || selectedModel);
 
   const handleSaveEdit = () => {
     if (onEdit && editContent.trim()) {
@@ -196,14 +189,14 @@ function MessageBubble({
         {/* Message Header */}
         <div className={`flex items-center gap-2 mb-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
           <span className="text-sm font-medium">
-            {isUser ? 'You' : `${message.model ? message.model : 'AI'}`}
+            {isUser ? 'You' : modelInfo.displayName}
           </span>
           <span className="text-xs text-muted-foreground">
             {format(message.timestamp, 'HH:mm')}
           </span>
           {!isUser && message.model && (
             <Badge variant="outline" className="text-xs">
-              {message.model}
+              {modelInfo.provider}
             </Badge>
           )}
         </div>
@@ -395,6 +388,8 @@ function MessageBubble({
 }
 
 function ThinkingMessage({ selectedModel }: { selectedModel: string }) {
+  const modelInfo = useModelInfo(selectedModel);
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -409,7 +404,7 @@ function ThinkingMessage({ selectedModel }: { selectedModel: string }) {
       {/* Thinking Content */}
       <div className="flex-1 max-w-3xl">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm font-medium">{selectedModel}</span>
+          <span className="text-sm font-medium">{modelInfo.displayName}</span>
           <Badge variant="outline" className="text-xs">
             <Brain className="w-3 h-3 mr-1" />
             Thinking...
@@ -434,6 +429,8 @@ function ThinkingMessage({ selectedModel }: { selectedModel: string }) {
 }
 
 function LoadingMessage({ selectedModel }: { selectedModel: string }) {
+  const modelInfo = useModelInfo(selectedModel);
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -448,7 +445,7 @@ function LoadingMessage({ selectedModel }: { selectedModel: string }) {
       {/* Loading Content */}
       <div className="flex-1 max-w-3xl">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm font-medium">{selectedModel}</span>
+          <span className="text-sm font-medium">{modelInfo.displayName}</span>
           <Badge variant="outline" className="text-xs">
             <Zap className="w-3 h-3 mr-1" />
             Generating...
@@ -481,6 +478,8 @@ function StreamingMessage({
   streamingMessage: string; 
   onStop?: () => void; 
 }) {
+  const modelInfo = useModelInfo(selectedModel);
+  
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -495,7 +494,7 @@ function StreamingMessage({
       {/* Streaming Content */}
       <div className="flex-1 max-w-3xl">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-sm font-medium">{selectedModel}</span>
+          <span className="text-sm font-medium">{modelInfo.displayName}</span>
           <Badge variant="outline" className="text-xs">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1" />
             Streaming...

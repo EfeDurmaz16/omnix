@@ -398,6 +398,16 @@ export function AdvancedModelSearch({ onModelSelect, currentModel, onClose }: Mo
   }, []);
 
   // Helper functions to determine model properties
+  const getModelDisplayName = (model: any) => {
+    // If the model already has a clean name, use it
+    if (model.name && model.name !== model.id && !model.name.includes('/')) {
+      return model.name;
+    }
+    
+    // Fall back to the utility function
+    return require('@/utils/modelUtils').getModelDisplayNameSync(model.id);
+  };
+
   const getModelDescription = (model: any) => {
     if (model.id.includes('o3')) return 'Advanced reasoning model for complex problem-solving';
     if (model.id.includes('o1')) return 'Reasoning model with step-by-step thinking';
