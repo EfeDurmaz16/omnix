@@ -6,9 +6,11 @@ import { FirecrawlWebSearch } from '@/lib/search/FirecrawlWebSearch';
 import { enhancedModelRouter } from '@/lib/router/EnhancedModelRouter';
 import { modelCatalog } from '@/lib/catalog/ModelCatalog';
 import { analyticsTracker } from '@/lib/analytics/AnalyticsTracker';
+import { validateAndSanitize, chatRequestSchema, checkRateLimit, rateLimits } from '@/lib/security/inputValidation';
+import { createSecureResponse, createErrorResponse, validateOrigin, validateRequestSize, logSecurityEvent } from '@/lib/security/apiSecurity';
+import { sanitizeHtml } from '@/lib/security/inputValidation';
 
-// Rate limiting store (in production, use Redis)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+// Rate limiting is now handled by the security middleware
 
 /**
  * Clean AI response content by removing XML tags and formatting issues
@@ -61,25 +63,36 @@ export async function POST(req: NextRequest) {
   try {
     console.log('Chat API called');
     
+    // Security validations
+    if (!validateOrigin(req)) {
+      return createErrorResponse('Invalid origin', 403);
+    }
+    
+    if (!validateRequestSize(req.headers.get('content-length'))) {
+      return createErrorResponse('Request too large', 413);
+    }
+    
     // Authentication check
     const auth_result = await auth();
     userId = auth_result.userId || undefined;
     console.log('User ID from auth:', userId);
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
-    // Parse request body
+    // Parse and validate request body
     body = await req.json();
     
-    // Type guard to ensure body is properly parsed
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json(
-        { error: 'Invalid request body' },
-        { status: 400 }
-      );
+    // Validate request body with schema
+    const validation = validateAndSanitize(chatRequestSchema, body);
+    if (!validation.success) {
+      logSecurityEvent('INVALID_CHAT_REQUEST', userId, { error: validation.error });
+      return createErrorResponse(validation.error, 400);
     }
+    
+    // Use validated data
+    body = validation.data;
 
     const { messages, sessionId, conversationId, mode, files, stream = false, includeMemory = true, voiceChat = false, language = 'en', enableWebSearch = false, forceWebSearch = false } = body;
     model = body.model;
@@ -94,48 +107,21 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Input validation
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Messages array is required and cannot be empty' },
-        { status: 400 }
-      );
-    }
-
-    if (!model || typeof model !== 'string') {
-      return NextResponse.json(
-        { error: 'Model is required and must be a string' },
-        { status: 400 }
-      );
-    }
-
-    // Validate message content length
+    // Additional validation is handled by schema
     const totalContent = messages.map(m => m.content).join(' ');
-    if (totalContent.length > 10000) {
-      return NextResponse.json(
-        { error: 'Total message content too long. Maximum 10,000 characters.' },
-        { status: 400 }
-      );
-    }
+    
+    // Sanitize message content
+    const sanitizedMessages = messages.map(msg => ({
+      ...msg,
+      content: sanitizeHtml(msg.content)
+    }));
 
     // Rate limiting check
-    const now = Date.now();
-    const userRateLimit = rateLimitStore.get(userId) || { count: 0, resetTime: now + 60000 };
-    
-    if (now > userRateLimit.resetTime) {
-      userRateLimit.count = 0;
-      userRateLimit.resetTime = now + 60000; // Reset every minute
+    const rateLimitResult = checkRateLimit(userId, rateLimits.chat);
+    if (!rateLimitResult.allowed) {
+      logSecurityEvent('RATE_LIMIT_EXCEEDED', userId, { endpoint: 'chat' });
+      return createErrorResponse('Rate limit exceeded. Please try again later.', 429);
     }
-
-    if (userRateLimit.count >= 30) { // 30 requests per minute
-      return NextResponse.json(
-        { error: 'Rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      );
-    }
-
-    userRateLimit.count++;
-    rateLimitStore.set(userId, userRateLimit);
 
     // Initialize model catalog and validate model access
     console.log('Validating model access for:', model);
@@ -146,10 +132,8 @@ export async function POST(req: NextRequest) {
     
     if (!modelInfo) {
       console.log('Access denied for model:', model, '- model not found in catalog');
-      return NextResponse.json(
-        { error: 'Invalid model or model not available' },
-        { status: 403 }
-      );
+      logSecurityEvent('INVALID_MODEL_ACCESS', userId, { model });
+      return createErrorResponse('Invalid model or model not available', 403);
     }
     
     // TODO: Add user plan validation here if needed
@@ -158,14 +142,12 @@ export async function POST(req: NextRequest) {
     // Content filtering (basic)
     const forbiddenWords = ['hack', 'exploit', 'malware', 'virus'];
     if (forbiddenWords.some(word => totalContent.toLowerCase().includes(word))) {
-      return NextResponse.json(
-        { error: 'Message contains inappropriate content' },
-        { status: 400 }
-      );
+      logSecurityEvent('CONTENT_FILTER_TRIGGERED', userId, { content: totalContent.substring(0, 100) });
+      return createErrorResponse('Message contains inappropriate content', 400);
     }
 
     // Process file attachments if any
-    const processedMessages = [...messages];
+    const processedMessages = [...sanitizedMessages];
     const attachedImages: Array<{name: string; type: string; url: string; content?: string; mimeType?: string}> = [];
     
     if (files && files.length > 0) {
@@ -608,6 +590,9 @@ export async function POST(req: NextRequest) {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Transfer-Encoding': 'chunked',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block',
         },
       });
     } else {
@@ -686,7 +671,7 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      return NextResponse.json(response);
+      return createSecureResponse(response);
     }
 
   } catch (error) {
@@ -773,19 +758,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
-      },
-      { status: statusCode }
+    return createErrorResponse(
+      errorMessage,
+      statusCode,
+      process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : 'Unknown error') : undefined
     );
   }
 }
 
 export async function GET() {
   // Health check endpoint
-  return NextResponse.json({ 
+  return createSecureResponse({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
     version: '2.0.0',

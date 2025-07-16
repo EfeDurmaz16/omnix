@@ -1,28 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { markItDownService } from '@/lib/files/MarkItDownService';
+import { auth } from '@clerk/nextjs/server';
+import { validateFileUploadRequest } from '@/lib/security/fileUpload';
+import { createSecureResponse, createErrorResponse, validateOrigin, validateRequestSize, logSecurityEvent } from '@/lib/security/apiSecurity';
+import { checkRateLimit, rateLimits } from '@/lib/security/inputValidation';
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+    // Authentication check
+    const { userId } = await auth();
+    if (!userId) {
+      return createErrorResponse('Unauthorized', 401);
+    }
+    
+    // Security validations
+    if (!validateOrigin(request)) {
+      return createErrorResponse('Invalid origin', 403);
+    }
+    
+    if (!validateRequestSize(request.headers.get('content-length'))) {
+      return createErrorResponse('Request too large', 413);
+    }
+    
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(userId, rateLimits.upload);
+    if (!rateLimitResult.allowed) {
+      logSecurityEvent('RATE_LIMIT_EXCEEDED', userId, { endpoint: 'upload' });
+      return createErrorResponse('Rate limit exceeded. Please try again later.', 429);
+    }
+    
+    // Validate file upload request
+    const uploadValidation = await validateFileUploadRequest(request, userId);
+    if (!uploadValidation.valid) {
+      logSecurityEvent('INVALID_FILE_UPLOAD', userId, { error: uploadValidation.error });
+      return createErrorResponse(uploadValidation.error || 'Invalid file upload', 400);
+    }
+    
+    const files = uploadValidation.files!;
+    const file = files[0]; // Process first file
     
     if (!file) {
-      return NextResponse.json(
-        { success: false, error: 'No file provided' },
-        { status: 400 }
-      );
+      return createErrorResponse('No file provided', 400);
     }
 
     console.log('📎 Processing file upload:', file.name, file.type, file.size);
-
-    // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { success: false, error: 'File size exceeds 10MB limit' },
-        { status: 400 }
-      );
-    }
+    
+    // File validation is already handled by validateFileUploadRequest
 
     let processedContent = '';
     let fileType = 'unknown';
@@ -52,7 +75,7 @@ export async function POST(request: NextRequest) {
           
           const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
           
-          return NextResponse.json({
+          return createSecureResponse({
             success: true,
             data: {
               id: fileId,
@@ -181,17 +204,15 @@ I'm ready to help once you provide the text content!`;
       processedContent = `[Word Document: ${file.name}]\nNote: Word document processing is not yet implemented. Please copy and paste the text content you'd like me to analyze.`;
     } else {
       // Unsupported file type
-      return NextResponse.json(
-        { success: false, error: `Unsupported file type: ${file.type}` },
-        { status: 400 }
-      );
+      logSecurityEvent('UNSUPPORTED_FILE_TYPE', userId, { fileType: file.type, fileName: file.name });
+      return createErrorResponse(`Unsupported file type: ${file.type}`, 400);
     }
 
     const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     console.log('✅ File processed successfully:', fileId, fileType, processingMethod);
 
-    return NextResponse.json({
+    return createSecureResponse({
       success: true,
       data: {
         id: fileId,
@@ -212,9 +233,6 @@ I'm ready to help once you provide the text content!`;
 
   } catch (error) {
     console.error('❌ File upload error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to process file' },
-      { status: 500 }
-    );
+    return createErrorResponse('Failed to process file', 500);
   }
 } 

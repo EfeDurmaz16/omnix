@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     // Authentication check
     const auth_result = await auth();
     const userId = auth_result.userId;
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     // Clear all caches
@@ -70,7 +78,7 @@ export async function POST(req: NextRequest) {
       console.warn('Failed to clear user service cache:', error);
     }
 
-    return NextResponse.json({
+    return createSecureResponse({
       success: true,
       message: 'Caches cleared successfully',
       cleared: cacheResults,
@@ -79,25 +87,38 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Cache clearing error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to clear caches',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to clear caches',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    message: 'Cache clearing endpoint - use POST to clear caches',
-    available_caches: [
-      'memorySearchCache',
-      'embeddingCache', 
-      'userProfileCache',
-      'vectorStore',
-      'userService'
-    ]
-  });
+export async function GET(req: NextRequest) {
+  try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
+    return createSecureResponse({
+      message: 'Cache clearing endpoint - use POST to clear caches',
+      available_caches: [
+        'memorySearchCache',
+        'embeddingCache', 
+        'userProfileCache',
+        'vectorStore',
+        'userService'
+      ]
+    });
+  } catch (error) {
+    console.error('Error in clear-cache GET:', error);
+    return createErrorResponse(
+      'Failed to get clear-cache info',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+  }
 }

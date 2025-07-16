@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { firestore } from '@/lib/gcp-storage';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // POST /api/debug/cleanup-vectors - Clean up user-vectors collection
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     const { action } = await req.json();
@@ -118,7 +126,7 @@ export async function POST(req: NextRequest) {
         break;
 
       default:
-        return NextResponse.json({
+        return createSecureResponse({
           message: 'User-Vectors Cleanup Tool',
           actions: [
             'delete_all_user_vectors - Delete all documents in user-vectors collection',
@@ -128,25 +136,38 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    return NextResponse.json(result);
+    return createSecureResponse(result);
 
   } catch (error) {
     console.error('Error in cleanup-vectors:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to cleanup vectors',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to cleanup vectors',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }
 
 // GET instructions
-export async function GET() {
-  return NextResponse.json({
-    message: 'User-Vectors Cleanup API',
-    usage: 'POST with {"action": "analyze_structure"} to analyze current data',
-    warning: 'delete_all_user_vectors will permanently delete all memory data!'
-  });
+export async function GET(req: NextRequest) {
+  try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
+    return createSecureResponse({
+      message: 'User-Vectors Cleanup API',
+      usage: 'POST with {"action": "analyze_structure"} to analyze current data',
+      warning: 'delete_all_user_vectors will permanently delete all memory data!'
+    });
+  } catch (error) {
+    console.error('Error in cleanup-vectors GET:', error);
+    return createErrorResponse(
+      'Failed to get cleanup-vectors info',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+  }
 }

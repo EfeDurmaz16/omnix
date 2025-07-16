@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { AdvancedContextManager } from '@/lib/context/AdvancedContextManager';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // GET /api/debug/memory-flow - Debug the complete memory injection flow
 export async function GET(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     console.log(`🔍 Debug memory flow for user ${userId}`);
@@ -97,16 +105,14 @@ export async function GET(req: NextRequest) {
       console.error('❌ Step error:', stepError);
     }
 
-    return NextResponse.json(results);
+    return createSecureResponse(results);
 
   } catch (error) {
     console.error('Error in memory flow debug:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to debug memory flow',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to debug memory flow',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 export async function GET(request: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(request);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     // Check all possible sources of plan information
@@ -44,20 +52,17 @@ export async function GET(request: NextRequest) {
 
     console.log('🔍 PLAN DEBUG INFO:', JSON.stringify(debugInfo, null, 2));
 
-    return NextResponse.json({
+    return createSecureResponse({
       success: true,
       data: debugInfo
     });
 
   } catch (error) {
     console.error('❌ Debug plan status error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to debug plan status',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to debug plan status',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

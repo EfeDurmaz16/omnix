@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // GET /api/debug/memory-status - Check current memory storage status
 export async function GET(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     console.log(`🔍 Checking memory status for user ${userId}`);
@@ -96,16 +104,14 @@ export async function GET(req: NextRequest) {
 
     console.log(`📊 Memory status results:`, results);
 
-    return NextResponse.json(results);
+    return createSecureResponse(results);
 
   } catch (error) {
     console.error('Error checking memory status:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to check memory status',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to check memory status',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

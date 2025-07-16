@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Firestore } from '@google-cloud/firestore';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // POST /api/debug/test-firestore - Test basic Firestore connectivity
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     console.log(`🧪 Testing Firestore connectivity for user ${userId}`);
@@ -83,16 +91,14 @@ export async function POST(req: NextRequest) {
       console.error('❌ Firestore error:', firestoreError);
     }
 
-    return NextResponse.json(results);
+    return createSecureResponse(results);
 
   } catch (error) {
     console.error('Error in Firestore test:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to test Firestore',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to test Firestore',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

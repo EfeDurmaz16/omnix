@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 export async function GET(request: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(request);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     // Get current user from database
@@ -25,7 +33,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({
+    return createSecureResponse({
       success: true,
       data: {
         currentUser: user,
@@ -36,13 +44,10 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Database state check error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Failed to check database state',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to check database state',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

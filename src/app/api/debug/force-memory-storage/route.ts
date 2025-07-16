@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // POST /api/debug/force-memory-storage - Force store test memories
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     console.log(`🔧 Force storing test memories for user ${userId}`);
@@ -66,16 +74,14 @@ export async function POST(req: NextRequest) {
       results.errors.push(`Storage error: ${storageError}`);
     }
 
-    return NextResponse.json(results);
+    return createSecureResponse(results);
 
   } catch (error) {
     console.error('Error in force-memory-storage:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to force memory storage',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to force memory storage',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

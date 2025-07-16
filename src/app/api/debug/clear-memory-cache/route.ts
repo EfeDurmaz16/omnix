@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // POST /api/debug/clear-memory-cache - Clear all memory caches for debugging
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     console.log(`🧹 FORCE CLEARING all memory caches for user ${userId}`);
@@ -33,7 +41,7 @@ export async function POST(req: NextRequest) {
 
       console.log(`✅ Successfully cleared memory caches for user ${userId}`);
       
-      return NextResponse.json({ 
+      return createSecureResponse({ 
         success: true, 
         message: 'Memory caches cleared',
         userId: userId,
@@ -43,21 +51,19 @@ export async function POST(req: NextRequest) {
       
     } catch (cacheError) {
       console.error('Error clearing caches:', cacheError);
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to clear some caches',
-        details: cacheError instanceof Error ? cacheError.message : 'Unknown error'
-      });
+      return createErrorResponse(
+        'Failed to clear some caches',
+        500,
+        cacheError instanceof Error ? cacheError.message : 'Unknown error'
+      );
     }
 
   } catch (error) {
     console.error('Error in clear-memory-cache:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to clear memory cache',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to clear memory cache',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

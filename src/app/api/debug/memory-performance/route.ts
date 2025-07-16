@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { contextManager } from '@/lib/context/AdvancedContextManager';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 /**
  * Memory Performance Monitoring Endpoint
@@ -10,13 +12,16 @@ import { contextManager } from '@/lib/context/AdvancedContextManager';
  */
 export async function GET(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     // Check authentication (optional - you might want to restrict this)
     const auth_result = await auth();
     if (!auth_result?.userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return createErrorResponse('Unauthorized', 401);
     }
 
     // Get comprehensive system metrics
@@ -42,13 +47,14 @@ export async function GET(req: NextRequest) {
       recommendations: generateRecommendations(systemMetrics)
     };
 
-    return NextResponse.json(response);
+    return createSecureResponse(response);
     
   } catch (error) {
     console.error('Memory performance monitoring failed:', error);
-    return NextResponse.json(
-      { error: 'Failed to get memory performance metrics' },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to get memory performance metrics',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }

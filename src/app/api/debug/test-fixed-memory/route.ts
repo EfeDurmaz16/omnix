@@ -2,14 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { CleanMemoryStore } from '@/lib/memory/CleanMemoryStore';
 import { CleanContextManager } from '@/lib/memory/CleanContextManager';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 // POST /api/debug/test-fixed-memory - Test the fixed memory system
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     const { userId } = await auth();
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     const { action } = await req.json();
@@ -144,7 +152,7 @@ export async function POST(req: NextRequest) {
         break;
 
       default:
-        return NextResponse.json({
+        return createSecureResponse({
           message: 'Fixed Memory System Test',
           actions: [
             'test_storage - Test storing conversation in existing user-vectors collection',
@@ -155,25 +163,38 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    return NextResponse.json(result);
+    return createSecureResponse(result);
 
   } catch (error) {
     console.error('Error in fixed memory test:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to test fixed memory system',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Failed to test fixed memory system',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }
 
 // GET instructions
-export async function GET() {
-  return NextResponse.json({
-    message: 'Fixed Memory System Test API',
-    usage: 'POST with {"action": "test_storage"} or {"action": "test_retrieval"}',
-    note: 'Tests the fixed CleanMemoryStore with existing user-vectors collection'
-  });
+export async function GET(req: NextRequest) {
+  try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
+    return createSecureResponse({
+      message: 'Fixed Memory System Test API',
+      usage: 'POST with {"action": "test_storage"} or {"action": "test_retrieval"}',
+      note: 'Tests the fixed CleanMemoryStore with existing user-vectors collection'
+    });
+  } catch (error) {
+    console.error('Error in test-fixed-memory GET:', error);
+    return createErrorResponse(
+      'Failed to get test-fixed-memory info',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+  }
 }

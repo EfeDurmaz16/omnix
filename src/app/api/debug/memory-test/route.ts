@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { contextManager } from '@/lib/context/AdvancedContextManager';
+import { debugAuth } from '@/lib/security/debugAuth';
+import { createSecureResponse, createErrorResponse } from '@/lib/security/apiSecurity';
 
 export async function GET(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     // Authentication check
     const auth_result = await auth();
     const userId = auth_result.userId;
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     console.log('🧪 Running memory system test for user:', userId);
@@ -42,7 +50,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    return createSecureResponse({
       success: true,
       userId,
       stats,
@@ -52,38 +60,41 @@ export async function GET(req: NextRequest) {
 
   } catch (error) {
     console.error('Memory test failed:', error);
-    return NextResponse.json(
-      { 
-        error: 'Memory test failed', 
-        details: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Memory test failed',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // Debug endpoint authentication
+    const authResult = await debugAuth(req);
+    if (authResult) {
+      return authResult;
+    }
+    
     // Authentication check
     const auth_result = await auth();
     const userId = auth_result.userId;
     
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse('Unauthorized', 401);
     }
 
     const { action, data } = await req.json();
 
     if (action === 'sync-profile') {
       await (contextManager as any).vectorStore.syncUserProfile(userId, true);
-      return NextResponse.json({ success: true, message: 'Profile synced' });
+      return createSecureResponse({ success: true, message: 'Profile synced' });
     }
 
     if (action === 'test-extraction') {
       const { message } = data;
       if (!message) {
-        return NextResponse.json({ error: 'Message required' }, { status: 400 });
+        return createErrorResponse('Message required', 400);
       }
 
       // Create a temporary context to test extraction
@@ -94,23 +105,21 @@ export async function POST(req: NextRequest) {
         model: 'gpt-4o'
       });
 
-      return NextResponse.json({ 
+      return createSecureResponse({ 
         success: true, 
         message: 'Extraction test completed',
         contextId: context.id 
       });
     }
 
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    return createErrorResponse('Unknown action', 400);
 
   } catch (error) {
     console.error('Memory test POST failed:', error);
-    return NextResponse.json(
-      { 
-        error: 'Memory test failed', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
-      },
-      { status: 500 }
+    return createErrorResponse(
+      'Memory test failed',
+      500,
+      error instanceof Error ? error.message : 'Unknown error'
     );
   }
 } 
