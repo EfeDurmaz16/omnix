@@ -41,63 +41,66 @@ export function PricingSection() {
       popular: false
     },
     {
-      name: 'Starter',
-      icon: MessageSquare,
-      price: isAnnual ? 240 : 25,
-      originalPrice: isAnnual ? 300 : 25,
-      period: isAnnual ? '/year' : '/month',
-      description: 'Perfect for individual developers and small projects',
-      credits: '1,000 credits/month',
-      gradient: 'from-slate-600 to-slate-700',
-      glow: 'glow-slate',
-      features: [
-        'Access to GPT-3.5, Claude Haiku',
-        'Basic image generation',
-        'Standard support',
-        'API access',
-        'Usage analytics'
-      ],
-      cta: 'Start Building',
-      popular: false
-    },
-    {
-      name: 'Professional',
+      name: 'Pro',
       icon: Zap,
-      price: isAnnual ? 948 : 99,
-      originalPrice: isAnnual ? 1188 : 99,
+      price: isAnnual ? 191.99 : 19.99,
+      originalPrice: isAnnual ? 239.88 : 19.99,
       period: isAnnual ? '/year' : '/month',
-      description: 'Ideal for growing businesses and power users',
-      credits: '5,000 credits/month',
+      description: 'For professionals and creators',
+      credits: 'Unlimited text chat',
       gradient: 'from-slate-500 to-slate-600',
       glow: 'glow-accent',
       features: [
-        'Access to all text models (GPT-4, Claude Opus)',
-        'Advanced image generation',
-        'Video generation (beta)',
+        'All premium models (GPT-4, Claude, Gemini)',
+        '50 image generations/month',
+        'Voice input/output',
         'Priority support',
-        'Custom rate limits',
+        'API access',
         'Advanced analytics'
       ],
-      cta: 'Go Professional',
+      cta: 'Go Pro',
       popular: true
     },
     {
-      name: 'Enterprise',
+      name: 'Ultra',
+      icon: Users,
+      price: isAnnual ? 479.99 : 49.99,
+      originalPrice: isAnnual ? 599.88 : 49.99,
+      period: isAnnual ? '/year' : '/month',
+      description: 'For power users and advanced workflows',
+      credits: 'Everything in Pro + Advanced Features',
+      gradient: 'from-slate-400 to-slate-500',
+      glow: 'glow-accent',
+      features: [
+        'Advanced AI models access',
+        'Video generation (Veo, Seedance)',
+        'Priority processing',
+        'Advanced analytics',
+        'API priority access',
+        'Enhanced support'
+      ],
+      cta: 'Go Ultra',
+      popular: false
+    },
+    {
+      name: 'Team',
       icon: Building2,
       price: 'Custom',
       originalPrice: 'Custom',
-      period: '',
-      description: 'For large organizations with custom requirements',
-      credits: 'Unlimited usage',
+      period: '/person',
+      description: 'For teams and organizations',
+      credits: 'Custom per team size',
       gradient: 'from-slate-700 to-slate-800',
       glow: 'glow-slate',
       features: [
-        'Access to all models + early access',
-        'Custom model fine-tuning',
-        'Dedicated infrastructure',
-        '24/7 dedicated support',
-        'Custom SLA',
-        'On-premise deployment'
+        'Everything in Ultra',
+        'Team collaboration features',
+        'Shared workspaces',
+        'Admin controls & user management',
+        'Usage insights & analytics',
+        'Custom pricing per team member',
+        'Dedicated account manager',
+        'Priority support with SLA'
       ],
       cta: 'Contact Sales',
       popular: false
@@ -210,9 +213,14 @@ export function PricingSection() {
                     ) : (
                       <div className="text-3xl font-bold text-white">{plan.price}</div>
                     )}
-                    {isAnnual && typeof plan.price === 'number' && (
+                    {isAnnual && typeof plan.price === 'number' && plan.price > 0 && (
                       <div className="text-xs text-slate-400 mt-1">
-                        ${(plan.price/12).toFixed(0)}/month billed annually
+                        ${(plan.price/12).toFixed(2)}/month billed annually
+                      </div>
+                    )}
+                    {isAnnual && typeof plan.price === 'number' && plan.originalPrice !== plan.price && (
+                      <div className="text-xs text-green-400 mt-1">
+                        Save ${(plan.originalPrice - plan.price).toFixed(2)}/year
                       </div>
                     )}
                   </div>
@@ -234,7 +242,7 @@ export function PricingSection() {
                     asChild 
                     className={`w-full glass-button bg-gradient-to-br ${plan.gradient} hover:from-slate-500 hover:to-slate-600 text-white ${plan.glow} border-0`}
                   >
-                    <Link href={plan.name === 'Enterprise' ? '/contact' : '/signup'}>
+                    <Link href={plan.name === 'Team' ? '/contact' : plan.name === 'Free' ? '/signup' : '/billing'}>
                       {plan.cta}
                     </Link>
                   </Button>

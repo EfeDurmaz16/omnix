@@ -1,105 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { currentUser } from '@clerk/nextjs/server';
 
-// This endpoint simulates a Stripe webhook for testing in development
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = await currentUser();
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const { priceId, sessionMode = 'subscription' } = await request.json();
+    const { creditAmount, testType = 'credit-purchase' } = await request.json();
 
-    console.log('🧪 TEST WEBHOOK - Simulating Stripe webhook:', { userId, priceId, sessionMode });
+    console.log('🧪 Testing webhook simulation for user:', user.id);
 
-    // Map price IDs to plans (same as in webhook)
-    const priceToPlanMap: Record<string, string> = {
-      // Monthly plans
-      'price_1Rf0s3GfQ4XRggGYLyPcWhKs': 'PRO',
-      'price_1Rf0s4GfQ4XRggGYSB9ExPB6': 'PRO', 
-      'price_1Rf0s5GfQ4XRggGYAmoZRtmz': 'ULTRA',
-      'price_1Rf0s5GfQ4XRggGYNWPGsCZ7': 'ENTERPRISE',
-      // Annual plans
-      'price_1Rf0s4GfQ4XRggGYQGzx0EUS': 'PRO',
-      'price_1Rf0s4GfQ4XRggGYyjhDkBNw': 'PRO',
-      'price_1Rf0s5GfQ4XRggGY5Q7ueU19': 'ULTRA',
-      'price_1Rf0s6GfQ4XRggGYm1of3Nci': 'ENTERPRISE',
-    };
-
-    const planName = priceToPlanMap[priceId] || 'FREE';
-
-    if (sessionMode === 'subscription') {
-      console.log('🧪 TEST WEBHOOK - Simulating subscription for plan:', planName);
-
-      // Simulate calling the plan update API
-      const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/user/plan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-clerk-user-id': userId, // Custom header for webhook auth
+    if (testType === 'credit-purchase') {
+      // Simulate credit purchase webhook
+      const { EnhancedCreditManager } = await import('@/lib/credits/EnhancedCreditManager');
+      const creditManager = EnhancedCreditManager.getInstance();
+      
+      const result = await creditManager.addCredits(
+        creditAmount || 100,
+        `Test credit purchase - ${creditAmount || 100} credits (webhook simulation)`,
+        {
+          testSessionId: `test_session_${Date.now()}`,
+          testPurchase: true,
+          timestamp: new Date().toISOString()
         },
-        body: JSON.stringify({
-          plan: planName,
-          stripeCustomerId: 'test_customer_' + Date.now(),
-          stripeSubscriptionId: 'test_sub_' + Date.now(),
-          subscriptionStatus: 'active',
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        })
-      });
-
-      const result = await response.json();
-
+        user.id
+      );
+      
       if (result.success) {
-        console.log('✅ TEST WEBHOOK - Plan updated successfully');
+        console.log('✅ Test credits added successfully:', {
+          userId: user.id,
+          amount: creditAmount || 100,
+          newBalance: result.newBalance
+        });
         
-        // Also update credits
-        const { prisma } = await import('@/lib/db');
-        let credits = 1500; // Default FREE credits
-        switch (planName) {
-          case 'PRO':
-            credits = 3000;
-            break;
-          case 'ULTRA':
-            credits = 5000;
-            break;
-          case 'ENTERPRISE':
-            credits = 10000;
-            break;
-        }
-        
-        try {
-          await prisma.user.update({
-            where: { clerkId: userId },
-            data: { credits: credits }
-          });
-          console.log('✅ TEST WEBHOOK - Credits updated');
-        } catch (error) {
-          console.error('❌ TEST WEBHOOK - Failed to update credits:', error);
-        }
-
         return NextResponse.json({
           success: true,
-          message: `Test webhook successful - plan updated to ${planName}`,
-          data: { plan: planName, credits }
+          message: 'Test credits added successfully',
+          data: {
+            amount: creditAmount || 100,
+            newBalance: result.newBalance,
+            transaction: result.transaction
+          }
         });
       } else {
-        throw new Error(result.error || 'Plan update failed');
+        console.error('❌ Test credit addition failed:', result.error);
+        
+        return NextResponse.json({
+          success: false,
+          error: result.error,
+          message: 'Failed to add test credits'
+        }, { status: 500 });
       }
-    } else {
-      return NextResponse.json({
-        success: true,
-        message: 'Test webhook for credits - not implemented'
-      });
     }
 
-  } catch (error) {
-    console.error('❌ TEST WEBHOOK - Error:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Invalid test type'
+    }, { status: 400 });
+
+  } catch (error: unknown) {
+    console.error('❌ Test webhook error:', error);
     return NextResponse.json(
       { 
-        success: false, 
-        error: 'Test webhook failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        success: false,
+        error: 'Test webhook failed', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
       },
       { status: 500 }
     );

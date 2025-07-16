@@ -357,7 +357,38 @@ export class EnhancedModelRouter {
     });
 
     if (viableRecommendations.length === 0) {
-      throw new Error('No viable models available for request');
+      // Provide more detailed error information
+      const providerHealth = await modelCatalog.getProviderHealth();
+      const totalProviders = Object.keys(providerHealth).length;
+      const totalRecommendations = recommendations.length;
+      const healthyCount = recommendations.filter(rec => this.isProviderHealthy(rec.model.provider)).length;
+      const preferredCount = recommendations.filter(rec => 
+        !request.context?.preferences?.preferredProviders ||
+        request.context.preferences.preferredProviders.includes(rec.model.provider)
+      ).length;
+      const affordableCount = recommendations.filter(rec =>
+        !request.context?.preferences?.maxCostPerRequest ||
+        rec.model.inputCostPer1kTokens <= request.context.preferences.maxCostPerRequest
+      ).length;
+
+      const errorDetails = [
+        `Total providers configured: ${totalProviders}`,
+        `Total model recommendations: ${totalRecommendations}`,
+        `Healthy providers: ${healthyCount}`,
+        `Preferred providers: ${preferredCount}`,
+        `Affordable models: ${affordableCount}`
+      ].join(', ');
+
+             if (totalProviders === 0) {
+         const suggestedKeys = [
+           'OPENAI_API_KEY=your-openai-key',
+           'OPENROUTER_API_KEY=your-openrouter-key (provides access to 400+ models)',
+           'ANTHROPIC_API_KEY=your-anthropic-key'
+         ];
+         throw new Error(`No AI model providers are configured. Please add at least one API key to your .env.local file:\n\n${suggestedKeys.join('\n')}\n\nThen restart your development server.`);
+       }
+
+      throw new Error(`No viable models available for request. Debug info: ${errorDetails}`);
     }
 
     // Apply fallback strategy

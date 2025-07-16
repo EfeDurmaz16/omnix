@@ -28,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Crown, Zap, Users, Building2, CreditCard, DollarSign } from 'lucide-react';
 import { BILLING_PLANS } from '@/lib/stripe';
 
-// Enhanced plan structure with UI components
+// Enhanced plan structure with UI components - Updated to match Stripe configuration
 const ENHANCED_BILLING_PLANS = [
   {
     id: 'free',
@@ -72,37 +72,40 @@ const ENHANCED_BILLING_PLANS = [
     name: 'Ultra',
     price: 49.99,
     period: '/month',
-    description: 'For teams and collaborations',
+    description: 'For power users and advanced workflows',
     icon: Users,
     iconColor: 'text-purple-500',
     culturalStyle: 'bg-purple-100',
     features: [
       'Everything in Pro',
-      'Team collaboration features',
-      'Shared agent library',
-      'Admin controls',
-      'Usage insights',
-      'Priority support with SLA'
+      'Advanced AI models access',
+      'Video generation (Veo, Seedance)',
+      'Priority processing',
+      'Advanced analytics',
+      'API priority access',
+      'Enhanced support'
     ],
     videoModels: ['Google Veo 2.0', 'Google Veo 3.0', 'All Seedance models'],
     textModels: ['GPT-4', 'Claude Sonnet', 'Gemini Pro', 'Claude Opus']
   },
   {
-    id: 'enterprise',
-    name: 'Enterprise',
+    id: 'team',
+    name: 'Team',
     price: 'Custom',
-    period: '',
-    description: 'For large organizations',
+    period: '/person',
+    description: 'For teams and organizations',
     icon: Building2,
     iconColor: 'text-green-500',
     culturalStyle: 'bg-green-100',
     features: [
       'Everything in Ultra',
-      'Custom model deployments',
-      'On-premise options',
-      'Advanced security',
-      'Dedicated support',
-      'Custom integrations'
+      'Team collaboration features',
+      'Shared workspaces',
+      'Admin controls & user management',
+      'Usage insights & analytics',
+      'Custom pricing per team member',
+      'Dedicated account manager',
+      'Priority support with SLA'
     ],
     videoModels: ['All video models', 'Custom model access'],
     textModels: ['All text models', 'Custom deployments']
@@ -157,7 +160,7 @@ export default function BillingClient() {
 
   // Sync currentPlan with user's actual plan
   useEffect(() => {
-    if (user && user.plan) {
+    if (user && user.plan && typeof user.plan === 'string') {
       console.log('🔄 Syncing current plan with user plan:', user.plan);
       setCurrentPlan(user.plan.toLowerCase());
     }
@@ -179,10 +182,10 @@ export default function BillingClient() {
         const planToPriceMap: { [key: string]: string } = {
           'pro': 'price_1Rf0s4GfQ4XRggGYSB9ExPB6',
           'ultra': 'price_1Rf0s5GfQ4XRggGYAmoZRtmz',
-          'enterprise': 'price_1Rf0s5GfQ4XRggGYNWPGsCZ7'
+          'team': '', // Team plan requires custom pricing
         };
         
-        const priceId = planToPriceMap[lastPurchasePlan.toLowerCase()];
+        const priceId = planToPriceMap[lastPurchasePlan?.toLowerCase() || ''];
         
         if (priceId) {
           try {
@@ -203,7 +206,7 @@ export default function BillingClient() {
             console.log('🧪 Test webhook response:', testResult);
             
             if (testResponse.ok && testResult.success) {
-              console.log('✅ Test webhook succeeded! Plan updated to:', testResult.data.plan);
+              console.log('✅ Test webhook succeeded! Plan updated to:', testResult.data?.plan);
               localStorage.removeItem('lastPurchasePlan');
               
               // Refresh the user context
@@ -212,9 +215,11 @@ export default function BillingClient() {
               }
               
               // Update local state
-              setCurrentPlan(testResult.data.plan.toLowerCase());
+              if (testResult.data?.plan && typeof testResult.data.plan === 'string') {
+                setCurrentPlan(testResult.data.plan.toLowerCase());
+              }
               
-              alert(`🎉 Payment successful! Your plan has been upgraded to ${testResult.data.plan}.`);
+                              alert(`🎉 Payment successful! Your plan has been upgraded to ${testResult.data?.plan || 'your new plan'}.`);
               
               // Force page reload to ensure everything is updated
               setTimeout(() => {
@@ -256,7 +261,9 @@ export default function BillingClient() {
           
           if (response.ok) {
             const data = await response.json();
-            if (data.success && data.data.plan) {
+            console.log(`📋 Attempt ${attempts} - API response:`, data);
+            
+            if (data.success && data.data && data.data.plan && typeof data.data.plan === 'string') {
               const newPlan = data.data.plan.toLowerCase();
               console.log(`📋 Attempt ${attempts} - Plan from API:`, newPlan);
               
@@ -273,6 +280,13 @@ export default function BillingClient() {
                 }, 1000);
                 return;
               }
+            } else {
+              console.log(`📋 Attempt ${attempts} - Plan not found or invalid in API response:`, {
+                success: data.success,
+                hasData: !!data.data,
+                plan: data.data?.plan,
+                planType: typeof data.data?.plan
+              });
             }
           }
           
@@ -305,10 +319,10 @@ export default function BillingClient() {
           const planToPriceMap: { [key: string]: string } = {
             'pro': 'price_1Rf0s4GfQ4XRggGYSB9ExPB6',
             'ultra': 'price_1Rf0s5GfQ4XRggGYAmoZRtmz',
-            'enterprise': 'price_1Rf0s5GfQ4XRggGYNWPGsCZ7'
+            'team': '', // Team plan requires custom pricing
           };
           
-          const priceId = planToPriceMap[lastPurchasePlan.toLowerCase()];
+          const priceId = planToPriceMap[lastPurchasePlan?.toLowerCase() || ''];
           
           if (priceId) {
             const testResponse = await fetch('/api/test/webhook', {
@@ -333,7 +347,7 @@ export default function BillingClient() {
                   await refreshUserPlan();
                 }
                 
-                alert(`🎉 Payment successful! Your plan has been upgraded to ${lastPurchasePlan.toUpperCase()}.`);
+                alert(`🎉 Payment successful! Your plan has been upgraded to ${lastPurchasePlan?.toUpperCase() || 'your new plan'}.`);
                 
                 setTimeout(() => {
                   window.location.reload();
@@ -445,9 +459,9 @@ export default function BillingClient() {
   const plans = ENHANCED_BILLING_PLANS;
 
   const handleUpgrade = async (planId: string) => {
-    if (planId === 'enterprise') {
-      // For enterprise, just show contact info
-      alert('Contact us at enterprise@aspendos.ai for custom pricing and setup.');
+    if (planId === 'team') {
+      // For team plan, just show contact info
+      alert('Contact us at sales@aspendos.ai for custom team pricing based on your team size.');
       return;
     }
 
@@ -458,7 +472,8 @@ export default function BillingClient() {
       const priceIdMap: { [key: string]: string } = {
         'free': '', // Free plan doesn't need a price ID
         'pro': STRIPE_PRICE_IDS.pro_monthly,
-        'ultra': STRIPE_PRICE_IDS.team_monthly, // Ultra maps to team
+        'ultra': STRIPE_PRICE_IDS.team_monthly, // Ultra uses team price ID
+        'team': '', // Team plan requires custom pricing - contact sales
       };
       
       const priceId = priceIdMap[planId];
@@ -676,7 +691,7 @@ export default function BillingClient() {
                 >
                   {loading === plan.id ? 'Processing...' :
                    currentPlan === plan.id ? 'Current Plan' : 
-                   plan.id === 'enterprise' ? 'Contact Sales' : 
+                   plan.id === 'team' ? 'Contact Sales' : 
                    `Upgrade to ${plan.name}`}
                 </Button>
               </div>
@@ -748,10 +763,10 @@ export default function BillingClient() {
             <p className="text-muted-foreground">• Advanced video generation</p>
           </div>
           <div>
-            <h4 className="font-medium cultural-text-primary">Enterprise</h4>
+            <h4 className="font-medium cultural-text-primary">Team Plan</h4>
             <p className="text-muted-foreground">• All video models</p>
             <p className="text-muted-foreground">• Custom model access</p>
-            <p className="text-muted-foreground">• Dedicated infrastructure</p>
+            <p className="text-muted-foreground">• Team collaboration features</p>
           </div>
         </div>
         

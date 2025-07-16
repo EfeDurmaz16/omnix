@@ -567,6 +567,14 @@ export class ModelCatalog {
     return this.providers.get(providerId);
   }
 
+  getProviderCount(): number {
+    return this.providers.size;
+  }
+
+  getConfiguredProviders(): string[] {
+    return Array.from(this.providers.keys());
+  }
+
   async refreshModels(): Promise<void> {
     console.log('🔄 Refreshing model catalog...');
     await this.loadAllModels();

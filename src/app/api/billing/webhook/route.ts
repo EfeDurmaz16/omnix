@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
+  apiVersion: '2025-06-30.basil',
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -151,18 +151,16 @@ async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscrip
       
       console.log('🔍 Processing price ID:', priceId);
       
-      // Map real Stripe price IDs to plan names (updated for ULTRA plan)
+      // Map real Stripe price IDs to plan names (updated to match new structure)
       const priceToPlanMap: Record<string, string> = {
         // Monthly plans
-        'price_1Rf0s3GfQ4XRggGYLyPcWhKs': 'PRO',
         'price_1Rf0s4GfQ4XRggGYSB9ExPB6': 'PRO', 
         'price_1Rf0s5GfQ4XRggGYAmoZRtmz': 'ULTRA',
-        'price_1Rf0s5GfQ4XRggGYNWPGsCZ7': 'ENTERPRISE',
+        'price_1Rf0s5GfQ4XRggGYNWPGsCZ7': 'TEAM', // Enterprise price ID now maps to TEAM
         // Annual plans
-        'price_1Rf0s4GfQ4XRggGYQGzx0EUS': 'PRO',
         'price_1Rf0s4GfQ4XRggGYyjhDkBNw': 'PRO',
         'price_1Rf0s5GfQ4XRggGY5Q7ueU19': 'ULTRA',
-        'price_1Rf0s6GfQ4XRggGYm1of3Nci': 'ENTERPRISE',
+        'price_1Rf0s6GfQ4XRggGYm1of3Nci': 'TEAM',
       };
       
       planName = priceToPlanMap[priceId] || 'FREE';
@@ -223,7 +221,7 @@ async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscrip
       const { userPlans } = await import('@/app/api/user/plan/route');
       
       userPlans.set(clerkUserId, {
-        plan: planName as 'FREE' | 'PRO' | 'ULTRA' | 'ENTERPRISE',
+        plan: planName as 'FREE' | 'PRO' | 'ULTRA' | 'TEAM',
         ...subscriptionData,
         updatedAt: new Date()
       });
@@ -242,16 +240,16 @@ async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscrip
 async function updateUserCredits(clerkUserId: string, planName: string) {
   try {
     // Set appropriate credits based on plan
-    let credits = 1500; // Default FREE credits
+    let credits = 100; // Default FREE credits
     switch (planName) {
       case 'PRO':
-        credits = 3000;
+        credits = 2000;
         break;
       case 'ULTRA':
         credits = 5000;
         break;
-      case 'ENTERPRISE':
-        credits = 10000;
+      case 'TEAM':
+        credits = 10000; // Team plan gets highest credits
         break;
     }
     
@@ -301,13 +299,13 @@ async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkou
     
     let creditAmount = 0;
     
-    // Map real Stripe price IDs to credit amounts
+    // Map real Stripe price IDs to credit amounts (including bonuses)
     const priceToCreditsMap: Record<string, number> = {
       // Using actual generated Stripe price IDs
       'price_1Rf0s6GfQ4XRggGY0MDCg4Yw': 100,    // $5 package (100 credits)
-      'price_1Rf0s7GfQ4XRggGYV43Z1A3z': 350,    // $15 package (350 credits + 50 bonus)
-      'price_1Rf0s7GfQ4XRggGYamxizg5m': 1000,   // $40 package (1000 credits + 100 bonus)
-      'price_1Rf0s7GfQ4XRggGYrAsvxiKB': 2500,   // $100 package (2500 credits + 500 bonus)
+      'price_1Rf0s7GfQ4XRggGYV43Z1A3z': 350,    // $15 package (300 credits + 50 bonus)
+      'price_1Rf0s7GfQ4XRggGYamxizg5m': 1200,   // $40 package (1000 credits + 200 bonus)
+      'price_1Rf0s7GfQ4XRggGYrAsvxiKB': 3000,   // $100 package (2500 credits + 500 bonus)
     };
     
     creditAmount = priceToCreditsMap[priceId!] || 0;
@@ -320,15 +318,64 @@ async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkou
         sessionId: session.id
       });
       
-      // TODO: Implement actual database update here
-      // This is where you'd normally update your database
-      // For now, the client-side handles credit addition via localStorage
+      // Add credits to database using the EnhancedCreditManager
+      try {
+        const { EnhancedCreditManager } = await import('@/lib/credits/EnhancedCreditManager');
+        const creditManager = EnhancedCreditManager.getInstance();
+        
+        // Add credits with transaction record
+        const result = await creditManager.addCredits(
+          creditAmount,
+          `Credit purchase - ${creditAmount} credits from Stripe payment`,
+          {
+            stripeSessionId: session.id,
+            priceId: priceId,
+            purchaseType: 'one-time',
+            timestamp: new Date().toISOString()
+          },
+          clerkUserId
+        );
+        
+        if (result.success) {
+          console.log('✅ Credits successfully added to database:', {
+            userId: clerkUserId,
+            amount: creditAmount,
+            newBalance: result.newBalance,
+            sessionId: session.id
+          });
+        } else {
+          console.error('❌ Failed to add credits via EnhancedCreditManager:', result.error);
+          
+          // Fallback: try direct database update
+          const { prisma } = await import('@/lib/db');
+          const user = await prisma.user.findUnique({
+            where: { clerkId: clerkUserId },
+            select: { credits: true }
+          });
+          
+          if (user) {
+            const newCredits = (user.credits || 0) + creditAmount;
+            await prisma.user.update({
+              where: { clerkId: clerkUserId },
+              data: { credits: newCredits }
+            });
+            
+            console.log('✅ Credits added via direct database update:', {
+              userId: clerkUserId,
+              previousCredits: user.credits,
+              addedCredits: creditAmount,
+              newTotal: newCredits
+            });
+          }
+        }
+        
+      } catch (dbError) {
+        console.error('❌ Failed to add credits to database:', dbError);
+        // Still mark webhook as successful to avoid retries
+      }
       
       // Log successful processing
       console.log('✅ Credit purchase webhook processed successfully');
-      
-      // Store successful webhook processing for potential reconciliation
-      // You could store this in a database for audit purposes
       
     } else {
       console.error('❌ Unknown price ID for credit purchase:', {

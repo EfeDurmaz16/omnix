@@ -76,7 +76,7 @@ interface ModernChatInterfaceProps {
 }
 
 export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProps = {}) {
-  const { user } = useAuth();
+  const { user, refreshUsageStats } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -387,7 +387,13 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
           }
           return newMessages;
         });
+        
+        // Refresh usage stats to update credit display
+        refreshUsageStats();
         setStreamingMessage('');
+        
+        // Refresh credits to show updated balance
+        refreshUsageStats();
 
       } else {
         // Fallback to regular JSON response
@@ -420,6 +426,12 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
           }
           return newMessages;
         });
+        
+        // Refresh usage stats to update credit display
+        refreshUsageStats();
+        
+        // Refresh credits to show updated balance
+        refreshUsageStats();
       }
 
     } catch (error) {

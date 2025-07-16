@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { modelCatalog } from '@/lib/catalog/ModelCatalog';
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action') || 'list';
@@ -134,7 +134,7 @@ async function handleGetRecommendations(searchParams: URLSearchParams) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },

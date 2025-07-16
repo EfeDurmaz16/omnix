@@ -6,9 +6,15 @@ import { z } from 'zod';
 
 // Chat request validation
 export const chatRequestSchema = z.object({
-  message: z.string().min(1).max(10000), // Prevent extremely long messages
+  messages: z.array(z.object({
+    role: z.enum(['system', 'user', 'assistant']),
+    content: z.string().min(1).max(10000)
+  })).min(1).max(50), // At least 1 message, max 50 messages
   model: z.string().min(1).max(100),
+  sessionId: z.string().optional(),
   conversationId: z.string().optional(),
+  mode: z.enum(['flash', 'think', 'ultra-think', 'full-think']).optional(),
+  stream: z.boolean().optional(),
   includeMemory: z.boolean().optional(),
   voiceChat: z.boolean().optional(),
   language: z.string().max(10).optional(),
@@ -17,7 +23,7 @@ export const chatRequestSchema = z.object({
   files: z.array(z.object({
     name: z.string().max(255),
     type: z.string().max(100),
-    url: z.string().url(),
+    url: z.string().optional(),
     content: z.string().optional(),
     mimeType: z.string().max(100).optional()
   })).max(10).optional() // Limit to 10 files

@@ -9,6 +9,7 @@ import { analyticsTracker } from '@/lib/analytics/AnalyticsTracker';
 import { validateAndSanitize, chatRequestSchema, checkRateLimit, rateLimits } from '@/lib/security/inputValidation';
 import { createSecureResponse, createErrorResponse, validateOrigin, validateRequestSize, logSecurityEvent } from '@/lib/security/apiSecurity';
 import { sanitizeHtml } from '@/lib/security/inputValidation';
+import { creditCostCalculator } from '@/lib/pricing/CreditCostCalculator';
 
 // Rate limiting is now handled by the security middleware
 
@@ -465,6 +466,21 @@ export async function POST(req: NextRequest) {
       const readable = new ReadableStream({
         async start(controller) {
           try {
+            // Check credit availability before processing
+            const creditCheck = await creditCostCalculator.canAfford(
+              model,
+              enhancedRequest.messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4, // Rough token estimate
+              enhancedRequest.maxTokens || 1000,
+              'text',
+              userId
+            );
+            
+            if (!creditCheck.canAfford) {
+              console.log('❌ Insufficient credits for request:', creditCheck);
+              controller.error(new Error(`Insufficient credits: ${creditCheck.currentCredits} available, ${creditCheck.requiredCredits} required`));
+              return;
+            }
+            
             // Use enhanced model router to generate the response
             const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
             
@@ -504,6 +520,21 @@ export async function POST(req: NextRequest) {
             if (!streamingSuccessful) {
               console.log('⚠️ Streaming was interrupted. Full response was:');
               console.log('📝 Response content:', content.substring(0, 500) + (content.length > 500 ? '...' : ''));
+            }
+            
+            // Process credit deduction for successful response
+            const creditResult = await creditCostCalculator.processUsage(
+              model,
+              aiResponse.usage,
+              'text',
+              userId
+            );
+            
+            if (!creditResult.success) {
+              console.warn('⚠️ Credit deduction failed:', creditResult.error);
+              // Continue anyway as response was generated
+            } else {
+              console.log('✅ Credits deducted:', creditResult.creditsDeducted, 'remaining:', creditResult.remainingCredits);
             }
             
             // Store conversation in clean memory system (non-blocking)
@@ -597,7 +628,40 @@ export async function POST(req: NextRequest) {
       });
     } else {
       // Handle regular JSON response
+      
+      // Check credit availability before processing
+      const creditCheck = await creditCostCalculator.canAfford(
+        model,
+        enhancedRequest.messages.reduce((sum, msg) => sum + msg.content.length, 0) / 4, // Rough token estimate
+        enhancedRequest.maxTokens || 1000,
+        'text',
+        userId
+      );
+      
+      if (!creditCheck.canAfford) {
+        console.log('❌ Insufficient credits for request:', creditCheck);
+        return createErrorResponse(
+          `Insufficient credits: ${creditCheck.currentCredits} available, ${creditCheck.requiredCredits} required`,
+          402
+        );
+      }
+      
       const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
+      
+      // Process credit deduction for successful response
+      const creditResult = await creditCostCalculator.processUsage(
+        model,
+        aiResponse.usage,
+        'text',
+        userId
+      );
+      
+      if (!creditResult.success) {
+        console.warn('⚠️ Credit deduction failed:', creditResult.error);
+        // Continue anyway as response was generated
+      } else {
+        console.log('✅ Credits deducted:', creditResult.creditsDeducted, 'remaining:', creditResult.remainingCredits);
+      }
 
       // Store conversation in clean memory system (non-blocking)
       if (!useQuickMode) {
@@ -661,6 +725,11 @@ export async function POST(req: NextRequest) {
         memoryEnhanced: !useQuickMode && enhancedMessages.length > processedMessages.length,
         webSearchResults: webSearchResults.length > 0 ? webSearchResults : undefined,
         webSearchEnabled: enableWebSearch || forceWebSearch,
+        credits: {
+          used: creditResult.success ? creditResult.creditsDeducted : 0,
+          remaining: creditResult.success ? creditResult.remainingCredits : creditCheck.currentCredits,
+          required: creditCheck.requiredCredits
+        },
         metadata: {
           ...aiResponse.metadata,
           ragEnabled: !useQuickMode && enhancedMessages.length > processedMessages.length,

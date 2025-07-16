@@ -86,14 +86,16 @@ export class EnhancedCreditManager {
       }
     }
 
-    // Method 4: Try from localStorage keys
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('aspendos_credits_')) {
-        const userId = key.replace('aspendos_credits_', '');
-        console.log('✅ Found user ID from localStorage:', userId);
-        sessionStorage.setItem('aspendos-user-id', userId);
-        return userId;
+    // Method 4: Try from localStorage keys (client-side only)
+    if (typeof window !== 'undefined' && window.localStorage) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('aspendos_credits_')) {
+          const userId = key.replace('aspendos_credits_', '');
+          console.log('✅ Found user ID from localStorage:', userId);
+          sessionStorage.setItem('aspendos-user-id', userId);
+          return userId;
+        }
       }
     }
 
@@ -128,8 +130,10 @@ export class EnhancedCreditManager {
       // Try database first for most up-to-date info
       const dbUser = await databaseService.getUserByClerkId(targetUserId);
       if (dbUser) {
-        // Update localStorage with database value
-        localStorage.setItem(`aspendos_credits_${targetUserId}`, dbUser.credits.toString());
+        // Update localStorage with database value (client-side only)
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem(`aspendos_credits_${targetUserId}`, dbUser.credits.toString());
+        }
         console.log('✅ Credits from database:', dbUser.credits);
         return dbUser.credits;
       }
@@ -137,15 +141,20 @@ export class EnhancedCreditManager {
       console.warn('Failed to get credits from database, falling back to localStorage:', error);
     }
 
-    // Fallback to localStorage
+    // Fallback to localStorage (only available on client-side)
     try {
-      const stored = localStorage.getItem(`aspendos_credits_${targetUserId}`);
-      const credits = stored ? parseInt(stored) : 1500;
-      console.log('📱 Credits from localStorage:', credits);
-      return credits;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const stored = localStorage.getItem(`aspendos_credits_${targetUserId}`);
+        const credits = stored ? parseInt(stored) : 1500;
+        console.log('📱 Credits from localStorage:', credits);
+        return credits;
+      } else {
+        console.log('localStorage not available (server-side), using default credits');
+        return 1500; // Default credits for server-side operations
+      }
     } catch (error) {
       console.error('Error getting credits from localStorage:', error);
-      return 0;
+      return 1500; // Default credits instead of 0
     }
   }
 
@@ -193,8 +202,10 @@ export class EnhancedCreditManager {
         console.warn('Failed to add credits to database, continuing with localStorage:', dbError);
       }
 
-      // Update localStorage (immediate consistency)
-      localStorage.setItem(`aspendos_credits_${targetUserId}`, newCredits.toString());
+      // Update localStorage (immediate consistency, client-side only)
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(`aspendos_credits_${targetUserId}`, newCredits.toString());
+      }
       
       // Store transaction in localStorage
       await this.logTransaction(transaction);
@@ -266,8 +277,10 @@ export class EnhancedCreditManager {
         console.warn('Failed to deduct credits from database, continuing with localStorage:', dbError);
       }
 
-      // Update localStorage (immediate consistency)
-      localStorage.setItem(`aspendos_credits_${targetUserId}`, newCredits.toString());
+      // Update localStorage (immediate consistency, client-side only)
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(`aspendos_credits_${targetUserId}`, newCredits.toString());
+      }
       
       // Store transaction
       await this.logTransaction(transaction);
@@ -351,18 +364,20 @@ export class EnhancedCreditManager {
    */
   private async logTransaction(transaction: CreditTransaction): Promise<void> {
     try {
-      const key = `aspendos_transactions_${transaction.userId}`;
-      const existingTransactions = localStorage.getItem(key) || '[]';
-      const transactions: CreditTransaction[] = JSON.parse(existingTransactions);
-      
-      transactions.push(transaction);
-      
-      // Keep only last 200 transactions to prevent storage bloat
-      if (transactions.length > 200) {
-        transactions.splice(0, transactions.length - 200);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const key = `aspendos_transactions_${transaction.userId}`;
+        const existingTransactions = localStorage.getItem(key) || '[]';
+        const transactions: CreditTransaction[] = JSON.parse(existingTransactions);
+        
+        transactions.push(transaction);
+        
+        // Keep only last 200 transactions to prevent storage bloat
+        if (transactions.length > 200) {
+          transactions.splice(0, transactions.length - 200);
+        }
+        
+        localStorage.setItem(key, JSON.stringify(transactions));
       }
-      
-      localStorage.setItem(key, JSON.stringify(transactions));
     } catch (error) {
       console.warn('Could not log transaction to localStorage:', error);
     }
@@ -393,11 +408,15 @@ export class EnhancedCreditManager {
       console.warn('Failed to get transactions from database:', error);
     }
 
-    // Fallback to localStorage
+    // Fallback to localStorage (client-side only)
     try {
-      const key = `aspendos_transactions_${targetUserId}`;
-      const stored = localStorage.getItem(key) || '[]';
-      return JSON.parse(stored);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const key = `aspendos_transactions_${targetUserId}`;
+        const stored = localStorage.getItem(key) || '[]';
+        return JSON.parse(stored);
+      } else {
+        return [];
+      }
     } catch (error) {
       console.error('Error getting transaction history:', error);
       return [];

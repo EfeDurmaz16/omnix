@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
     const planName = plan.toUpperCase();
 
     // Set appropriate credits based on plan
-    let credits = 1500; // Default FREE credits
+    let credits = 100; // Default FREE credits
     switch (planName) {
       case 'PRO':
-        credits = 3000;
+        credits = 2000;
         break;
       case 'ULTRA':
         credits = 5000;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { FirecrawlWebSearch } from '@/lib/search/FirecrawlWebSearch';
 
 let webSearch: FirecrawlWebSearch | null = null;
@@ -13,7 +13,7 @@ function getWebSearch(): FirecrawlWebSearch {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     const body = await request.json();
     const { action, query, options = {}, userQuery, aiResponse, forceSearch = false } = body;
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');

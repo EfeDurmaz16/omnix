@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs';
+import { auth } from '@clerk/nextjs/server';
 import { enhancedModelRouter, EnhancedGenerateRequest } from '@/lib/router/EnhancedModelRouter';
 import { ElasticsearchRAG } from '@/lib/rag/ElasticsearchRAG';
 import { FirecrawlWebSearch } from '@/lib/search/FirecrawlWebSearch';
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     
     const body = await request.json();
     const {
@@ -138,7 +138,7 @@ async function handleStreamingResponse(request: EnhancedGenerateRequest) {
 // GET endpoint for chat-related queries
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
 
