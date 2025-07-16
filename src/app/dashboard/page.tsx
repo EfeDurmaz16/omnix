@@ -16,8 +16,8 @@ export default function DashboardPage() {
   return (
     <div className="h-screen cultural-bg">
       <Navbar />
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-[calc(100vh-64px)]">
-        <div className="border-b cultural-border cultural-card">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-[calc(100vh-64px)] flex flex-col">
+        <div className="border-b cultural-border cultural-card shrink-0">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between py-2">
               <TabsList className="grid w-full max-w-lg grid-cols-4 cultural-card">
@@ -47,23 +47,23 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <TabsContent value="chat" className="h-[calc(100vh-9rem)] mt-0 cultural-bg">
+        <TabsContent value="chat" className="flex-1 min-h-0 mt-0 cultural-bg">
           <ModernChatInterface onModelRedirect={setActiveTab} />
         </TabsContent>
 
-        <TabsContent value="agents" className="h-[calc(100vh-9rem)] mt-0 overflow-auto">
+        <TabsContent value="agents" className="flex-1 min-h-0 mt-0 overflow-auto">
           <div className="container mx-auto px-4 py-6 cultural-text-primary">
             <AgentDashboard />
           </div>
         </TabsContent>
 
-        <TabsContent value="image" className="h-[calc(100vh-9rem)] mt-0 overflow-auto">
+        <TabsContent value="image" className="flex-1 min-h-0 mt-0 overflow-auto">
           <div className="container mx-auto px-4 py-6 cultural-text-primary">
             <ImageGenerator />
           </div>
         </TabsContent>
 
-        <TabsContent value="video" className="h-[calc(100vh-9rem)] mt-0 overflow-auto">
+        <TabsContent value="video" className="flex-1 min-h-0 mt-0 overflow-auto">
           <div className="container mx-auto px-4 py-6 cultural-text-primary">
             <VideoGenerator />
           </div>

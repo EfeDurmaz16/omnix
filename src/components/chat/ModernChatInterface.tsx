@@ -508,17 +508,28 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setShowModelSearch(true);
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-        e.preventDefault();
-        handleNewConversation();
-      }
+      // Global shortcuts
       if (e.key === 'Escape') {
         setShowModelSearch(false);
         setSidebarOpen(false);
+      }
+      
+      // Ctrl/Cmd + shortcuts
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case 'k':
+            e.preventDefault();
+            setShowModelSearch(true);
+            break;
+          case 'b':
+            e.preventDefault();
+            setSidebarOpen(!sidebarOpen);
+            break;
+          case 'n':
+            e.preventDefault();
+            handleNewConversation();
+            break;
+        }
       }
     };
 
@@ -535,7 +546,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   };
 
   return (
-    <div className="h-screen flex bg-background overflow-hidden">
+    <div className="h-full flex bg-background overflow-hidden">
       {/* Collapsible Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -547,6 +558,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40 lg:hidden"
               onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
             />
 
             {/* Sidebar */}
@@ -556,6 +568,8 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
               exit={{ x: -320 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               className="fixed lg:relative z-50 w-80 h-full bg-card border-r border-border shadow-lg lg:shadow-none"
+              role="complementary"
+              aria-label="Chat history and navigation"
             >
               <ChatSidebar
                 conversations={conversations}
@@ -572,9 +586,9 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
       </AnimatePresence>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col cultural-bg">
+      <div className="flex-1 flex flex-col cultural-bg min-h-0 h-full">
         {/* Chat Header */}
-        <div className="cultural-card cultural-border">
+        <div className="cultural-card cultural-border shrink-0" role="banner">
           <ChatHeader
             selectedModel={selectedModel}
             onModelChange={handleModelChange}
@@ -595,7 +609,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-hidden cultural-bg">
+        <div className="flex-1 min-h-0 overflow-hidden cultural-bg" role="main" aria-label="Chat messages">
           <MessagesContainer
             messages={messages}
             isLoading={isLoading}
@@ -611,7 +625,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
 
         {/* Voice Chat Area */}
         {showVoiceChat && (
-          <div className="cultural-card cultural-border border-t">
+          <div className="cultural-card cultural-border border-t shrink-0">
             <RealtimeVoiceChat
               selectedModel={selectedModel}
               onMessage={(message, isUser) => {
@@ -626,7 +640,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
         )}
 
         {/* Input Area */}
-        <div className="cultural-card cultural-border border-t">
+        <div className="cultural-card cultural-border border-t shrink-0">
           <div className="cultural-bg">
             <EnhancedChatInput
               onSend={handleSendMessage}

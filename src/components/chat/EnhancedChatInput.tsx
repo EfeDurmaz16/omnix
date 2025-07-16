@@ -364,7 +364,7 @@ export function EnhancedChatInput({
   const canSend = (message.trim().length > 0 || attachedFiles.length > 0) && !disabled && !isUploadingFiles;
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-3 sm:p-4 space-y-3">
       {/* File Upload Loading */}
       {isUploadingFiles && (
         <motion.div
@@ -417,17 +417,18 @@ export function EnhancedChatInput({
       )}
 
       {/* Input Area */}
-      <div className="flex items-end gap-2">
+      <div className="flex items-end gap-1 sm:gap-2 min-w-0">
         {/* Attachment Button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || isUploadingFiles}
-          className="shrink-0"
+          className="shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] hover:bg-muted/80 transition-colors p-2"
           title="Upload files (text, images, PDFs)"
+          aria-label="Upload files"
         >
-          <Paperclip className="w-4 h-4" />
+          <Paperclip className="w-3 h-3 sm:w-4 sm:h-4" />
         </Button>
 
         {/* Hidden File Input */}
@@ -441,7 +442,7 @@ export function EnhancedChatInput({
         />
 
         {/* Text Input Container */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative min-w-0">
           <MarkdownInput
             value={message}
             onChange={setMessage}
@@ -490,9 +491,11 @@ export function EnhancedChatInput({
           size="sm"
           onClick={toggleRecording}
           disabled={disabled}
-          className="shrink-0"
+          className="shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] hover:bg-muted/80 transition-colors p-2"
+          title={isRecording ? "Stop recording" : "Start voice recording"}
+          aria-label={isRecording ? "Stop recording voice message" : "Start recording voice message"}
         >
-          {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          {isRecording ? <MicOff className="w-3 h-3 sm:w-4 sm:h-4" /> : <Mic className="w-3 h-3 sm:w-4 sm:h-4" />}
         </Button>
 
         {/* Send Button */}
@@ -500,15 +503,17 @@ export function EnhancedChatInput({
           onClick={handleSend}
           disabled={!canSend}
           size="sm"
-          className="shrink-0"
+          className="shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[44px] sm:min-h-[44px] bg-primary hover:bg-primary/90 text-primary-foreground hover:scale-105 transition-all p-2"
+          title="Send message (Enter)"
+          aria-label="Send message"
         >
-          <Send className="w-4 h-4" />
+          <Send className="w-3 h-3 sm:w-4 sm:h-4" />
         </Button>
       </div>
 
       {/* Quick Actions */}
       <div className="flex items-center justify-between text-xs text-muted-foreground cultural-bg rounded-lg p-2">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 overflow-hidden">
           <span className="cultural-text-primary">
             Model: <span className="font-medium cultural-text-accent">{modelInfo.displayName}</span>
           </span>
@@ -516,7 +521,8 @@ export function EnhancedChatInput({
           {/* Web Search Status Indicator */}
           {onWebSearchToggle && (
             <div className="flex items-center gap-1">
-              <span className="cultural-text-primary">Web Search:</span>
+              <span className="cultural-text-primary hidden sm:inline">Web Search:</span>
+              <span className="cultural-text-primary sm:hidden">Web:</span>
               <span className={`font-medium px-1.5 py-0.5 rounded text-xs ${
                 webSearchEnabled 
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 

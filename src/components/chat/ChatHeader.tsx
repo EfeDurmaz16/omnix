@@ -91,7 +91,7 @@ export function ChatHeader({
   };
 
   return (
-    <header className="flex items-center justify-between p-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="flex items-center justify-between p-3 sm:p-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       {/* Left Section */}
       <div className="flex items-center gap-3">
         {/* Sidebar Toggle - Always visible */}
@@ -99,26 +99,29 @@ export function ChatHeader({
           variant="ghost"
           size="sm"
           onClick={onToggleSidebar}
+          className="min-w-[44px] min-h-[44px] hover:bg-muted/80 transition-colors"
           title="Toggle chat history"
+          aria-label="Toggle chat history sidebar"
         >
           <Menu className="h-4 w-4" />
         </Button>
 
         {/* Conversation Title */}
         <div className="hidden md:block">
-          <h1 className="font-semibold text-lg truncate max-w-xs">
+          <h1 className="font-semibold text-lg truncate max-w-xs text-foreground/90">
             {conversationTitle}
           </h1>
         </div>
       </div>
 
       {/* Center Section - Model Selector */}
-      <div className="flex-1 max-w-md mx-4">
+      <div className="flex-1 max-w-md mx-2 sm:mx-4">
         <div className="relative">
           <Button
             variant="outline"
             onClick={onShowModelSearch}
-            className="w-full justify-between h-10 px-4"
+            className="w-full justify-between min-h-[44px] px-4 hover:bg-muted/50 transition-colors focus:ring-2 focus:ring-primary/20"
+            aria-label={`Change model from ${modelInfo.displayName}`}
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex items-center gap-2">
@@ -186,16 +189,16 @@ export function ChatHeader({
         </div>
 
         {/* Model Details */}
-        <div className="mt-1 text-xs text-muted-foreground text-center">
-          {modelInfo.provider} • {modelInfo.tier}
+        <div className="mt-1 text-xs text-muted-foreground text-center hidden sm:block">
+          <span className="font-medium">{modelInfo.provider}</span> • <span className="capitalize">{modelInfo.tier}</span>
         </div>
       </div>
 
       {/* Right Section */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 min-w-0">
         {/* Thinking Mode Selector - Always visible during chat */}
         {thinkingMode && onThinkingModeChange && (
-          <div className="flex items-center gap-1 border border-border/50 rounded-md p-1">
+          <div className="flex items-center gap-1 border border-border/50 rounded-md p-1" role="group" aria-label="Thinking mode selection">
             {thinkingModes.map((mode) => {
               const IconComponent = mode.icon;
               const isActive = thinkingMode === mode.id;
@@ -205,12 +208,14 @@ export function ChatHeader({
                   variant="ghost"
                   size="sm"
                   onClick={() => onThinkingModeChange(mode.id)}
-                  className={`thinking-mode-${mode.id} ${isActive ? 'active' : ''} px-2 py-1 h-7 min-w-[28px] transition-all duration-200 border-0 flex items-center justify-center ${
+                  className={`thinking-mode-${mode.id} ${isActive ? 'active' : ''} px-2 py-1 min-h-[32px] min-w-[36px] transition-all duration-200 border-0 flex items-center justify-center ${
                     isActive 
-                      ? 'text-white shadow-lg' 
+                      ? 'text-white shadow-lg bg-primary' 
                       : 'text-muted-foreground hover:shadow-md hover:bg-muted/50'
                   }`}
                   title={`${mode.name} mode`}
+                  aria-label={`Switch to ${mode.name} mode`}
+                  aria-pressed={isActive}
                 >
                   <IconComponent className="h-3 w-3" />
                 </Button>
@@ -221,7 +226,7 @@ export function ChatHeader({
 
         {/* Auto-Routing Toggle */}
         {onAutoRoutingToggle && (
-          <div className="flex items-center gap-2 px-2 min-w-fit">
+          <div className="hidden sm:flex items-center gap-2 px-2 min-w-fit">
             <span className="text-xs text-muted-foreground whitespace-nowrap">Smart</span>
             <Switch
               checked={autoRoutingEnabled}
@@ -233,26 +238,26 @@ export function ChatHeader({
 
         {/* Voice Chat Toggle */}
         {onVoiceChatToggle && (
-          <div className="flex items-center gap-2 px-2 min-w-fit">
+          <div className="flex items-center gap-1 sm:gap-2 px-1 sm:px-2 min-w-fit">
             <Mic className={`h-4 w-4 ${showVoiceChat ? 'text-green-500' : 'text-muted-foreground'}`} />
             <Switch
               checked={showVoiceChat}
               onCheckedChange={onVoiceChatToggle}
-              className="scale-90 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-input border-border"
+              className="scale-75 sm:scale-90 data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-input border-border"
             />
           </div>
         )}
 
         {/* Web Search Toggle */}
         {onWebSearchToggle && (
-          <div className="flex items-center gap-2 px-2 min-w-fit">
+          <div className="flex items-center gap-1 sm:gap-2 px-1 sm:px-2 min-w-fit">
             <span className={`text-sm ${webSearchEnabled ? 'text-blue-500' : 'text-muted-foreground'}`}>
               {webSearchEnabled ? '🌐' : '🔍'}
             </span>
             <Switch
               checked={webSearchEnabled}
               onCheckedChange={onWebSearchToggle}
-              className="scale-90 data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-input border-border"
+              className="scale-75 sm:scale-90 data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-input border-border"
             />
           </div>
         )}
@@ -261,7 +266,13 @@ export function ChatHeader({
         <ThemeToggle />
 
         {/* Action Buttons */}
-        <Button variant="ghost" size="sm" className="hidden sm:flex">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="hidden sm:flex min-w-[44px] min-h-[44px] hover:bg-muted/80 transition-colors"
+          title="Share conversation"
+          aria-label="Share conversation"
+        >
           <Share className="h-4 w-4" />
         </Button>
         
@@ -271,12 +282,18 @@ export function ChatHeader({
             userId={userId} 
             variant="ghost" 
             size="sm" 
-            className="hidden sm:flex"
+            className="hidden sm:flex min-w-[44px] min-h-[44px] hover:bg-muted/80 transition-colors"
           />
         )}
 
         {/* More Menu */}
-        <Button variant="ghost" size="sm">
+        <Button 
+          variant="ghost" 
+          size="sm"
+          className="min-w-[44px] min-h-[44px] hover:bg-muted/80 transition-colors"
+          title="More options"
+          aria-label="More options"
+        >
           <MoreVertical className="h-4 w-4" />
         </Button>
       </div>

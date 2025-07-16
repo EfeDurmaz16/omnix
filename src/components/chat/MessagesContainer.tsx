@@ -106,7 +106,7 @@ export function MessagesContainer({
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6" style={{ maxHeight: 'calc(100vh - 140px)' }}>
+    <div ref={containerRef} className="h-full overflow-y-auto overflow-x-hidden p-4 space-y-6">
       <AnimatePresence>
         {messages.map((message, index) => (
           <MessageBubble
