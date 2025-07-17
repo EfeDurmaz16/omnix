@@ -85,62 +85,83 @@ export const CREDIT_COST_TIERS: Record<string, ModelCostTier> = {
     ]
   },
 
-  // Tier 4: Specialized models (video, image, etc.) - 10-50 credits per request
-  specialized: {
-    name: 'Specialized',
-    description: 'Specialized models for video, image, and audio',
+  // Tier 4: Image models - 10-25 credits per request
+  image: {
+    name: 'Image Generation',
+    description: 'AI image generation models',
     config: {
       baseCreditsPerRequest: 10,
       creditsPerInputToken: 0.01,
       creditsPerOutputToken: 0.02,
       minimumCredits: 10,
-      maximumCredits: 100,
-      multiplier: 10.0
+      maximumCredits: 25,
+      multiplier: 5.0
     },
     models: [
       'dall-e-3',
       'dall-e-2',
       'stable-diffusion-xl',
+      'midjourney',
+      'stable-diffusion-3'
+    ]
+  },
+
+  // Tier 5: Video models - 150-300 credits per request (covers $6-12 cost)
+  video: {
+    name: 'Video Generation',
+    description: 'AI video generation models - premium pricing',
+    config: {
+      baseCreditsPerRequest: 150, // Minimum 150 credits = $6 (covers base cost)
+      creditsPerInputToken: 0.05,
+      creditsPerOutputToken: 0.1,
+      minimumCredits: 150, // $6 minimum
+      maximumCredits: 300, // $12 maximum
+      multiplier: 30.0
+    },
+    models: [
       'seedance-video-v1',
-      'google-veo-2'
+      'google-veo-2',
+      'google-veo-3',
+      'runway-gen-3',
+      'luma-dream-machine'
     ]
   }
 };
 
 /**
- * Credit Package Pricing - Updated for profitability
+ * Credit Package Pricing - Updated for profitability with video generation
  */
 export const CREDIT_PACKAGES = {
   starter: {
-    price: 5, // $5
+    price: 9, // $9 (was $5)
     credits: 100,
     bonus: 0,
-    costPerCredit: 0.05,
-    description: 'Perfect for trying out the platform'
+    costPerCredit: 0.09, // $9 / 100 = $0.09
+    description: 'Perfect for trying out the platform - includes chat & images'
   },
   
   popular: {
-    price: 15, // $15
+    price: 29, // $29 (was $15)
     credits: 300,
     bonus: 50, // Total: 350 credits
-    costPerCredit: 0.043, // $15 / 350 = ~$0.043
-    description: 'Best value for regular users'
+    costPerCredit: 0.083, // $29 / 350 = ~$0.083
+    description: 'Best value for regular users - includes 2 videos'
   },
   
   power: {
-    price: 40, // $40
+    price: 69, // $69 (was $40)
     credits: 800,
     bonus: 200, // Total: 1000 credits
-    costPerCredit: 0.04, // $40 / 1000 = $0.04
-    description: 'For power users and teams'
+    costPerCredit: 0.069, // $69 / 1000 = $0.069
+    description: 'For power users - includes 6 videos'
   },
   
   enterprise: {
-    price: 100, // $100
+    price: 149, // $149 (was $100)
     credits: 2000,
     bonus: 500, // Total: 2500 credits
-    costPerCredit: 0.04, // $100 / 2500 = $0.04
-    description: 'Maximum value for businesses'
+    costPerCredit: 0.0596, // $149 / 2500 = ~$0.06
+    description: 'Maximum value for businesses - includes 16 videos'
   }
 };
 
@@ -196,11 +217,11 @@ export function calculateCreditCost(
   cost += inputTokens * config.creditsPerInputToken;
   cost += outputTokens * config.creditsPerOutputToken;
   
-  // Apply request type multiplier
+  // Apply request type multiplier (now handled by tier-specific pricing)
   if (requestType === 'image') {
-    cost *= 2;
+    cost *= 1.5;
   } else if (requestType === 'video') {
-    cost *= 5;
+    cost *= 2; // Video models already have high base cost
   } else if (requestType === 'audio') {
     cost *= 1.5;
   }
@@ -216,7 +237,20 @@ export function calculateCreditCost(
  * Find which tier a model belongs to
  */
 function findModelTier(modelId: string): ModelCostTier {
+  // Check video models first (highest cost)
+  if (CREDIT_COST_TIERS.video.models.some(model => modelId.includes(model) || model.includes(modelId))) {
+    return CREDIT_COST_TIERS.video;
+  }
+  
+  // Check image models
+  if (CREDIT_COST_TIERS.image.models.some(model => modelId.includes(model) || model.includes(modelId))) {
+    return CREDIT_COST_TIERS.image;
+  }
+  
+  // Check other tiers
   for (const [tierName, tier] of Object.entries(CREDIT_COST_TIERS)) {
+    if (tierName === 'video' || tierName === 'image') continue; // Already checked above
+    
     if (tier.models.some(model => modelId.includes(model) || model.includes(modelId))) {
       return tier;
     }

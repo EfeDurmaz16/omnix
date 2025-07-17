@@ -395,14 +395,16 @@ export default function BillingClient() {
         console.log('✅ Credits added successfully via CreditManager');
         alert(`🎉 Credits purchased successfully! ${creditAmount} credits have been added to your account.`);
         
-        // Try to also update the auth context if available
-        if (user && usageStats && addCredits) {
-          console.log('🔄 Also updating auth context...');
-          try {
-            addCredits(creditAmount);
-          } catch (error) {
-            console.warn('Could not update auth context, but credits were added via CreditManager:', error);
-          }
+        // Update the auth context directly
+        if (addCredits) {
+          console.log('🔄 Updating auth context with credit amount:', creditAmount);
+          addCredits(creditAmount);
+        }
+
+        // Force refresh credits from database immediately
+        if (refreshUserPlan) {
+          console.log('🔄 Forcing refresh of user plan and credits...');
+          refreshUserPlan();
         }
         
         // Refresh the page to ensure UI is updated
@@ -524,12 +526,12 @@ export default function BillingClient() {
     try {
       setLoading(`credits-${amount}`);
       
-      // Map amount to priceId and credit amount (INCLUDING BONUS)
+      // Map amount to priceId and credit amount (INCLUDING BONUS) - Updated with new pricing
       const creditPackages = [
-        { amount: 5, priceId: STRIPE_PRICE_IDS.credits_5, credits: 100, bonus: 0 },
-        { amount: 15, priceId: STRIPE_PRICE_IDS.credits_15, credits: 350, bonus: 50 },
-        { amount: 40, priceId: STRIPE_PRICE_IDS.credits_40, credits: 1000, bonus: 200 },
-        { amount: 100, priceId: STRIPE_PRICE_IDS.credits_100, credits: 2500, bonus: 500 }
+        { amount: 9, priceId: STRIPE_PRICE_IDS.credits_5, credits: 100, bonus: 0 },
+        { amount: 29, priceId: STRIPE_PRICE_IDS.credits_15, credits: 300, bonus: 50 },
+        { amount: 69, priceId: STRIPE_PRICE_IDS.credits_40, credits: 800, bonus: 200 },
+        { amount: 149, priceId: STRIPE_PRICE_IDS.credits_100, credits: 2000, bonus: 500 }
       ];
       
       const package_ = creditPackages.find(p => p.amount === amount);
@@ -712,10 +714,10 @@ export default function BillingClient() {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { amount: 5, credits: 100, bonus: 0 },
-            { amount: 15, credits: 350, bonus: 50 },
-            { amount: 40, credits: 1000, bonus: 200 },
-            { amount: 100, credits: 2500, bonus: 500 }
+            { amount: 9, credits: 100, bonus: 0 },
+            { amount: 29, credits: 300, bonus: 50 },
+            { amount: 69, credits: 800, bonus: 200 },
+            { amount: 149, credits: 2000, bonus: 500 }
           ].map((pack) => (
             <Card key={pack.amount} className="relative cultural-card cultural-border">
               <CardHeader className="text-center pb-2">
@@ -730,6 +732,12 @@ export default function BillingClient() {
                       +{pack.bonus} bonus!
                     </div>
                   )}
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {pack.amount === 9 ? 'Chat & Images' : 
+                     pack.amount === 29 ? 'Includes ~2 videos' : 
+                     pack.amount === 69 ? 'Includes ~5 videos' : 
+                     'Includes ~13 videos'}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-2">

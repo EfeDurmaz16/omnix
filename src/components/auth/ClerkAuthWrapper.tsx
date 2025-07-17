@@ -51,46 +51,23 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     if (clerkUser && !user) {
       console.log('🔄 Initializing user data from Clerk...');
       
-      // Store user ID in sessionStorage for reliable access
-      sessionStorage.setItem('clerk-user-id', clerkUser.id);
-      console.log('💾 Stored user ID in sessionStorage:', clerkUser.id);
-      
-      // Initialize user in database
-      clientCreditManager.initializeUserCredits(
-        clerkUser.emailAddresses[0]?.emailAddress || '',
-        'FREE' // Default plan
-      ).catch(error => {
-        console.warn('Failed to initialize user in database:', error);
-      });
-      
-      // Get credits using client credit manager (after setting initial state)
-      setTimeout(() => {
-        clientCreditManager.getCredits().then(credits => {
-          console.log('💰 Credits from client manager:', credits);
-          
-          // Update user state with latest credits
-          setUser(prev => prev ? { ...prev, credits } : prev);
-          setUsageStats(prev => prev ? { ...prev, remainingCredits: credits } : prev);
-        }).catch(error => {
-          console.warn('Failed to get credits from client manager:', error);
-        });
-      }, 100);
-      
       // Get cached plan from localStorage or default to 'free'
       const cachedPlan = localStorage.getItem(`aspendos_plan_${clerkUser.id}`) || 'free';
       
-      // Use plan-based default credits for immediate UI update
-      const getDefaultCreditsForPlan = (plan: string): number => {
-        const planCredits = {
-          'free': 100,
-          'pro': 2000,
-          'ultra': 5000,
-          'enterprise': 10000
-        };
-        return planCredits[plan as keyof typeof planCredits] || planCredits['free'];
-      };
+      // ALWAYS get REAL credits from database first
+      let defaultCredits = 5000; // Fallback only
       
-      const defaultCredits = getDefaultCreditsForPlan(cachedPlan);
+      // Get current credits from database immediately
+      clientCreditManager.getCredits(true).then(realCredits => {
+        console.log('🔄 Got REAL credits from database:', realCredits);
+        setUser(prev => prev ? { ...prev, credits: realCredits } : prev);
+        setUsageStats(prev => prev ? { ...prev, remainingCredits: realCredits } : prev);
+        
+        // Save to localStorage
+        localStorage.setItem(`aspendos_credits_${clerkUser.id}`, realCredits.toString());
+      }).catch(() => {
+        console.warn('Failed to get real credits, using fallback');
+      });
       
       // Create the userData with cached plan
       const userData: User = {
@@ -113,20 +90,20 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         lastReset: new Date()
       };
 
+      console.log('🔄 Setting initial usageStats:', usageData);
       setUser(userData);
       setUsageStats(usageData);
       setLoading(false);
 
-      // Then fetch the actual plan asynchronously and update cache
+      // Just fetch plan, don't touch credits after initial setup
       fetch('/api/user/plan')
         .then(response => {
           if (response.ok) {
             return response.json();
           }
-          throw new Error('Plan fetch failed');
         })
         .then(planData => {
-          if (planData.success && planData.data.plan) {
+          if (planData && planData.success && planData.data.plan) {
             const actualPlan = planData.data.plan.toLowerCase();
             console.log('📋 Fetched user plan from API:', actualPlan);
             
@@ -138,17 +115,13 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           }
         })
         .catch(error => {
-          console.warn('Failed to fetch user plan from API:', error);
+          console.warn('Failed to fetch plan:', error);
         });
       
       console.log('✅ User initialized:', userData);
     } else if (!clerkUser && user) {
       // User logged out
       console.log('👋 User logged out, clearing data');
-      
-      // Clear cached plan data
-      localStorage.removeItem(`aspendos_plan_${user.id}`);
-      localStorage.removeItem(`aspendos_credits_${user.id}`);
       
       setUser(null);
       setUsageStats(null);
@@ -161,14 +134,39 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   }, [clerkUser, isLoaded, user]);
 
+  // Listen for credit update events separately
+  useEffect(() => {
+    if (!clerkUser) return;
+
+    const handleCreditsUpdated = (event: CustomEvent) => {
+      console.log('💰 Credits updated event received:', event.detail);
+      const { amount, type, newBalance } = event.detail;
+      
+      if (newBalance && typeof newBalance === 'number') {
+        // Use exact balance from database
+        setUser(prev => prev ? { ...prev, credits: newBalance } : prev);
+        setUsageStats(prev => prev ? { ...prev, remainingCredits: newBalance } : prev);
+      } else if (amount && typeof amount === 'number') {
+        // Add to current balance
+        setUser(prev => prev ? { ...prev, credits: prev.credits + amount } : prev);
+        setUsageStats(prev => prev ? { ...prev, remainingCredits: prev.remainingCredits + amount } : prev);
+      }
+    };
+
+    window.addEventListener('creditsUpdated', handleCreditsUpdated as EventListener);
+    
+    return () => {
+      window.removeEventListener('creditsUpdated', handleCreditsUpdated as EventListener);
+    };
+  }, [clerkUser]);
+
   const refreshUsageStats = async () => {
     if (user) {
       try {
-        // Get updated credits from client manager
-        const credits = await clientCreditManager.getCredits();
-        console.log('💰 Refreshed credits from client manager:', credits);
+        console.log('🔄 refreshUsageStats called for user:', user.id);
+        const credits = await clientCreditManager.getCredits(true);
+        console.log('💰 Refreshed credits:', credits);
         
-        // Update both user and usage stats
         setUser(prev => prev ? { ...prev, credits } : prev);
         setUsageStats(prev => prev ? { ...prev, remainingCredits: credits } : prev);
       } catch (error) {
@@ -207,27 +205,38 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   const addCredits = (amount: number) => {
     console.log('💰 addCredits called with:', amount);
-    console.log('💰 Current state - user:', !!user, 'usageStats:', !!usageStats);
-    console.log('💰 Clerk user:', !!clerkUser, 'isLoaded:', isLoaded);
     
-    if (!user || !usageStats) {
-      console.error('❌ Cannot add credits: user or usageStats is null');
-      return;
-    }
+    // 1. IMMEDIATELY update navbar (usageStats.remainingCredits)
+    setUsageStats(prev => {
+      const currentCredits = prev?.remainingCredits || 0;
+      const newCredits = currentCredits + amount;
+      console.log(`🔄 NAVBAR UPDATE: ${currentCredits} + ${amount} = ${newCredits}`);
+      
+      // 4. SAVE TO LOCALSTORAGE immediately so it persists
+      if (clerkUser?.id) {
+        localStorage.setItem(`aspendos_credits_${clerkUser.id}`, newCredits.toString());
+        console.log('💾 Saved to localStorage:', newCredits);
+      }
+      
+      return prev ? { ...prev, remainingCredits: newCredits } : prev;
+    });
     
-    // Add credits to database
-    clientCreditManager.addCredits(amount, 'Manual credit addition', {})
+    // 2. Also update user credits
+    setUser(prev => {
+      const newCredits = (prev?.credits || 0) + amount;
+      return prev ? { ...prev, credits: newCredits } : prev;
+    });
+    
+    // 3. Save to database for persistence
+    clientCreditManager.addCredits(amount, 'Credit purchase', {})
       .then(result => {
-        if (result.success) {
-          console.log('💰 Credits added to database:', result.newBalance);
-          // Update state with actual database balance
-          setUser(prev => prev ? { ...prev, credits: result.newBalance } : prev);
-          setUsageStats(prev => prev ? { ...prev, remainingCredits: result.newBalance } : prev);
-        }
+        console.log('💾 Database updated:', result.success);
       })
       .catch(error => {
-        console.error('Failed to add credits to database:', error);
+        console.error('Database update failed:', error);
       });
+    
+    console.log('✅ Credits added to navbar and database:', amount);
   };
 
   const refreshUserPlan = async () => {
@@ -235,16 +244,17 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     
     try {
       console.log('🔄 Refreshing user plan and credits...');
-      const planResponse = await fetch('/api/user/plan');
+      
+      const [planResponse, newCredits] = await Promise.all([
+        fetch('/api/user/plan'),
+        clientCreditManager.getCredits(true)
+      ]);
+      
       if (planResponse.ok) {
         const planData = await planResponse.json();
         if (planData.success && planData.data.plan) {
           const newPlan = planData.data.plan.toLowerCase();
-          console.log('📋 Updated user plan:', newPlan);
-          
-          // Also get credits from the client credit manager
-          const newCredits = await clientCreditManager.getCredits();
-          console.log('💰 Updated user credits:', newCredits);
+          console.log('📋 Plan:', newPlan, 'Credits:', newCredits);
           
           setUser(prevUser => prevUser ? { 
             ...prevUser, 
@@ -252,15 +262,10 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             credits: newCredits
           } : prevUser);
           
-          // Also update usage stats
           setUsageStats(prevStats => prevStats ? {
             ...prevStats,
             remainingCredits: newCredits
           } : prevStats);
-          
-          // Update localStorage
-          localStorage.setItem(`aspendos_credits_${user.id}`, newCredits.toString());
-          console.log('💾 Updated localStorage with new credits:', newCredits);
         }
       }
     } catch (error) {

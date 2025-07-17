@@ -42,8 +42,14 @@ export function ImageGenerator() {
             provider.models.map((model: any) => ({ ...model, provider: provider.name }))
           );
           const imageModels = allModels.filter((model: any) => model.type === 'image');
-          setImageModels(imageModels);
-          console.log('📸 Loaded image models:', imageModels);
+          
+          // Remove duplicates based on model ID and provider combination
+          const uniqueImageModels = imageModels.filter((model: any, index: number, self: any[]) => 
+            index === self.findIndex((m: any) => m.id === model.id && m.provider === model.provider)
+          );
+          
+          setImageModels(uniqueImageModels);
+          console.log('📸 Loaded image models:', uniqueImageModels.length, 'unique models from', imageModels.length, 'total');
         }
       } catch (error) {
         console.error('Failed to load image models:', error);
@@ -455,8 +461,8 @@ export function ImageGenerator() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="cultural-card">
-                        {imageModels.map((model) => (
-                          <SelectItem key={model.id} value={model.id}>
+                        {imageModels.map((model, index) => (
+                          <SelectItem key={`${model.id}-${model.provider}-${index}`} value={model.id}>
                             <div className="flex items-center space-x-2">
                               <span>{model.name}</span>
                               {isModelWorking(model.id) ? (

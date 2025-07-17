@@ -299,13 +299,13 @@ async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkou
     
     let creditAmount = 0;
     
-    // Map real Stripe price IDs to credit amounts (including bonuses)
+    // Map real Stripe price IDs to credit amounts (including bonuses) - UPDATED PRICING
     const priceToCreditsMap: Record<string, number> = {
-      // Using actual generated Stripe price IDs
-      'price_1Rf0s6GfQ4XRggGY0MDCg4Yw': 100,    // $5 package (100 credits)
-      'price_1Rf0s7GfQ4XRggGYV43Z1A3z': 350,    // $15 package (300 credits + 50 bonus)
-      'price_1Rf0s7GfQ4XRggGYamxizg5m': 1200,   // $40 package (1000 credits + 200 bonus)
-      'price_1Rf0s7GfQ4XRggGYrAsvxiKB': 3000,   // $100 package (2500 credits + 500 bonus)
+      // Using NEW Stripe price IDs with sustainable video generation pricing
+      'price_1RlsVjGfQ4XRggGY74J3FMmC': 100,    // $9 starter pack (100 credits)
+      'price_1RlsW2GfQ4XRggGYPaNV5jGR': 350,    // $29 popular pack (300 credits + 50 bonus)
+      'price_1RlsWZGfQ4XRggGYCstPDYua': 1000,   // $69 power pack (800 credits + 200 bonus)
+      'price_1RlsWpGfQ4XRggGYRqadeGWD': 2500,   // $149 enterprise pack (2000 credits + 500 bonus)
     };
     
     creditAmount = priceToCreditsMap[priceId!] || 0;

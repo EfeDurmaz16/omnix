@@ -44,7 +44,7 @@ export default function ImageEditor({
 }: ImageEditorProps) {
   const { user } = useAuth();
   const [editPrompt, setEditPrompt] = useState('');
-  const [editType, setEditType] = useState<'variation' | 'inpaint' | 'outpaint'>('variation');
+  const [editType, setEditType] = useState<'variation' | 'inpaint' | 'outpaint' | 'auto'>('auto');
   const [editModel, setEditModel] = useState('dall-e-3');
   const [isEditing, setIsEditing] = useState(false);
   const [versions, setVersions] = useState<StoredImage[]>([]);
@@ -94,8 +94,15 @@ export default function ImageEditor({
         
         console.log('🎨 Image models found:', imageModels);
         
+        // Remove duplicates based on model ID and provider combination
+        const uniqueModels = imageModels.filter((model, index, self) => 
+          index === self.findIndex(m => m.id === model.id && m.provider === model.provider)
+        );
+        
+        console.log('🔧 Deduplicated models:', uniqueModels.length, 'unique models from', imageModels.length, 'total');
+        
         // If no image models found, add fallback models
-        if (imageModels.length === 0) {
+        if (uniqueModels.length === 0) {
           console.warn('No image models found from API, using fallback');
           setAvailableModels([
             { id: 'dall-e-3', name: 'DALL-E 3', provider: 'openai' },
@@ -109,7 +116,7 @@ export default function ImageEditor({
             { id: 'stable-diffusion-3', name: 'Stable Diffusion 3', provider: 'stability' }
           ]);
         } else {
-          setAvailableModels(imageModels);
+          setAvailableModels(uniqueModels);
         }
       }
     } catch (error) {
@@ -157,7 +164,7 @@ export default function ImageEditor({
         body: JSON.stringify({
           imageId: selectedVersion.id,
           editPrompt: editPrompt.trim(),
-          editType,
+          ...(editType !== 'auto' && { editType }), // Only include editType if not 'auto'
           editModel,
           originalImage: {
             id: selectedVersion.id,
@@ -239,6 +246,12 @@ export default function ImageEditor({
   };
 
   const editTypeOptions = [
+    { 
+      value: 'auto', 
+      label: 'Auto (Recommended)', 
+      icon: Sparkles,
+      description: 'Automatically choose the best editing approach based on your prompt'
+    },
     { 
       value: 'variation', 
       label: 'Create Variation', 
@@ -427,8 +440,8 @@ export default function ImageEditor({
                   {availableModels.length === 0 ? (
                     <option disabled>Loading models...</option>
                   ) : (
-                    availableModels.map((model) => (
-                      <option key={model.id} value={model.id}>
+                    availableModels.map((model, index) => (
+                      <option key={`${model.id}-${model.provider}-${index}`} value={model.id}>
                         {model.name} ({model.provider})
                       </option>
                     ))
@@ -459,7 +472,9 @@ export default function ImageEditor({
                     value={editPrompt}
                     onChange={(e) => setEditPrompt(e.target.value)}
                     placeholder={
-                      editType === 'variation' 
+                      editType === 'auto'
+                        ? "e.g., make it cloudy, add flowers, change the background, remove objects..."
+                        : editType === 'variation' 
                         ? "e.g., make it more colorful, change the style to watercolor, add flowers..."
                         : editType === 'inpaint'
                         ? "e.g., change the background to a sunset, remove the person, add a cat..."

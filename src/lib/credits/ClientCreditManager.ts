@@ -23,12 +23,24 @@ export class ClientCreditManager {
   /**
    * Get current credits via API
    */
-  async getCredits(): Promise<number> {
+  async getCredits(forceRefresh: boolean = false): Promise<number> {
     try {
-      const response = await fetch('/api/credits');
+      const response = await fetch('/api/credits', {
+        cache: forceRefresh ? 'no-cache' : 'default',
+        headers: forceRefresh ? { 'Cache-Control': 'no-cache' } : {}
+      });
       const data = await response.json();
       
       if (data.success) {
+        // Dispatch event to notify UI components
+        if (forceRefresh) {
+          window.dispatchEvent(new CustomEvent('creditsUpdated', {
+            detail: { 
+              newBalance: data.credits, 
+              source: 'api-refresh' 
+            }
+          }));
+        }
         return data.credits;
       } else {
         console.error('Failed to fetch credits:', data.error);
@@ -38,6 +50,14 @@ export class ClientCreditManager {
       console.error('Error fetching credits:', error);
       return this.getDefaultCreditsForPlan('FREE'); // Default fallback
     }
+  }
+
+  /**
+   * Force refresh credits from database
+   */
+  async refreshCredits(): Promise<number> {
+    console.log('🔄 Force refreshing credits from database...');
+    return await this.getCredits(true);
   }
 
   /**

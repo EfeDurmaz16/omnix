@@ -16,8 +16,11 @@ import {
 
 export function Navbar() {
   const { theme } = useTheme();
-  const { usageStats } = useAuth();
+  const { usageStats, refreshUsageStats } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Debug logging
+  console.log('🔍 Navbar - usageStats:', usageStats);
 
   const formatCredits = (credits: number) => {
     return credits?.toLocaleString() || '0';
@@ -78,14 +81,16 @@ export function Navbar() {
         <div className="flex items-center space-x-3">
           {/* Credits Badge */}
           <SignedIn>
-            {usageStats && (
-              <div className="relative hidden sm:inline-flex">
-                <Badge className="cultural-accent cultural-border text-foreground font-medium px-3 py-1">
-                  <Zap className="w-3 h-3 mr-1.5" />
-                  {formatCredits(usageStats.remainingCredits)}
-                </Badge>
-              </div>
-            )}
+            <div className="relative hidden sm:inline-flex">
+              <Badge 
+                className="cultural-accent cultural-border text-foreground font-medium px-3 py-1 cursor-pointer"
+                onClick={() => refreshUsageStats()}
+                title="Click to refresh credits"
+              >
+                <Zap className="w-3 h-3 mr-1.5" />
+                {formatCredits(usageStats?.remainingCredits || 0)}
+              </Badge>
+            </div>
           </SignedIn>
 
           {/* Theme Toggle */}

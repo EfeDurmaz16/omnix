@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { imageId, editPrompt, editType = 'variation', editModel = 'dall-e-3', originalImage } = body;
+    const { imageId, editPrompt, editType, editModel = 'dall-e-3', originalImage } = body;
 
     if (!editPrompt) {
       return NextResponse.json(

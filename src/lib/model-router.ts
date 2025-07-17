@@ -268,6 +268,23 @@ export class ModelRouter {
 
       console.log('🖼️ ModelRouter: Generating image with options:', { model: options.model, prompt: options.prompt.substring(0, 50) + '...' });
 
+      // Auto-detect edit type if not specified and we have a source image
+      if (options.sourceImage && !options.editType) {
+        const prompt = options.prompt.toLowerCase();
+        if (prompt.includes('remove') || prompt.includes('delete') || prompt.includes('erase') || prompt.includes('replace')) {
+          options.editType = 'inpaint';
+          console.log('🤖 Auto-detected edit type: inpaint');
+        } else if (prompt.includes('extend') || prompt.includes('expand') || prompt.includes('outward') || prompt.includes('beyond')) {
+          options.editType = 'outpaint';
+          console.log('🤖 Auto-detected edit type: outpaint');
+        } else {
+          options.editType = 'variation';
+          console.log('🤖 Auto-detected edit type: variation (default)');
+        }
+      } else if (options.sourceImage && options.editType) {
+        console.log('🎯 Using specified edit type:', options.editType);
+      }
+
       const model = await this.getModelInfo(options.model);
       if (!model || model.type !== 'image') {
         throw new ProviderError(`Image model ${options.model} not found`, 'router', 'MODEL_NOT_FOUND', 404);
