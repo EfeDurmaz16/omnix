@@ -26,10 +26,25 @@ from google.adk.tools import FunctionTool
 from google.adk.planners import BuiltInPlanner
 from google.adk.memory import InMemoryMemoryService
 from google.genai import types
-from google.adk.tools import google_search, code_executor
+from google.adk.tools import google_search
+import google.generativeai as genai
+from google.genai import Client
 
 # Load environment variables
 load_dotenv()
+
+# Check for Google API key
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+if not GOOGLE_API_KEY:
+    print("⚠️  Warning: GOOGLE_API_KEY not found in environment variables")
+    print("⚠️  Please add GOOGLE_API_KEY to your .env file")
+    print("⚠️  Get your API key from: https://aistudio.google.com/apikey")
+else:
+    # Set up authentication for Google GenAI
+    os.environ['GOOGLE_API_KEY'] = GOOGLE_API_KEY
+    os.environ['GENAI_API_KEY'] = GOOGLE_API_KEY  # Alternative env var name
+    genai.configure(api_key=GOOGLE_API_KEY)
+    print(f"✅ Google API key configured: {GOOGLE_API_KEY[:10]}...")
 
 # Pydantic models
 class AgentConfig(BaseModel):
@@ -179,6 +194,133 @@ def web_search(query: str, num_results: int = 5) -> dict:
         "search_time": "0.15s"
     }
 
+def notion_search(query: str) -> dict:
+    """Search Notion workspace for pages and content.
+    
+    Args:
+        query: Search query for Notion workspace
+        
+    Returns:
+        Dictionary with Notion search results
+    """
+    import requests
+    
+    try:
+        # Call the local MCP service to search Notion
+        response = requests.post('http://localhost:3000/api/mcp/test', 
+            json={
+                "action": "test_tool",
+                "serverId": "notion", 
+                "toolName": "API-search",
+                "testArgs": {"query": query}
+            },
+            timeout=10
+        )
+        
+        if response.ok:
+            data = response.json()
+            if data.get('success'):
+                return {
+                    "query": query,
+                    "results": data.get('data', {}).get('result', {}),
+                    "source": "notion_workspace"
+                }
+        
+        return {
+            "query": query,
+            "error": "Failed to search Notion workspace",
+            "source": "notion_workspace"
+        }
+        
+    except Exception as e:
+        return {
+            "query": query,
+            "error": f"Notion search error: {str(e)}",
+            "source": "notion_workspace"
+        }
+
+def notion_get_page(page_id: str) -> dict:
+    """Get content from a specific Notion page.
+    
+    Args:
+        page_id: The ID of the Notion page to retrieve
+        
+    Returns:
+        Dictionary with page content
+    """
+    import requests
+    
+    try:
+        response = requests.post('http://localhost:3000/api/mcp/test',
+            json={
+                "action": "test_tool",
+                "serverId": "notion",
+                "toolName": "API-get-page", 
+                "testArgs": {"page_id": page_id}
+            },
+            timeout=10
+        )
+        
+        if response.ok:
+            data = response.json()
+            if data.get('success'):
+                return {
+                    "page_id": page_id,
+                    "content": data.get('data', {}).get('result', {}),
+                    "source": "notion_workspace"
+                }
+        
+        return {
+            "page_id": page_id,
+            "error": "Failed to get Notion page",
+            "source": "notion_workspace"
+        }
+        
+    except Exception as e:
+        return {
+            "page_id": page_id,
+            "error": f"Notion page error: {str(e)}",
+            "source": "notion_workspace"
+        }
+
+def notion_list_databases() -> dict:
+    """List all databases in the Notion workspace.
+    
+    Returns:
+        Dictionary with database list
+    """
+    import requests
+    
+    try:
+        response = requests.post('http://localhost:3000/api/mcp/test',
+            json={
+                "action": "test_tool",
+                "serverId": "notion",
+                "toolName": "API-list-databases",
+                "testArgs": {}
+            },
+            timeout=10
+        )
+        
+        if response.ok:
+            data = response.json()
+            if data.get('success'):
+                return {
+                    "databases": data.get('data', {}).get('result', {}),
+                    "source": "notion_workspace"
+                }
+        
+        return {
+            "error": "Failed to list Notion databases",
+            "source": "notion_workspace"
+        }
+        
+    except Exception as e:
+        return {
+            "error": f"Notion database error: {str(e)}",
+            "source": "notion_workspace"
+        }
+
 # Agent templates
 AGENT_TEMPLATES = {
     "research-assistant": {
@@ -193,7 +335,7 @@ Your capabilities include:
 - Weather information when needed
 
 Always provide well-researched, accurate information with proper citations when possible. Be thorough but concise in your responses.""",
-        "tools": ["web_search", "analyze_data", "send_email", "get_weather"],
+        "tools": ["web_search", "analyze_data", "send_email", "get_weather", "notion_search", "notion_get_page", "notion_list_databases"],
         "personality": {
             "communication_style": "professional",
             "expertise_level": "expert",
@@ -278,11 +420,37 @@ Always provide accurate, up-to-date weather information and helpful context.""",
             "expertise_level": "specialist",
             "response_style": "informative"
         }
+    },
+    "mcp-assistant": {
+        "name": "MCP_Integration_Assistant", 
+        "description": "Specialized assistant for working with MCP tools like Notion workspace",
+        "system_prompt": """You are an MCP Integration Assistant specialized in working with Model Context Protocol tools, particularly Notion workspace integration.
+
+Your primary capabilities include:
+- Searching Notion workspaces for specific content
+- Retrieving and analyzing Notion page content
+- Listing and exploring Notion databases
+- Helping users manage and interact with their Notion data
+
+When users ask to search for something, always prioritize searching their Notion workspace first using notion_search before falling back to web search. 
+
+Be precise about whether you're searching Notion workspace or the web, and clearly indicate the source of your information.
+
+Always provide helpful suggestions for organizing and utilizing Notion content effectively.""",
+        "tools": ["notion_search", "notion_get_page", "notion_list_databases", "web_search", "analyze_data"],
+        "personality": {
+            "communication_style": "helpful",
+            "expertise_level": "expert", 
+            "response_style": "detailed"
+        }
     }
 }
 
 def create_adk_agent(config: AgentConfig, template_id: Optional[str] = None) -> Agent:
     """Create a new ADK agent instance."""
+    
+    print(f"🔧 Creating agent with name: '{config.name}'")
+    print(f"🔧 Template ID: {template_id}")
     
     # Get template if specified
     template = None
@@ -302,21 +470,27 @@ def create_adk_agent(config: AgentConfig, template_id: Optional[str] = None) -> 
             available_tools.append(FunctionTool(send_email))
         elif tool_name == "analyze_data":
             available_tools.append(FunctionTool(analyze_data))
+        elif tool_name == "notion_search":
+            available_tools.append(FunctionTool(notion_search))
+        elif tool_name == "notion_get_page":
+            available_tools.append(FunctionTool(notion_get_page))
+        elif tool_name == "notion_list_databases":
+            available_tools.append(FunctionTool(notion_list_databases))
     
     # Prepare system prompt
     system_prompt = config.system_prompt or (template["system_prompt"] if template else "You are a helpful AI assistant.")
     
     # Create the agent
+    agent_name = config.name or (template["name"] if template else "default_agent")
+    print(f"🔧 Final agent name: '{agent_name}'")
+    
     agent = LlmAgent(
-        name=config.name,
+        name=agent_name,
         model=config.model,
         description=config.description,
         instruction=system_prompt,
         tools=available_tools,
-        planner=BuiltInPlanner(
-            model=config.model,
-            include_thoughts=True
-        )
+        planner=BuiltInPlanner(thinking_config={'include_thoughts': True})
     )
     
     return agent
@@ -473,7 +647,7 @@ async def execute_agent(request: AgentExecuteRequest):
         start_time = datetime.now()
         
         # Create session
-        session = session_service.create_session(
+        session = await session_service.create_session(
             app_name="omnix-adk",
             user_id=request.userId,
             session_id=execution_id
@@ -501,18 +675,28 @@ async def execute_agent(request: AgentExecuteRequest):
             session_id=execution_id,
             new_message=user_content
         ):
+            print(f"🔍 ADK Event: {type(event)} - {dir(event)}")
+            print(f"🔍 Event content: {event}")
+            
             # Track execution steps
             step_data = {
                 "timestamp": datetime.now().isoformat(),
-                "type": event.type if hasattr(event, 'type') else "unknown",
-                "author": event.author if hasattr(event, 'author') else "system",
-                "content": str(event.content.parts[0].text) if event.content and event.content.parts else ""
+                "type": str(type(event).__name__),
+                "author": getattr(event, 'author', 'system'),
+                "content": str(event)
             }
             steps.append(step_data)
             
-            # Get final response
-            if hasattr(event, 'is_final_response') and event.is_final_response():
-                final_response = event.content.parts[0].text if event.content and event.content.parts else ""
+            # Get final response from any event with content
+            if hasattr(event, 'content') and event.content:
+                if hasattr(event.content, 'parts') and event.content.parts:
+                    response_text = event.content.parts[0].text
+                    if response_text:
+                        final_response = response_text
+                        print(f"📄 Captured response: {response_text[:200]}...")
+            elif hasattr(event, 'text'):
+                final_response = event.text
+                print(f"📄 Captured text: {event.text[:200]}...")
         
         end_time = datetime.now()
         
@@ -606,7 +790,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "real_adk_service:app",
         host="127.0.0.1",
-        port=8001,
+        port=8002,
         reload=True,
         log_level="info"
     ) 
