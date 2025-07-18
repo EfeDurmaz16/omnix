@@ -192,6 +192,84 @@ export const CodePreview: React.FC<CodePreviewProps> = ({
   };
 
   const createReactSandbox = (code: string): string => {
+    // Load virtual file system from localStorage
+    const loadVirtualFS = () => {
+      try {
+        const stored = localStorage.getItem('codePreview_virtualFS');
+        if (stored) {
+          const { files, timestamp } = JSON.parse(stored);
+          // Clean up old files (older than 1 hour)
+          if (Date.now() - timestamp > 60 * 60 * 1000) {
+            localStorage.removeItem('codePreview_virtualFS');
+            return {};
+          }
+          return files;
+        }
+      } catch (e) {
+        console.warn('Failed to load virtual file system:', e);
+      }
+      return {};
+    };
+
+    const virtualFS = loadVirtualFS();
+    console.log('🔍 CodePreview - Virtual FS loaded:', Object.keys(virtualFS));
+
+    // Smart preprocessing: resolve imports and handle exports
+    const processReactCode = (code: string): { code: string, cssContent: string } => {
+      let processedCode = code
+        // Remove only React-related imports that we provide via CDN
+        .replace(/import\s+React[^;]*from\s+['"]react['"];?\s*/g, '')
+        .replace(/import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g, '')
+        .replace(/import\s+.*?from\s+['"]react-dom['"];?\s*/g, '')
+        .replace(/import\s+.*?from\s+['"]react-dom\/client['"];?\s*/g, '')
+        // Handle export statements more carefully
+        .replace(/export\s+default\s+/g, '')
+        .replace(/export\s+\{[^}]*\}\s*;?\s*/g, '')
+        // Keep other exports but remove the export keyword
+        .replace(/export\s+(?=const|function|class)/g, '');
+
+      let cssContent = '';
+
+      // Handle CSS imports
+      const cssImportMatches = code.match(/import\s+['"]([^'"]*\.css)['"];?/g);
+      if (cssImportMatches) {
+        cssImportMatches.forEach(importStatement => {
+          const cssPathMatch = importStatement.match(/['"]([^'"]*\.css)['"]/);
+          if (cssPathMatch) {
+            const cssPath = cssPathMatch[1];
+            const cssFileName = cssPath.split('/').pop() || 'styles.css';
+            
+            // Find matching CSS content in virtual file system
+            console.log('🔍 CodePreview - Looking for CSS file:', cssFileName);
+            console.log('🔍 CodePreview - Available files:', Object.keys(virtualFS));
+            
+            const matchingCSSKey = Object.keys(virtualFS).find(key => 
+              key.endsWith('.css') && (
+                key === cssFileName || 
+                key.includes(cssFileName.replace('.css', '')) ||
+                cssFileName.includes(key.replace('.css', ''))
+              )
+            );
+            
+            if (matchingCSSKey && virtualFS[matchingCSSKey]) {
+              cssContent += virtualFS[matchingCSSKey] + '\n\n';
+              processedCode = processedCode.replace(importStatement, '');
+            } else {
+              // If no matching CSS file found, remove the import anyway
+              processedCode = processedCode.replace(importStatement, '');
+            }
+          }
+        });
+      }
+
+      return {
+        code: processedCode.trim(),
+        cssContent: cssContent.trim()
+      };
+    };
+
+    const { code: cleanCode, cssContent } = processReactCode(code);
+
     return `
       <!DOCTYPE html>
       <html>
@@ -210,38 +288,110 @@ export const CodePreview: React.FC<CodePreviewProps> = ({
           }
           #root { width: 100%; height: 100%; }
           .error { color: red; background: #fee; padding: 10px; border-radius: 4px; margin: 10px 0; }
+          
+          /* Imported CSS from virtual file system */
+          ${cssContent}
         </style>
       </head>
       <body>
         <div id="root"></div>
         <script type="text/babel">
-          const { useState, useEffect, useRef } = React;
+          const { useState, useEffect, useRef, useCallback, useMemo } = React;
           
           try {
-            ${code}
+            // Execute the processed user's code
+            ${cleanCode}
             
-            // Try to render the component
+            // Create root for React 18
             const root = ReactDOM.createRoot(document.getElementById('root'));
             
-            // Look for App component or default export
-            if (typeof App !== 'undefined') {
-              root.render(React.createElement(App));
-            } else {
-              // Try to find any React component in the code
-              const componentMatch = code.match(/(?:function|const|class)\\s+(\\w+)/);
-              if (componentMatch) {
-                const ComponentName = componentMatch[1];
-                if (typeof window[ComponentName] !== 'undefined') {
-                  root.render(React.createElement(window[ComponentName]));
-                } else {
-                  root.render(React.createElement('div', null, 'No App component found. Define an App component to render.'));
+            // Auto-detect and render component
+            const renderComponent = () => {
+              const userCode = \`${cleanCode}\`;
+              
+              // Try different component patterns
+              const componentPatterns = [
+                'App', 'TodoList', 'Component', 'Main', 'Home',
+                // Extract component names from the user code
+                ...(userCode.match(/(?:function|const|class)\\s+(\\w+)/g) || [])
+                  .map(match => match.replace(/(?:function|const|class)\\s+/, ''))
+                  .filter(name => name.charAt(0) === name.charAt(0).toUpperCase())
+              ];
+              
+              console.log('Looking for components:', componentPatterns);
+              
+              // Try to render each potential component
+              for (const componentName of componentPatterns) {
+                try {
+                  if (typeof window[componentName] !== 'undefined') {
+                    console.log('Rendering component:', componentName);
+                    root.render(React.createElement(window[componentName]));
+                    return;
+                  }
+                  if (typeof eval(componentName) !== 'undefined') {
+                    console.log('Rendering component via eval:', componentName);
+                    root.render(React.createElement(eval(componentName)));
+                    return;
+                  }
+                } catch (e) {
+                  console.log('Failed to render', componentName, e);
+                  continue;
                 }
-              } else {
-                root.render(React.createElement('div', null, 'No React component found in the code.'));
               }
-            }
+              
+              // If no component found, try to render any JSX directly
+              const jsxMatch = userCode.match(/return\\s*\\(/);
+              if (jsxMatch) {
+                // Try to wrap the JSX in a functional component
+                try {
+                  const wrapperCode = \`
+                    const AutoGeneratedComponent = () => {
+                      \${userCode}
+                    };
+                    window.AutoGeneratedComponent = AutoGeneratedComponent;
+                  \`;
+                  eval(wrapperCode);
+                  root.render(React.createElement(window.AutoGeneratedComponent));
+                  return;
+                } catch (e) {
+                  console.log('Failed to create auto-generated component', e);
+                }
+              }
+              
+              // Last resort: show helpful message
+              root.render(React.createElement('div', { 
+                style: { 
+                  padding: '20px', 
+                  textAlign: 'center', 
+                  color: '#666',
+                  fontFamily: 'monospace' 
+                } 
+              }, [
+                React.createElement('h3', { key: 'title' }, 'React Component Preview'),
+                React.createElement('p', { key: 'msg' }, 'No renderable React component found.'),
+                React.createElement('p', { key: 'tip' }, 'Make sure your component is named "App", "TodoList", or use a capitalized function name.'),
+                React.createElement('details', { key: 'debug' }, [
+                  React.createElement('summary', { key: 'summary' }, 'Debug Info'),
+                  React.createElement('pre', { key: 'patterns', style: { textAlign: 'left', fontSize: '12px' } }, 
+                    'Searched for: ' + componentPatterns.join(', '))
+                ])
+              ]));
+            };
+            
+            // Add error handling
+            window.addEventListener('error', (e) => {
+              console.error('Runtime error:', e);
+              document.getElementById('root').innerHTML = 
+                '<div class="error">Runtime Error: ' + e.message + '</div>';
+            });
+            
+            // Render the component
+            renderComponent();
+            
           } catch (error) {
-            document.getElementById('root').innerHTML = '<div class="error">Error: ' + error.message + '</div>';
+            console.error('Code execution error:', error);
+            document.getElementById('root').innerHTML = 
+              '<div class="error">Error: ' + error.message + '</div>';
           }
         </script>
       </body>

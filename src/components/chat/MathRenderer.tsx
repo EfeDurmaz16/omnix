@@ -17,13 +17,27 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
   const [showAutoPreview, setShowAutoPreview] = useState(true);
   
+  // Check if content is primarily code blocks to skip math processing
+  const isCodeContent = (text: string): boolean => {
+    const codeBlockCount = (text.match(/```[\s\S]*?```/g) || []).length;
+    const totalLines = text.split('\n').length;
+    const codeBlockLines = (text.match(/```[\s\S]*?```/g) || [])
+      .map(block => block.split('\n').length)
+      .reduce((sum, lines) => sum + lines, 0);
+    
+    // If more than 60% of content is code blocks, treat as code content
+    return codeBlockLines > totalLines * 0.6 || codeBlockCount > 2;
+  };
+  
   // Use code detection hook to automatically detect web code
   const { combinedWebCode, hasRunnableCode } = useCodeDetection(content);
   
   // Debug: Log what we detect
   console.log('🔍 MathRenderer - Content length:', content.length);
+  console.log('🔍 MathRenderer - Content preview:', content.substring(0, 500) + '...');
   console.log('🔍 MathRenderer - Has runnable code:', hasRunnableCode);
   console.log('🔍 MathRenderer - Combined web code:', combinedWebCode ? 'YES' : 'NO');
+  console.log('🔍 MathRenderer - Is code content:', isCodeContent(content));
   if (combinedWebCode) {
     console.log('🔍 MathRenderer - Combined web code length:', combinedWebCode.length);
   }
@@ -36,6 +50,23 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const processContent = (text: string) => {
     let processed = text;
     
+    // First, protect code blocks from math processing
+    const codeBlockPlaceholders: string[] = [];
+    
+    // Protect fenced code blocks (```...```)
+    processed = processed.replace(/```[\s\S]*?```/g, (match) => {
+      const placeholder = `__CODEBLOCK_${codeBlockPlaceholders.length}__`;
+      codeBlockPlaceholders.push(match);
+      return placeholder;
+    });
+    
+    // Protect inline code blocks (`...`)
+    processed = processed.replace(/`[^`]+`/g, (match) => {
+      const placeholder = `__INLINECODE_${codeBlockPlaceholders.length}__`;
+      codeBlockPlaceholders.push(match);
+      return placeholder;
+    });
+    
     // Convert LaTeX display math \[ ... \] to $$ ... $$
     processed = processed.replace(/\\\[\s*(.*?)\s*\\\]/gs, '$$$$1$$');
     
@@ -43,10 +74,19 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     processed = processed.replace(/\\\(\s*(.*?)\s*\\\)/gs, '$$1$');
     
     // Convert square bracket math [ ... ] to display math when it contains LaTeX
+    // Only do this for content that's not inside code blocks
     processed = processed.replace(/\[\s*([^[\]]*(?:\\[a-zA-Z]+|\\frac|\\sqrt|\\int|\\lim|\\partial|\\infty|\\sum|\\prod|\^|\{|\}|_)[^[\]]*)\s*\]/g, '$$$$1$$');
     
     // Fix common $1$ placeholder patterns by looking at context
     processed = fixPlaceholderMath(processed);
+    
+    // Restore code blocks
+    codeBlockPlaceholders.forEach((codeBlock, index) => {
+      const placeholder = `__CODEBLOCK_${index}__`;
+      const inlineCodePlaceholder = `__INLINECODE_${index}__`;
+      processed = processed.replace(placeholder, codeBlock);
+      processed = processed.replace(inlineCodePlaceholder, codeBlock);
+    });
     
     // Debug: Log the processed content to see what we're getting
     console.log('🔍 Processed content after placeholder fixing:', processed);

@@ -1,11 +1,9 @@
-'use client';
-
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export interface DetectedCodeBlock {
   id: string;
-  code: string;
   language: string;
+  code: string;
   isRunnable: boolean;
   startIndex: number;
   endIndex: number;
@@ -26,338 +24,389 @@ export const useCodeDetection = (content: string) => {
   const detectLanguage = (lang: string | undefined, code: string): string => {
     if (lang) return lang;
     
-    // Auto-detect language based on code content
     const lowerCode = code.toLowerCase();
-    
-    // HTML detection
-    if (lowerCode.includes('<!doctype') || lowerCode.includes('<html>') || 
+
+    if (lowerCode.includes('<!doctype') || lowerCode.includes('<html>') ||
         lowerCode.includes('<head>') || lowerCode.includes('<body>')) {
       return 'html';
     }
-    
-    // React/JSX detection
+
     if (lowerCode.includes('import react') || lowerCode.includes('from \'react\'') ||
         lowerCode.includes('usestate') || lowerCode.includes('useeffect') ||
         lowerCode.includes('return (') || lowerCode.includes('<div') ||
-        lowerCode.includes('function app') || lowerCode.includes('const app')) {
+        lowerCode.includes('jsx') || lowerCode.includes('tsx')) {
       return 'jsx';
     }
-    
-    // CSS detection
-    if (lowerCode.includes('{') && lowerCode.includes('}') && 
+
+    if (lowerCode.includes('{') && lowerCode.includes('}') &&
         (lowerCode.includes('color:') || lowerCode.includes('background:') ||
          lowerCode.includes('font-') || lowerCode.includes('margin:') ||
-         lowerCode.includes('padding:') || lowerCode.includes('display:'))) {
+         lowerCode.includes('padding:'))) {
       return 'css';
     }
-    
-    // JavaScript detection
+
     if (lowerCode.includes('function') || lowerCode.includes('const ') ||
         lowerCode.includes('let ') || lowerCode.includes('var ') ||
         lowerCode.includes('console.log') || lowerCode.includes('=>')) {
       return 'javascript';
     }
-    
+
     return 'text';
+  };
+
+  // Virtual file system for imports
+  const storeFilesInVirtualFS = (blocks: DetectedCodeBlock[]) => {
+    const virtualFS: { [key: string]: string } = {};
+    
+    console.log('🔍 VirtualFS - All blocks:', blocks.map(b => ({ language: b.language, codeLength: b.code.length })));
+    
+    // Store CSS files first
+    const cssBlocks = blocks.filter(b => b.language === 'css');
+    console.log('🔍 VirtualFS - CSS blocks found:', cssBlocks.length);
+    
+    cssBlocks.forEach((block, index) => {
+      const filename = `styles${index > 0 ? index : ''}.css`;
+      virtualFS[filename] = block.code;
+      console.log('🔍 VirtualFS - Stored CSS file:', filename, 'content length:', block.code.length);
+      console.log('🔍 VirtualFS - CSS content preview:', block.code.substring(0, 100) + '...');
+    });
+    
+    // Store JavaScript/React files (but exclude CSS blocks)
+    const jsBlocks = blocks.filter(b => ['javascript', 'js', 'jsx', 'tsx'].includes(b.language));
+    console.log('🔍 VirtualFS - JS blocks found:', jsBlocks.length);
+    
+    jsBlocks.forEach((block, index) => {
+      // Skip if this is actually CSS content misidentified as JS
+      if (block.code.includes('{') && block.code.includes('}') && 
+          (block.code.includes('color:') || block.code.includes('background:') || 
+           block.code.includes('padding:') || block.code.includes('margin:'))) {
+        console.log('🔍 VirtualFS - Skipping JS block that looks like CSS');
+        return;
+      }
+      
+      // Try to extract filename from comments or use generic name
+      const filenameMatch = block.code.match(/\/\*\s*@filename\s+([^\s]+)\s*\*\//);
+      const filename = filenameMatch ? filenameMatch[1] : `component${index > 0 ? index : ''}.js`;
+      virtualFS[filename] = block.code;
+      console.log('🔍 VirtualFS - Stored JS file:', filename, 'content length:', block.code.length);
+    });
+    
+    // Store in localStorage with a timestamp for cleanup
+    localStorage.setItem('codePreview_virtualFS', JSON.stringify({
+      files: virtualFS,
+      timestamp: Date.now()
+    }));
+    
+    console.log('🔍 VirtualFS - Final virtual file system files:', Object.keys(virtualFS));
+    console.log('🔍 VirtualFS - Full virtual file system:', virtualFS);
+    
+    return virtualFS;
   };
 
   const combineWebCodeBlocks = (blocks: DetectedCodeBlock[]): string | null => {
     const htmlBlocks = blocks.filter(b => b.language === 'html');
     const cssBlocks = blocks.filter(b => b.language === 'css');
     const jsBlocks = blocks.filter(b => ['javascript', 'js'].includes(b.language));
-    
-    // If we have at least one web-related block, create a combined HTML
+    const reactBlocks = blocks.filter(b => ['jsx', 'tsx', 'react'].includes(b.language));
+
+    // Store files in virtual file system
+    const virtualFS = storeFilesInVirtualFS(blocks);
+
+    // If we have React blocks, create a React sandbox
+    if (reactBlocks.length > 0) {
+      const reactCode = reactBlocks.map(b => {
+        // Smart preprocessing: resolve imports and handle exports
+        let processedCode = b.code
+          // Remove only React-related imports that we provide via CDN
+          .replace(/import\s+React[^;]*from\s+['"]react['"];?\s*/g, '')
+          .replace(/import\s+\{[^}]*\}\s+from\s+['"]react['"];?\s*/g, '')
+          .replace(/import\s+.*?from\s+['"]react-dom['"];?\s*/g, '')
+          .replace(/import\s+.*?from\s+['"]react-dom\/client['"];?\s*/g, '')
+          // Handle export statements more carefully
+          .replace(/export\s+default\s+/g, '')
+          .replace(/export\s+\{[^}]*\}\s*;?\s*/g, '')
+          // Keep other exports but remove the export keyword
+          .replace(/export\s+(?=const|function|class)/g, '')
+          .trim();
+        
+        // Replace CSS imports with actual CSS injection
+        const cssImportMatches = b.code.match(/import\s+['"]([^'"]*\.css)['"];?/g);
+        if (cssImportMatches) {
+          cssImportMatches.forEach(importStatement => {
+            const cssPathMatch = importStatement.match(/['"]([^'"]*\.css)['"]/);
+            if (cssPathMatch) {
+              const cssPath = cssPathMatch[1];
+              const cssFileName = cssPath.split('/').pop() || 'styles.css';
+              
+              // Find matching CSS content
+              const cssContent = Object.keys(virtualFS).find(key => 
+                key.endsWith('.css') && (key === cssFileName || key.includes(cssFileName.replace('.css', '')))
+              );
+              
+              if (cssContent) {
+                processedCode = processedCode.replace(importStatement, '');
+                // CSS will be injected in the HTML head
+              }
+            }
+          });
+        }
+        
+        return processedCode;
+      }).join('\n\n');
+      
+      const cssCode = cssBlocks.map(b => b.code).join('\n\n');
+      
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+          <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+          <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+          <title>React Preview</title>
+          <style>
+            body { 
+              margin: 0; 
+              padding: 16px; 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }
+            #root { width: 100%; height: 100%; }
+            ${cssCode}
+          </style>
+        </head>
+        <body>
+          <div id="root"></div>
+          <script type="text/babel">
+            const { useState, useEffect, useRef, useCallback, useMemo } = React;
+            
+            try {
+              ${reactCode}
+              
+              const root = ReactDOM.createRoot(document.getElementById('root'));
+              
+              // Auto-detect component
+              const componentPatterns = ['App', 'TodoList', 'Component', 'Main'];
+              let rendered = false;
+              
+              for (const name of componentPatterns) {
+                try {
+                  if (typeof window[name] !== 'undefined') {
+                    root.render(React.createElement(window[name]));
+                    rendered = true;
+                    break;
+                  }
+                  if (typeof eval(name) !== 'undefined') {
+                    root.render(React.createElement(eval(name)));
+                    rendered = true;
+                    break;
+                  }
+                } catch (e) {
+                  continue;
+                }
+              }
+              
+              if (!rendered) {
+                root.render(React.createElement('div', { 
+                  style: { padding: '20px', textAlign: 'center', color: '#666' } 
+                }, 'Component not found. Make sure to export as "App", "TodoList", or similar.'));
+              }
+              
+            } catch (error) {
+              document.getElementById('root').innerHTML = 
+                '<div style="color: red; padding: 20px;">Error: ' + error.message + '</div>';
+            }
+          </script>
+        </body>
+        </html>
+      `;
+    }
+
+    // Original HTML/CSS/JS combination logic
     if (htmlBlocks.length > 0 || cssBlocks.length > 0 || jsBlocks.length > 0) {
       let combinedHTML = '';
-      
-      // If there's HTML, use it as base
+
       if (htmlBlocks.length > 0) {
         combinedHTML = htmlBlocks[0].code;
-        
-        // Debug: log what we're processing
-        console.log('🔍 Processing HTML block:', combinedHTML.substring(0, 100) + '...');
-        console.log('🔍 Has script tag:', combinedHTML.includes('<script>'));
-        
-        // Add CSS if not already present
+
         if (cssBlocks.length > 0 && !combinedHTML.includes('<style>')) {
           const cssCode = cssBlocks.map(b => b.code).join('\n\n');
           combinedHTML = combinedHTML.replace(
             '</head>',
-            `  <style>\n${cssCode}\n  </style>\n</head>`
+            '<style>\n' + cssCode + '\n</style>\n</head>'
           );
         }
-        
-        // Always enhance JavaScript, whether from separate blocks or existing script tags
-        if (jsBlocks.length > 0 || combinedHTML.includes('<script>')) {
+
+        if (jsBlocks.length > 0 && !combinedHTML.includes('<script>')) {
           const jsCode = jsBlocks.map(b => b.code).join('\n\n');
-          
-          // If HTML already has script tags, enhance them with debugging
-          if (combinedHTML.includes('<script>')) {
-            console.log('🔍 Found script tag, enhancing...');
-            combinedHTML = combinedHTML.replace(
-              /<script>([\s\S]*?)<\/script>/g,
-              (match, scriptContent) => {
-                console.log('🔍 Replacing script content:', scriptContent.substring(0, 50) + '...');
-                return `<script>
-    // IMMEDIATE TEST - Add a visible indicator that JavaScript is running
-    (function() {
-      // Create a visible indicator immediately
-      const testDiv = document.createElement('div');
-      testDiv.innerHTML = '🟢 JavaScript is running!';
-      testDiv.style.cssText = 'position: fixed; top: 10px; left: 10px; background: lime; color: black; padding: 10px; border-radius: 5px; font-weight: bold; z-index: 10000;';
-      document.body.appendChild(testDiv);
-      
-      // Debug console that displays messages visually in the iframe
-      const originalLog = console.log;
-      const originalError = console.error;
-      
-      console.log = function(...args) {
-        originalLog.apply(console, args);
-        // Create visual debug output
-        const debugDiv = document.getElementById('debug-output') || (() => {
-          const div = document.createElement('div');
-          div.id = 'debug-output';
-          div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; z-index: 10000; max-width: 300px; max-height: 200px; overflow: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.3);';
-          document.body.appendChild(div);
-          return div;
-        })();
-        
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-        debugDiv.innerHTML += '<div style="margin: 2px 0; color: #4CAF50;">[LOG] ' + message + '</div>';
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-      };
-      
-      console.error = function(...args) {
-        originalError.apply(console, args);
-        const debugDiv = document.getElementById('debug-output') || (() => {
-          const div = document.createElement('div');
-          div.id = 'debug-output';
-          div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; z-index: 10000; max-width: 300px; max-height: 200px; overflow: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.3);';
-          document.body.appendChild(div);
-          return div;
-        })();
-        
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-        debugDiv.innerHTML += '<div style="margin: 2px 0; color: #f44336;">[ERROR] ' + message + '</div>';
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-      };
-    })();
-    
-    // Ensure the debug logger is set up first
-    console.log('🚀 Debug logger initialized');
-    
-    // Ensure DOM is loaded
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('✅ DOM loaded, initializing JavaScript...');
-        initializeEnhancedFunctions();
-      });
-    } else {
-      console.log('✅ DOM already loaded, initializing JavaScript...');
-      initializeEnhancedFunctions();
-    }
-    
-    function initializeEnhancedFunctions() {
-      try {
-        console.log('🔧 Starting JavaScript initialization...');
-        
-        // Original JavaScript code
-        ${scriptContent}
-        
-        console.log('✅ JavaScript initialization complete!');
-        
-      } catch (error) {
-        console.error('❌ Error initializing JavaScript:', error);
-      }
-    }
-</script>`;
-              }
-            );
-          } else if (jsCode) {
-            // No existing script tags, add our wrapper with the JS code
-            const wrappedJSCode = `
-    // Debug console that displays messages visually in the iframe
-    (function() {
-      const originalLog = console.log;
-      const originalError = console.error;
-      
-      console.log = function(...args) {
-        originalLog.apply(console, args);
-        // Create visual debug output
-        const debugDiv = document.getElementById('debug-output') || (() => {
-          const div = document.createElement('div');
-          div.id = 'debug-output';
-          div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; z-index: 10000; max-width: 300px; max-height: 200px; overflow: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.3);';
-          document.body.appendChild(div);
-          return div;
-        })();
-        
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-        debugDiv.innerHTML += '<div style="margin: 2px 0; color: #4CAF50;">[LOG] ' + message + '</div>';
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-      };
-      
-      console.error = function(...args) {
-        originalError.apply(console, args);
-        const debugDiv = document.getElementById('debug-output') || (() => {
-          const div = document.createElement('div');
-          div.id = 'debug-output';
-          div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; z-index: 10000; max-width: 300px; max-height: 200px; overflow: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.3);';
-          document.body.appendChild(div);
-          return div;
-        })();
-        
-        const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-        debugDiv.innerHTML += '<div style="margin: 2px 0; color: #f44336;">[ERROR] ' + message + '</div>';
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-      };
-    })();
-    
-    // Ensure the debug logger is set up first
-    console.log('🚀 Debug logger initialized');
-    
-    // Ensure DOM is loaded
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('✅ DOM loaded, initializing JavaScript...');
-        initializeFunctions();
-      });
-    } else {
-      console.log('✅ DOM already loaded, initializing JavaScript...');
-      initializeFunctions();
-    }
-    
-    function initializeFunctions() {
-      try {
-        console.log('🔧 Starting JavaScript initialization...');
-        
-        // Original JavaScript code
-        ${jsCode}
-        
-        console.log('✅ JavaScript initialization complete!');
-        
-      } catch (error) {
-        console.error('❌ Error initializing JavaScript:', error);
-      }
-    }`;
-          
           combinedHTML = combinedHTML.replace(
             '</body>',
-            `  <script>\n${wrappedJSCode}\n  </script>\n</body>`
+            '<script>\n' + jsCode + '\n</script>\n</body>'
           );
         }
       } else {
-        // Create HTML from CSS and JS blocks
         const cssCode = cssBlocks.map(b => b.code).join('\n\n');
         const jsCode = jsBlocks.map(b => b.code).join('\n\n');
-        
-        let scriptContent = '';
+
+        combinedHTML = '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Code Preview</title>\n';
+
+        if (cssCode) {
+          combinedHTML += '  <style>\n' + cssCode + '\n  </style>\n';
+        }
+
+        combinedHTML += '</head>\n<body>\n  <div id="root"></div>\n  <div id="output"></div>\n';
+
         if (jsCode) {
-          scriptContent = `
-  <script>
-    // Ensure DOM is loaded
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        initializeFunctions();
-      });
-    } else {
-      initializeFunctions();
-    }
-    
-    function initializeFunctions() {
-      try {
-        // Original JavaScript code
-        ${jsCode}
-        
-        // Add console output to page
-        const originalLog = console.log;
-        console.log = function(...args) {
-          originalLog.apply(console, args);
-          const output = document.getElementById('output');
-          if (output) {
-            const message = args.map(arg => 
-              typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-            ).join(' ');
-            output.innerHTML += '<div style="margin: 5px 0; padding: 5px; background: #f0f0f0; border-radius: 3px;">' + message + '</div>';
-          }
-        };
-        
-      } catch (error) {
-        console.error('Error initializing JavaScript:', error);
-        const output = document.getElementById('output');
-        if (output) {
-          output.innerHTML += '<div style="color: red; margin: 5px 0; padding: 5px; background: #ffe6e6; border-radius: 3px;">Error: ' + error.message + '</div>';
+          combinedHTML += '  <script>\n' + jsCode + '\n  </script>\n';
         }
+
+        combinedHTML += '</body>\n</html>';
       }
-    }
-  </script>`;
-        }
-        
-        combinedHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Code Preview</title>
-  ${cssCode ? `<style>\n${cssCode}\n  </style>` : ''}
-</head>
-<body>
-  <div id="root"></div>
-  <div id="output"></div>
-  ${scriptContent}
-</body>
-</html>`;
-      }
-      
-      // Debug: log the final combined HTML
-      console.log('🔍 Final combined HTML length:', combinedHTML.length);
-      console.log('🔍 Final combined HTML (first 200 chars):', combinedHTML.substring(0, 200) + '...');
-      
+
       return combinedHTML;
     }
-    
+
     return null;
   };
 
   useEffect(() => {
+    if (!content) {
+      setCodeBlocks([]);
+      setHasRunnableCode(false);
+      setCombinedWebCode(null);
+      return;
+    }
+
+    console.log('🔍 useCodeDetection - Processing content:', content.substring(0, 200) + '...');
+    console.log('🔍 useCodeDetection - Full content length:', content.length);
+    console.log('🔍 useCodeDetection - Looking for "css" in content:', content.toLowerCase().includes('css'));
+    console.log('🔍 useCodeDetection - Content contains "Run":', content.includes('Run'));
+    console.log('🔍 useCodeDetection - Content contains "Copy":', content.includes('Copy'));
+
     const detectCodeBlocks = (text: string): DetectedCodeBlock[] => {
       const blocks: DetectedCodeBlock[] = [];
-      
-      // Match fenced code blocks (```language\ncode\n```)
-      const fencedCodeRegex = /```(\w+)?\n([\s\S]*?)```/g;
+
+      // Standard fenced code blocks (```language)
+      const fencedCodeRegex = /```(\w+)?\s*\n([\s\S]*?)```/g;
       let match;
-      
+
+      console.log('🔍 useCodeDetection - Looking for fenced code blocks...');
+
       while ((match = fencedCodeRegex.exec(text)) !== null) {
         const language = detectLanguage(match[1], match[2]);
         const code = match[2].trim();
         
+        console.log('🔍 useCodeDetection - Found fenced code block:', { 
+          rawLanguage: match[1], 
+          detectedLanguage: language, 
+          codeLength: code.length,
+          codeStart: code.substring(0, 50) + '...'
+        });
+        
         if (code) {
           blocks.push({
-            id: `code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            code,
+            id: `code-${blocks.length}`,
             language,
+            code,
             isRunnable: isRunnableLanguage(language),
             startIndex: match.index,
             endIndex: match.index + match[0].length
           });
         }
       }
+
+      // LLM-style code blocks (language\nRun\nCopy\ncode)
+      // Updated regex to be more specific and handle Turkish content better
+      const llmCodeRegex = /\b(jsx|css|html|javascript|js|tsx|react)\s*\n(?:Run\s*\n)?(?:Copy\s*\n)?([\s\S]*?)(?=\n(?:jsx|css|html|javascript|js|tsx|react)\s*\n(?:Run\s*\n)?(?:Copy\s*\n)?|$)/gi;
+      let llmMatch;
+
+      console.log('🔍 useCodeDetection - Looking for LLM-style code blocks...');
+      console.log('🔍 useCodeDetection - Text sample for LLM regex:', text.substring(0, 500));
       
-      // Match inline code blocks (single backticks) that look like HTML/JS
+      // Let's test the regex manually
+      const testMatches = text.match(llmCodeRegex);
+      console.log('🔍 useCodeDetection - Manual regex test matches:', testMatches ? testMatches.length : 0);
+      if (testMatches) {
+        testMatches.forEach((match, idx) => {
+          console.log(`🔍 useCodeDetection - Test match ${idx}:`, match.substring(0, 100) + '...');
+        });
+      }
+
+      while ((llmMatch = llmCodeRegex.exec(text)) !== null) {
+        const language = llmMatch[1].toLowerCase();
+        const code = llmMatch[2].trim();
+        
+        console.log('🔍 useCodeDetection - Raw LLM match:', { 
+          language, 
+          codeLength: code.length,
+          codeStart: code.substring(0, 100) + '...',
+          fullMatch: llmMatch[0].substring(0, 200) + '...'
+        });
+        
+        // Process all matches for known languages
+        if (code && code.length > 10) {
+          console.log('🔍 useCodeDetection - Found LLM-style code block:', { 
+            language, 
+            codeLength: code.length,
+            codeStart: code.substring(0, 50) + '...'
+          });
+          
+          blocks.push({
+            id: `code-${blocks.length}`,
+            language,
+            code,
+            isRunnable: isRunnableLanguage(language),
+            startIndex: llmMatch.index,
+            endIndex: llmMatch.index + llmMatch[0].length
+          });
+        }
+      }
+
+      // Additional fallback detection for CSS blocks that might be missed
+      if (text.toLowerCase().includes('css') && text.includes('Run') && text.includes('Copy')) {
+        console.log('🔍 useCodeDetection - Fallback CSS detection triggered');
+        
+        // Try to find CSS blocks with a simpler approach
+        const cssMatches = text.match(/css\s*\n(?:Run\s*\n)?(?:Copy\s*\n)?([\s\S]*?)(?=\n(?:jsx|html|javascript|js|tsx|react)\s*\n|$)/gi);
+        if (cssMatches) {
+          console.log('🔍 useCodeDetection - Fallback found CSS matches:', cssMatches.length);
+          cssMatches.forEach((match, idx) => {
+            const codeMatch = match.match(/css\s*\n(?:Run\s*\n)?(?:Copy\s*\n)?([\s\S]*)/i);
+            if (codeMatch && codeMatch[1]) {
+              const code = codeMatch[1].trim();
+              console.log('🔍 useCodeDetection - Fallback CSS block:', { 
+                index: idx,
+                codeLength: code.length,
+                codeStart: code.substring(0, 50) + '...'
+              });
+              
+              blocks.push({
+                id: `fallback-css-${blocks.length}`,
+                language: 'css',
+                code,
+                isRunnable: true,
+                startIndex: text.indexOf(match),
+                endIndex: text.indexOf(match) + match.length
+              });
+            }
+          });
+        }
+      }
+
       const inlineCodeRegex = /`([^`]+)`/g;
       let inlineMatch;
-      
+
       while ((inlineMatch = inlineCodeRegex.exec(text)) !== null) {
         const code = inlineMatch[1].trim();
-        
-        // Only consider inline code as runnable if it looks like HTML tags or JS
+
         if (code.includes('<') && code.includes('>') && code.length > 10) {
           const language = detectLanguage(undefined, code);
           if (isRunnableLanguage(language)) {
             blocks.push({
-              id: `inline-code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              code,
+              id: `inline-code-${blocks.length}`,
               language,
+              code,
               isRunnable: true,
               startIndex: inlineMatch.index,
               endIndex: inlineMatch.index + inlineMatch[0].length
@@ -365,15 +414,14 @@ export const useCodeDetection = (content: string) => {
           }
         }
       }
-      
+
       return blocks.sort((a, b) => a.startIndex - b.startIndex);
     };
 
     const blocks = detectCodeBlocks(content);
     setCodeBlocks(blocks);
     setHasRunnableCode(blocks.some(block => block.isRunnable));
-    
-    // Generate combined web code if applicable
+
     const combined = combineWebCodeBlocks(blocks);
     setCombinedWebCode(combined);
   }, [content]);
