@@ -8,12 +8,13 @@ import { DataAnalysisTool } from './DataAnalysisTool';
 import { FileProcessingTool } from './FileProcessingTool';
 import { FirecrawlWebSearch } from '../../search/FirecrawlWebSearch';
 import { GeminiTool, defaultGeminiConfig } from './GeminiTool';
+import MCPIntegrationManager from '../../mcp/MCPTool';
 
 export interface ToolDefinition {
   id: string;
   name: string;
   description: string;
-  category: 'communication' | 'data' | 'web' | 'file' | 'ai';
+  category: 'communication' | 'data' | 'web' | 'file' | 'ai' | 'mcp';
   instance: any;
   methods: {
     [methodName: string]: {
@@ -209,8 +210,37 @@ export class ToolRegistry {
       }
     });
 
+    // Initialize MCP integration and add MCP tools
+    this.initializeMCPTools();
+
     this.initialized = true;
     console.log('🔧 Tool registry initialized with', this.tools.size, 'real tools');
+  }
+
+  /**
+   * Initialize MCP tools
+   */
+  private static async initializeMCPTools(): Promise<void> {
+    try {
+      // Initialize MCP integration
+      await MCPIntegrationManager.initialize();
+      
+      // Get MCP tool definitions
+      const mcpToolDefinitions = MCPIntegrationManager.getMCPToolDefinitions();
+      
+      // Add MCP tools to registry
+      mcpToolDefinitions.forEach(toolDef => {
+        this.tools.set(toolDef.id, {
+          ...toolDef,
+          category: 'mcp'
+        });
+      });
+
+      console.log(`🔧 Added ${mcpToolDefinitions.length} MCP tools to registry`);
+    } catch (error) {
+      console.error('❌ Failed to initialize MCP tools:', error);
+      // Don't fail the entire initialization, just log the error
+    }
   }
 
   /**
@@ -292,13 +322,15 @@ export class ToolRegistry {
                   this.getToolsByCategory('data').length +
                   this.getToolsByCategory('web').length +
                   this.getToolsByCategory('file').length +
-                  this.getToolsByCategory('ai').length,
+                  this.getToolsByCategory('ai').length +
+                  this.getToolsByCategory('mcp').length,
       toolsByCategory: {
         communication: this.getToolsByCategory('communication').length,
         data: this.getToolsByCategory('data').length,
         web: this.getToolsByCategory('web').length,
         file: this.getToolsByCategory('file').length,
-        ai: this.getToolsByCategory('ai').length
+        ai: this.getToolsByCategory('ai').length,
+        mcp: this.getToolsByCategory('mcp').length
       }
     };
   }

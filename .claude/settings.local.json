@@ -3,7 +3,8 @@
     "allow": [
       "Bash(firebase deploy:*)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm install:*)"
     ],
     "deny": []
   }

@@ -56,7 +56,7 @@ export class FirecrawlWebSearch {
       // Check if query contains a specific URL that should be crawled directly
       const urlMatch = query.match(/https?:\/\/[^\s]+/);
       if (urlMatch) {
-        let url = urlMatch[0];
+        const url = urlMatch[0];
         console.log(`🕷️ Detected URL in query, crawling directly: ${url}`);
         
         // Try multiple approaches for URL scraping
@@ -94,7 +94,7 @@ export class FirecrawlWebSearch {
           }
           
           // Extract meaningful search terms from the URL and query
-          let searchTerms = [];
+          const searchTerms = [];
           
           // Extract newsletter/article info from URL
           if (url.includes('dunya-halleri')) {

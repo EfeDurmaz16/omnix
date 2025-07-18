@@ -1,0 +1,11 @@
+{
+  "name": "MCP Test Data",
+  "version": "1.0.0",
+  "description": "Sample JSON data for MCP testing",
+  "tools": [
+    "read_file",
+    "write_file",
+    "list_directory"
+  ],
+  "timestamp": "2025-07-17T18:11:24.947Z"
+}

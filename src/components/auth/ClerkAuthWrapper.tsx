@@ -55,7 +55,7 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       const cachedPlan = localStorage.getItem(`aspendos_plan_${clerkUser.id}`) || 'free';
       
       // ALWAYS get REAL credits from database first
-      let defaultCredits = 5000; // Fallback only
+      const defaultCredits = 5000; // Fallback only
       
       // Get current credits from database immediately
       clientCreditManager.getCredits(true).then(realCredits => {

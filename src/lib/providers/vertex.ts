@@ -583,7 +583,7 @@ export class VertexAIProvider implements ModelProvider {
       
       // Apply compute mode if specified
       const computeModeConfig = request.mode ? COMPUTE_MODES[request.mode] : null;
-      let messages = [...request.messages];
+      const messages = [...request.messages];
       
       if (computeModeConfig) {
         if (messages[0]?.role !== 'system') {

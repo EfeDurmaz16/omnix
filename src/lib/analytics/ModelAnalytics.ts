@@ -421,7 +421,7 @@ export class ModelAnalytics {
       .filter(m => m.totalRequests >= 3) // Minimum usage for recommendations
       .map(m => {
         let score = 0;
-        let reasons: string[] = [];
+        const reasons: string[] = [];
 
         // High success rate
         if (m.successRate > 95) {

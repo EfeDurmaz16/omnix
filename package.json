@@ -13,7 +13,11 @@
     "lint:fix": "next lint --fix",
     "doctor": "npx next info && npm audit",
     "clean": "rimraf .next node_modules package-lock.json && npm install",
-    "setup:azure": "node scripts/setup-azure-openai.js"
+    "setup:azure": "node scripts/setup-azure-openai.js",
+    "setup:mcp": "node setup-mcp-test.js",
+    "test:mcp": "node test-mcp-integration.js",
+    "test:notion": "node test-notion-setup.js",
+    "test:notion-packages": "node test-notion-packages.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
@@ -27,6 +31,7 @@
     "@google-cloud/vertexai": "^1.9.0",
     "@google/generative-ai": "^0.24.1",
     "@mendable/firecrawl-js": "^1.29.1",
+    "@modelcontextprotocol/sdk": "^1.15.1",
     "@prisma/client": "^6.11.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",
@@ -55,6 +60,7 @@
     "google-auth-library": "^10.1.0",
     "katex": "^0.16.22",
     "lucide-react": "^0.515.0",
+    "motion-dom": "^12.23.6",
     "next": "^15.3.5",
     "next-themes": "^0.4.6",
     "nodemailer": "^7.0.5",

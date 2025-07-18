@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         agentId,
         taskDescription,
-        context
+        context,
+        userId
       })
     });
 

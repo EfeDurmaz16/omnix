@@ -222,7 +222,7 @@ function formatModelId(modelId: string): string {
   if (id.includes('tts-1')) return 'TTS-1';
   
   // Generic cleanup for unknown models
-  let name = modelId
+  const name = modelId
     // Remove provider prefixes (including meta-llama)
     .replace(/^(openai|anthropic|google|meta-llama|meta|mistral|xai|alibaba|deepseek|stability|midjourney|elevenlabs|wavespeed)[-_\/]?/i, '')
     // Remove timestamp suffixes (like -20241022)

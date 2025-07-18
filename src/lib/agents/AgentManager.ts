@@ -99,7 +99,7 @@ export class AgentManager {
    */
   async getAgent(agentId: string): Promise<AgentConfiguration | undefined> {
     // Check cache first
-    let agent = this.agents.get(agentId);
+    const agent = this.agents.get(agentId);
     if (agent) {
       return agent;
     }

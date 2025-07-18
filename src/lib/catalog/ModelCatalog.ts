@@ -439,7 +439,7 @@ export class ModelCatalog {
       high: Infinity
     };
 
-    let candidates = await this.getModelsByFilter({
+    const candidates = await this.getModelsByFilter({
       ...taskFilters[requirements.task],
       maxCost: requirements.budget ? budgetLimits[requirements.budget] : undefined,
       minContextWindow: requirements.contextLength

@@ -1174,7 +1174,7 @@ export class OpenAIProvider implements ModelProvider {
       const stream = await this.client.chat.completions.create(streamParams) as any;
 
       let accumulatedContent = '';
-      let promptTokens = 0;
+      const promptTokens = 0;
       let completionTokens = 0;
 
       for await (const chunk of stream) {

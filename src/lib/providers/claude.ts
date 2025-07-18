@@ -406,7 +406,7 @@ export class ClaudeProvider implements ModelProvider {
       const stream = this.client.messages.stream(requestOptions);
       
       let fullContent = '';
-      let responseId = `claude-stream-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const responseId = `claude-stream-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
       
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {

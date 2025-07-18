@@ -86,7 +86,7 @@ export class AgentExecutor {
       // Execute the plan
       let currentStep = 0;
       let shouldContinue = planningResponse.shouldContinue;
-      let conversationHistory = [
+      const conversationHistory = [
         { role: 'system', content: agent.systemPrompt },
         { role: 'user', content: `Task: ${taskDescription}\n\nContext: ${JSON.stringify(context || {})}` },
         { role: 'assistant', content: planningResponse.content }

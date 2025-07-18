@@ -305,7 +305,7 @@ export async function POST(req: NextRequest) {
     
     // Initialize clean context manager
     const cleanContextManager = new CleanContextManager();
-    let contextId = conversationId || `chat_${Date.now()}`;
+    const contextId = conversationId || `chat_${Date.now()}`;
     let enhancedMessages = processedMessages;
     
     if (useQuickMode || isSimpleQuery) {
