@@ -12,7 +12,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { MessageSquare, Image, Video, Bot, Code } from 'lucide-react';
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState('sandbox');
+  const [activeTab, setActiveTab] = useState('chat');
 
   return (
     <div className="h-screen cultural-bg">
@@ -21,25 +21,21 @@ export default function DashboardPage() {
         <div className="border-b cultural-border cultural-card shrink-0">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between py-2">
-              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground cultural-card">
-                <TabsTrigger value="chat">
-                  <MessageSquare className="h-4 w-4 mr-2" />
+              <TabsList className="grid w-full max-w-lg grid-cols-4 cultural-card">
+                <TabsTrigger value="chat" className="flex items-center space-x-2 cultural-hover transition-all duration-300">
+                  <MessageSquare className="h-4 w-4" />
                   <span>Chat</span>
                 </TabsTrigger>
-                <TabsTrigger value="agents">
-                  <Bot className="h-4 w-4 mr-2" />
+                <TabsTrigger value="agents" className="flex items-center space-x-2 cultural-hover transition-all duration-300">
+                  <Bot className="h-4 w-4" />
                   <span>Agents</span>
                 </TabsTrigger>
-                <TabsTrigger value="sandbox" style={{backgroundColor: 'red', color: 'white'}}>
-                  <Code className="h-4 w-4 mr-2" />
-                  <span>Sandbox</span>
-                </TabsTrigger>
-                <TabsTrigger value="image">
-                  <Image className="h-4 w-4 mr-2" />
+                <TabsTrigger value="image" className="flex items-center space-x-2 cultural-hover transition-all duration-300">
+                  <Image className="h-4 w-4" />
                   <span>Images</span>
                 </TabsTrigger>
-                <TabsTrigger value="video">
-                  <Video className="h-4 w-4 mr-2" />
+                <TabsTrigger value="video" className="flex items-center space-x-2 cultural-hover transition-all duration-300">
+                  <Video className="h-4 w-4" />
                   <span>Videos</span>
                 </TabsTrigger>
               </TabsList>
@@ -62,14 +58,6 @@ export default function DashboardPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="sandbox" className="flex-1 min-h-0 mt-0 overflow-auto">
-          <div className="container mx-auto px-4 py-6 cultural-text-primary">
-            <div className="text-center">
-              <h1 className="text-2xl font-bold mb-4">🎉 Sandbox Tab is Working!</h1>
-              <p>This is the sandbox content. If you can see this, the tab is working correctly.</p>
-            </div>
-          </div>
-        </TabsContent>
 
         <TabsContent value="image" className="flex-1 min-h-0 mt-0 overflow-auto">
           <div className="container mx-auto px-4 py-6 cultural-text-primary">

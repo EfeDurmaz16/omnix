@@ -28,6 +28,7 @@ export function Navbar() {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard' },
+    { name: 'Sandbox', href: '/sandbox' },
     { name: 'Billing', href: '/billing' },
     { name: 'Themes', href: '/themes' },
     { name: 'Profile', href: '/profile' },

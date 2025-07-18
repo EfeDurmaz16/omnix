@@ -670,7 +670,12 @@ export class EnhancedModelRouter {
       ]
     };
 
-    await this.ragSystem.storeConversation(request.context.userId, conversation);
+    try {
+      await this.ragSystem.storeConversation(request.context.userId, conversation);
+    } catch (error) {
+      console.error('❌ Failed to store conversation in RAG system:', error.message);
+      // Don't throw the error - continue with the request
+    }
   }
 
   private getLastUsedProvider(sessionId?: string): string | null {

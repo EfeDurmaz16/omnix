@@ -6,6 +6,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Play, Eye } from 'lucide-react';
 import { CodePreview } from './CodePreview';
+import { AutoPreview } from './AutoPreview';
+import { useCodeDetection } from '@/hooks/useCodeDetection';
 
 interface MathRendererProps {
   content: string;
@@ -13,6 +15,18 @@ interface MathRendererProps {
 
 export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
+  const [showAutoPreview, setShowAutoPreview] = useState(true);
+  
+  // Use code detection hook to automatically detect web code
+  const { combinedWebCode, hasRunnableCode } = useCodeDetection(content);
+  
+  // Debug: Log what we detect
+  console.log('🔍 MathRenderer - Content length:', content.length);
+  console.log('🔍 MathRenderer - Has runnable code:', hasRunnableCode);
+  console.log('🔍 MathRenderer - Combined web code:', combinedWebCode ? 'YES' : 'NO');
+  if (combinedWebCode) {
+    console.log('🔍 MathRenderer - Combined web code length:', combinedWebCode.length);
+  }
   
   const isRunnableLanguage = (language: string): boolean => {
     const runnableLanguages = ['html', 'javascript', 'js', 'jsx', 'tsx', 'react', 'css', 'typescript', 'ts'];
@@ -510,6 +524,14 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
         </div>
       )}
       {renderMathContent(content)}
+      
+      {/* Auto Preview for Web Code */}
+      {combinedWebCode && showAutoPreview && (
+        <AutoPreview 
+          htmlContent={combinedWebCode}
+          onClose={() => setShowAutoPreview(false)}
+        />
+      )}
       
       {/* Code Preview Modal */}
       {previewCode && (
