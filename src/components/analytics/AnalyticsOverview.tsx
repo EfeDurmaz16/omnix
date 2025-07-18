@@ -108,7 +108,8 @@ export function AnalyticsOverview() {
           <CardTitle className="flex items-center space-x-2">
             <Activity className="h-5 w-5" />
             <span>Analytics Overview</span>
-          </CardHeader>
+          </CardTitle>
+        </CardHeader>
           <CardContent>
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="h-5 w-5 animate-spin mr-2" />
@@ -127,7 +128,8 @@ export function AnalyticsOverview() {
               <Activity className="h-5 w-5" />
               <span>Analytics Overview</span>
             </CardTitle>
-            <CardContent>
+          </CardHeader>
+          <CardContent>
               <div className="text-center py-8">
                 <p className="text-red-600 mb-4">Failed to load analytics: {error}</p>
                 <Button onClick={fetchOverview} size="sm">

@@ -1,15 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import 'katex/dist/katex.min.css';
 import { BlockMath, InlineMath } from 'react-katex';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Play, Eye } from 'lucide-react';
+import { CodePreview } from './CodePreview';
 
 interface MathRendererProps {
   content: string;
 }
 
 export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
+  const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
+  
+  const isRunnableLanguage = (language: string): boolean => {
+    const runnableLanguages = ['html', 'javascript', 'js', 'jsx', 'tsx', 'react', 'css', 'typescript', 'ts'];
+    return runnableLanguages.includes(language.toLowerCase());
+  };
   // Convert LaTeX bracket notation to dollar notation
   const processContent = (text: string) => {
     let processed = text;
@@ -399,19 +407,34 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
       }
       
       if (!inline && language) {
+        const codeContent = String(children).replace(/\n$/, '');
+        const isRunnable = isRunnableLanguage(language);
+        
         return (
           <div className="relative my-4">
             <div className="flex items-center justify-between bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded-t-lg border border-gray-300 dark:border-gray-600 border-b-0">
               <span className="text-xs font-mono font-medium text-gray-600 dark:text-gray-300 uppercase">
                 {language}
               </span>
-              <button
-                onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
-                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                title="Copy code"
-              >
-                Copy
-              </button>
+              <div className="flex items-center gap-2">
+                {isRunnable && (
+                  <button
+                    onClick={() => setPreviewCode({ code: codeContent, language })}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+                    title="Run code"
+                  >
+                    <Play className="h-3 w-3" />
+                    Run
+                  </button>
+                )}
+                <button
+                  onClick={() => navigator.clipboard.writeText(codeContent)}
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  title="Copy code"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
             <SyntaxHighlighter
               style={typeof window !== 'undefined' && document.documentElement.classList.contains('dark') ? oneDark : oneLight}
@@ -420,7 +443,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
               className="!rounded-t-none rounded-b-lg !bg-gray-100 dark:!bg-gray-800 !border !border-gray-300 dark:!border-gray-600 !border-t-0 !mt-0"
               {...props}
             >
-              {String(children).replace(/\n$/, '')}
+              {codeContent}
             </SyntaxHighlighter>
           </div>
         );
@@ -487,6 +510,19 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
         </div>
       )}
       {renderMathContent(content)}
+      
+      {/* Code Preview Modal */}
+      {previewCode && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-6xl h-[90vh] overflow-hidden">
+            <CodePreview 
+              code={previewCode.code} 
+              language={previewCode.language}
+              onClose={() => setPreviewCode(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
