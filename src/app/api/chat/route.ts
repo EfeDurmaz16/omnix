@@ -11,6 +11,7 @@ import { validateAndSanitize, chatRequestSchema, checkRateLimit, rateLimits } fr
 import { createSecureResponse, createErrorResponse, validateOrigin, validateRequestSize, logSecurityEvent } from '@/lib/security/apiSecurity';
 import { sanitizeHtml } from '@/lib/security/inputValidation';
 import { creditCostCalculator } from '@/lib/pricing/CreditCostCalculator';
+import { PlanEnforcer } from '@/lib/middleware/PlanEnforcer';
 
 // Extend timeout for long responses
 export const maxDuration = 300; // 5 minutes
@@ -101,6 +102,46 @@ export async function POST(req: NextRequest) {
 
     const { messages, sessionId, conversationId, mode, files, stream = false, includeMemory = true, voiceChat = false, language = 'en', enableWebSearch = false, forceWebSearch = false } = body;
     model = body.model;
+    
+    // Estimate credit cost before plan enforcement
+    const estimatedCredits = creditCostCalculator.calculateCost(
+      model,
+      messages.map(m => m.content).join(' ').length,
+      'text'
+    );
+    
+    console.log(`🎯 Plan enforcement check: user=${userId}, model=${model}, estimatedCredits=${estimatedCredits}`);
+    
+    // Plan enforcement - check model access, quotas, and rate limits
+    const planCheck = await PlanEnforcer.enforceApiRequest(
+      userId,
+      model,
+      estimatedCredits,
+      voiceChat ? 'voice-chat' : 'basic-chat',
+      'chat'
+    );
+    
+    if (!planCheck.allowed) {
+      console.log('🚫 Plan enforcement failed:', planCheck.reason);
+      const response = createErrorResponse(planCheck.reason || 'Access denied', 403, {
+        rateLimitInfo: planCheck.rateLimitInfo,
+        usageInfo: planCheck.usageInfo
+      });
+      
+      // Add rate limit headers if available
+      if (planCheck.headers) {
+        Object.entries(planCheck.headers).forEach(([key, value]) => {
+          response.headers.set(key, value);
+        });
+      }
+      
+      return response;
+    }
+    
+    console.log('✅ Plan enforcement passed:', {
+      rateLimitInfo: planCheck.rateLimitInfo,
+      usageInfo: planCheck.usageInfo
+    });
     
     // Debug voice chat requests
     if (voiceChat) {
@@ -646,14 +687,23 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      return new Response(readable, {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Transfer-Encoding': 'chunked',
+      const responseHeaders: Record<string, string> = {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
         'X-XSS-Protection': '1; mode=block',
-        },
+      };
+
+      // Add rate limit headers if available
+      if (planCheck.headers) {
+        Object.entries(planCheck.headers).forEach(([key, value]) => {
+          responseHeaders[key] = value;
+        });
+      }
+
+      return new Response(readable, {
+        headers: responseHeaders,
       });
     } else {
       // Handle regular JSON response
@@ -769,7 +819,16 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      return createSecureResponse(response);
+      const secureResponse = createSecureResponse(response);
+      
+      // Add rate limit headers if available
+      if (planCheck.headers) {
+        Object.entries(planCheck.headers).forEach(([key, value]) => {
+          secureResponse.headers.set(key, value);
+        });
+      }
+      
+      return secureResponse;
     }
 
   } catch (error) {
