@@ -285,11 +285,13 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     const controller = new AbortController();
     setAbortController(controller);
     
-    // Set a reasonable timeout for API responses (45 seconds for RAG + web search)
+    // Set longer timeout for API responses to handle long generations
+    // Use 4.5 minutes to stay under server's 5 minute limit
+    const timeout = 270000; // 4.5 minutes
     const timeoutId = setTimeout(() => {
       controller.abort();
-      console.log('🕐 Request timed out after 45 seconds');
-    }, 45000);
+      console.log(`🕐 Request timed out after ${timeout / 1000} seconds`);
+    }, timeout);
 
     try {
       // Show thinking state for more advanced models
@@ -442,8 +444,26 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
 
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('🛑 Request aborted by user');
-        return;
+        console.log('🛑 Request aborted by user or timeout');
+        
+        // If we have partial content from streaming, preserve it
+        if (fullContent && fullContent.length > 0) {
+          console.log('📝 Preserving partial response from timeout:', fullContent.length, 'characters');
+          const partialMessage: Message = {
+            id: `msg_${Date.now()}_partial`,
+            role: 'assistant',
+            content: fullContent + '\n\n_[Response was cut off due to timeout. The message was taking longer than expected to complete.]_',
+            timestamp: new Date(),
+            model: optimalModel,
+          };
+
+          setMessages(prev => [...prev, partialMessage]);
+          setStreamingMessage('');
+          return;
+        } else {
+          // No partial content, just return without error message
+          return;
+        }
       }
 
       console.error('Error sending message:', error);
@@ -686,7 +706,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-background border border-border rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden"
+              className="bg-background border border-border rounded-lg shadow-xl w-full max-w-4xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               <AdvancedModelSearch

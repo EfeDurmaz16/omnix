@@ -1239,6 +1239,10 @@ export class OpenAIProvider implements ModelProvider {
     }
   }
 
+  async healthCheck(): Promise<boolean> {
+    return await this.validateConfig();
+  }
+
   estimateCost(request: GenerateRequest): number {
     const modelInfo = this.models.find(m => m.id === request.model);
     if (!modelInfo) return 0;

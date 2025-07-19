@@ -6,7 +6,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Play, Eye } from 'lucide-react';
 import { CodePreview } from './CodePreview';
-import { AutoPreview } from './AutoPreview';
 import { useCodeDetection } from '@/hooks/useCodeDetection';
 
 interface MathRendererProps {
@@ -15,7 +14,6 @@ interface MathRendererProps {
 
 export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
-  const [showAutoPreview, setShowAutoPreview] = useState(true);
   
   // Check if content is primarily code blocks to skip math processing
   const isCodeContent = (text: string): boolean => {
@@ -542,7 +540,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   };
   
   return (
-    <div className="math-content prose prose-sm max-w-none dark:prose-invert">
+    <div className="math-content max-w-none">
       {showDebug && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded">
           <h3 className="font-bold text-red-800 mb-2">⚠️ Debug: Found $1$ placeholders</h3>
@@ -565,13 +563,6 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
       )}
       {renderMathContent(content)}
       
-      {/* Auto Preview for Web Code */}
-      {combinedWebCode && showAutoPreview && (
-        <AutoPreview 
-          htmlContent={combinedWebCode}
-          onClose={() => setShowAutoPreview(false)}
-        />
-      )}
       
       {/* Code Preview Modal */}
       {previewCode && (

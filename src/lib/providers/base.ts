@@ -7,6 +7,7 @@ export interface ModelProvider {
   generateStream(request: GenerateRequest): AsyncIterable<GenerateResponse>;
   getModels(): ModelInfo[];
   validateConfig(): Promise<boolean>;
+  healthCheck(): Promise<boolean>;
   estimateCost(request: GenerateRequest): number;
 }
 
@@ -233,6 +234,16 @@ export abstract class BaseProvider implements ModelProvider {
   abstract generateText(request: GenerateRequest): Promise<GenerateResponse>;
   abstract generateStream(request: GenerateRequest): AsyncIterable<GenerateResponse>;
   abstract validateConfig(): Promise<boolean>;
+
+  // Default healthCheck implementation - can be overridden by providers
+  async healthCheck(): Promise<boolean> {
+    try {
+      return await this.validateConfig();
+    } catch (error) {
+      console.warn(`Health check failed for ${this.name}:`, error);
+      return false;
+    }
+  }
 
   getModels(): ModelInfo[] {
     return this.models;

@@ -506,8 +506,18 @@ export class ModelCatalog {
     
     for (const [providerId, provider] of this.providers) {
       try {
-        health[providerId] = await provider.healthCheck();
-      } catch {
+        // Check if healthCheck method exists
+        if (typeof provider.healthCheck === 'function') {
+          health[providerId] = await provider.healthCheck();
+        } else if (typeof provider.validateConfig === 'function') {
+          // Fallback to validateConfig if healthCheck doesn't exist
+          health[providerId] = await provider.validateConfig();
+        } else {
+          // Assume healthy if no health check method available
+          health[providerId] = true;
+        }
+      } catch (error) {
+        console.warn(`Health check failed for provider ${providerId}:`, error);
         health[providerId] = false;
       }
     }

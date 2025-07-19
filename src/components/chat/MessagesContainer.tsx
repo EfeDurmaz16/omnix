@@ -248,7 +248,7 @@ function MessageBubble({
             </div>
           ) : (
             /* Normal Display Mode */
-            <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
+            <div className="max-w-none leading-relaxed">
               <MathRenderer content={message.content} />
             </div>
           )}
@@ -474,7 +474,7 @@ function StreamingMessage({
         </div>
 
         <div className="bg-muted rounded-lg p-4 mr-12">
-          <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
+          <div className="max-w-none leading-relaxed">
             <MathRenderer content={streamingMessage} />
             {/* Typing cursor */}
             <span className="inline-block w-3 h-5 bg-primary ml-1 animate-pulse" style={{ animationDuration: '1s' }} />

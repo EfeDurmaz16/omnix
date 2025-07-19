@@ -501,37 +501,47 @@ export async function POST(req: NextRequest) {
             // Use enhanced model router to generate the response
             const aiResponse = await enhancedModelRouter.generateText(enhancedRequest);
             
-            // Stream the response character by character for fast typing effect
+            // Stream the response with optimized chunk size for performance
             const content = cleanAIResponse(aiResponse.content);
-            const chunkSize = 3; // characters per chunk for smooth typing
+            const chunkSize = content.length > 2000 ? 10 : 5; // Larger chunks for long content
+            
+            console.log('🔍 Starting stream - Total content length:', content.length);
+            console.log('🔍 Content preview:', content.substring(0, 100) + '...');
+            console.log('🔍 Content ending:', '...' + content.substring(content.length - 100));
             
             // Try to stream the content
             let streamingSuccessful = true;
+            let chunksStreamed = 0;
             
             for (let i = 0; i < content.length; i += chunkSize) {
+              chunksStreamed++;
               const chunk = content.slice(i, i + chunkSize);
               
               try {
-                // Check if controller is still writable
-                if (controller.desiredSize === null) {
-                  console.log('🛑 Controller closed, stopping stream');
+                // Send chunk (remove aggressive controller check)
+                controller.enqueue(encoder.encode(chunk));
+                
+                // Reduced delay for long content, faster streaming
+                if (i + chunkSize < content.length) {
+                  const delay = content.length > 2000 ? 5 : 10; // Faster for long content
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                }
+              } catch (error) {
+                // Only break on actual controller errors, not client disconnects
+                if (error instanceof Error && error.message.includes('Controller is already closed')) {
+                  console.log('🔌 Client disconnected, ending stream gracefully');
+                  break;
+                } else {
+                  console.log('🛑 Streaming error:', error instanceof Error ? error.message : 'Unknown error');
                   streamingSuccessful = false;
                   break;
                 }
-                
-                // Send chunk
-                controller.enqueue(encoder.encode(chunk));
-                
-                // Fast delay for smooth typing effect
-                if (i + chunkSize < content.length) {
-                  await new Promise(resolve => setTimeout(resolve, 15)); // Optimized delay for smooth streaming
-                }
-              } catch (error) {
-                console.log('🛑 Streaming error, stopping:', error instanceof Error ? error.message : 'Unknown error');
-                streamingSuccessful = false;
-                break;
               }
             }
+            
+            console.log('🔍 Stream finished - Chunks streamed:', chunksStreamed);
+            console.log('🔍 Stream successful:', streamingSuccessful);
+            console.log('🔍 Expected chunks:', Math.ceil(content.length / chunkSize));
             
             // If streaming failed, log the full response for debugging
             if (!streamingSuccessful) {
@@ -598,12 +608,12 @@ export async function POST(req: NextRequest) {
               }).catch(error => console.warn('Analytics tracking failed:', error));
             }
             
+            // Always close the controller after streaming is complete
             try {
-              if (controller.desiredSize !== null) {
-                controller.close();
-              }
+              controller.close();
+              console.log('✅ Stream completed successfully');
             } catch (error) {
-              console.log('🛑 Controller already closed');
+              console.log('🛑 Controller already closed:', error instanceof Error ? error.message : 'Unknown error');
             }
           } catch (error) {
             console.error('Streaming error:', error);
