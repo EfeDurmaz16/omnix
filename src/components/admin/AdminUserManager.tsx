@@ -40,7 +40,7 @@ import {
   CreditCard,
   Calendar
 } from 'lucide-react';
-import { UserPlan } from '@prisma/client';
+import { Plan as UserPlan } from '@prisma/client';
 
 interface AdminUser {
   id: string;

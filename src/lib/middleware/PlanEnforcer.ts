@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { prisma } from '@/lib/prisma';
-import { UserPlan } from '@prisma/client';
+import { prisma } from '@/lib/db';
+import { Plan as UserPlan } from '@prisma/client';
 import { rateLimiter, RateLimitResult } from '@/lib/rate-limiting/RedisRateLimiter';
 
 export interface PlanLimits {

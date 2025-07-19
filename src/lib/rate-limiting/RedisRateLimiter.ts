@@ -1,4 +1,10 @@
-import Redis from 'ioredis';
+// Optional Redis import - fallback to memory if not available
+let Redis: any = null;
+try {
+  Redis = require('ioredis');
+} catch (error) {
+  console.warn('Redis not available, using memory-only rate limiting');
+}
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -9,14 +15,14 @@ export interface RateLimitResult {
 }
 
 export class RedisRateLimiter {
-  private redis: Redis | null = null;
+  private redis: any | null = null;
   private fallbackStore = new Map<string, { count: number; resetTime: number }>();
 
   constructor() {
     try {
       // Initialize Redis connection if available
       const redisUrl = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL;
-      if (redisUrl) {
+      if (redisUrl && Redis) {
         this.redis = new Redis(redisUrl, {
           retryDelayOnFailover: 100,
           maxRetriesPerRequest: 3,
@@ -27,6 +33,8 @@ export class RedisRateLimiter {
           console.warn('Redis connection error, falling back to memory:', err.message);
           this.redis = null;
         });
+      } else if (!Redis) {
+        console.warn('Redis package not installed, using memory-only rate limiting');
       }
     } catch (error) {
       console.warn('Failed to initialize Redis, using memory fallback:', error);

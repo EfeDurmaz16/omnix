@@ -12,23 +12,33 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
-  name      String?
-  avatar    String?
-  plan      Plan     @default(FREE)
-  credits   Int      @default(1500)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  clerkId      String    @unique
+  email        String    @unique
+  name         String?
+  avatar       String?
+  plan         Plan      @default(FREE)
+  credits      Int       @default(1500)
+  role         UserRole  @default(USER)
+  lastLoginAt  DateTime?
+  teamId       String?   // Team membership
+  teamRole     TeamRole? // Role within team
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   // Relationships
-  transactions    CreditTransaction[]
-  conversations   Conversation[]
-  images          Image[]
-  videos          Video[]
-  apiUsage        ApiUsage[]
-  subscriptions   Subscription[]
+  transactions     CreditTransaction[]
+  conversations    Conversation[]
+  images           Image[]
+  videos           Video[]
+  apiUsage         ApiUsage[]
+  subscriptions    Subscription[]
+  adminActions     AdminAction[]
+  billingAddress   BillingAddress?
+  team             Team?               @relation("TeamMembers", fields: [teamId], references: [id], onDelete: SetNull)
+  ownedTeams       Team[]              @relation("TeamOwner")
+  sentInvitations  TeamInvitation[]    @relation("InvitationSender")
+  receivedInvitations TeamInvitation[] @relation("InvitationReceiver")
   // agents          Agent[]
 
   @@map("users")
@@ -140,7 +150,8 @@ model ApiUsage {
 
 model Subscription {
   id                   String            @id @default(cuid())
-  userId               String
+  userId               String?
+  teamId               String?           // Team subscription
   stripeCustomerId     String?
   stripeSubscriptionId String?           @unique
   stripePriceId        String?
@@ -149,14 +160,122 @@ model Subscription {
   currentPeriodStart   DateTime
   currentPeriodEnd     DateTime
   cancelAtPeriodEnd    Boolean           @default(false)
+  trialEnd             DateTime?
+  discountPercent      Float?            // Enterprise discount
+  customPrice          Float?            // Custom enterprise pricing
+  billingCycle         BillingCycle      @default(MONTHLY)
+  autoRenew            Boolean           @default(true)
   metadata             Json?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
   // Relationships
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+  usageRecords UsageRecord[]
 
   @@map("subscriptions")
+}
+
+model Invoice {
+  id               String        @id @default(cuid())
+  subscriptionId   String
+  stripeInvoiceId  String?       @unique
+  invoiceNumber    String        @unique
+  status           InvoiceStatus @default(DRAFT)
+  subtotal         Float         // Before tax and discounts
+  discountAmount   Float         @default(0)
+  taxAmount        Float         @default(0)
+  total            Float
+  currency         String        @default("USD")
+  periodStart      DateTime
+  periodEnd        DateTime
+  dueDate          DateTime
+  paidAt           DateTime?
+  metadata         Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relationships
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  lineItems    InvoiceLineItem[]
+  payments     Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float
+  amount      Float
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  // Relationships
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_line_items")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  invoiceId       String
+  stripePaymentId String?       @unique
+  amount          Float
+  currency        String        @default("USD")
+  status          PaymentStatus @default(PENDING)
+  method          String?       // card, bank_transfer, etc.
+  paidAt          DateTime?
+  failureReason   String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relationships
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  userId         String
+  model          String
+  requestType    String   // chat, image, video, etc.
+  quantity       Int      // Number of requests/tokens
+  unitCost       Float    // Cost per unit
+  totalCost      Float    // quantity * unitCost
+  timestamp      DateTime @default(now())
+  metadata       Json?
+
+  // Relationships
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("usage_records")
+}
+
+model BillingAddress {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  company      String?
+  line1        String
+  line2        String?
+  city         String
+  state        String?
+  postalCode   String
+  country      String
+  taxId        String?  // VAT/Tax ID for business
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relationships
+  user User @relation(fields: [userId], references: [clerkId], onDelete: Cascade)
+
+  @@map("billing_addresses")
 }
 
 // model Agent {
@@ -212,11 +331,104 @@ model Subscription {
 // }
 
 // Enums
+model Team {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  avatar       String?
+  plan         Plan     @default(TEAM)
+  credits      Int      @default(5000)
+  maxMembers   Int      @default(10)
+  ownerId      String
+  settings     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relationships
+  owner       User             @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     User[]           @relation("TeamMembers")
+  invitations TeamInvitation[]
+  usage       TeamUsage[]
+
+  @@map("teams")
+}
+
+model TeamInvitation {
+  id           String           @id @default(cuid())
+  teamId       String
+  inviterId    String
+  inviteeId    String?          // null if invited by email
+  email        String
+  role         TeamRole         @default(MEMBER)
+  status       InvitationStatus @default(PENDING)
+  token        String           @unique
+  expiresAt    DateTime
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relationships
+  team     Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  inviter  User  @relation("InvitationSender", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee  User? @relation("InvitationReceiver", fields: [inviteeId], references: [id], onDelete: SetNull)
+
+  @@map("team_invitations")
+}
+
+model TeamUsage {
+  id           String   @id @default(cuid())
+  teamId       String
+  userId       String   // Member who used credits
+  model        String   // Model used
+  credits      Int      // Credits consumed
+  requestType  String   // chat, image, video, etc.
+  metadata     Json?    // Additional usage data
+  createdAt    DateTime @default(now())
+
+  // Relationships
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("team_usage")
+}
+
+model AdminAction {
+  id           String   @id @default(cuid())
+  adminId      String
+  action       String   // Action type (PLAN_UPDATE, CREDITS_UPDATE, etc.)
+  targetUserId String?  // Target user if applicable
+  details      Json?    // Action details
+  createdAt    DateTime @default(now())
+
+  // Relationships
+  admin User @relation(fields: [adminId], references: [clerkId], onDelete: Cascade)
+
+  @@map("admin_actions")
+}
+
 enum Plan {
   FREE
   PRO
   ULTRA
-  ENTERPRISE
+  TEAM
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum TeamRole {
+  MEMBER
+  ADMIN
+  OWNER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
 }
 
 enum TransactionType {
@@ -225,6 +437,8 @@ enum TransactionType {
   REFUND
   BONUS
   ADJUSTMENT
+  ADMIN_GRANT
+  ADMIN_DEDUCT
 }
 
 enum VideoStatus {
@@ -242,6 +456,30 @@ enum SubscriptionStatus {
   INCOMPLETE_EXPIRED
   TRIALING
   UNPAID
+  PAUSED
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
 }
 
 // enum AgentExecutionStatus {
