@@ -230,7 +230,7 @@ export const CodePreview: React.FC<CodePreviewProps> = ({
 
       let cssContent = '';
 
-      // Handle CSS imports
+      // Handle CSS imports with more flexible matching
       const cssImportMatches = code.match(/import\s+['"]([^'"]*\.css)['"];?/g);
       if (cssImportMatches) {
         cssImportMatches.forEach(importStatement => {
@@ -247,17 +247,27 @@ export const CodePreview: React.FC<CodePreviewProps> = ({
               key.endsWith('.css') && (
                 key === cssFileName || 
                 key.includes(cssFileName.replace('.css', '')) ||
-                cssFileName.includes(key.replace('.css', ''))
+                cssFileName.includes(key.replace('.css', '')) ||
+                key === 'styles.css' // fallback to any CSS file
               )
             );
             
             if (matchingCSSKey && virtualFS[matchingCSSKey]) {
               cssContent += virtualFS[matchingCSSKey] + '\n\n';
-              processedCode = processedCode.replace(importStatement, '');
+              console.log('🔍 CodePreview - Found CSS content:', cssContent.substring(0, 100) + '...');
             } else {
-              // If no matching CSS file found, remove the import anyway
-              processedCode = processedCode.replace(importStatement, '');
+              console.log('🔍 CodePreview - No matching CSS file found for:', cssFileName);
+              
+              // If no specific match, try to find any CSS file in virtual FS
+              const anyCSSFile = Object.keys(virtualFS).find(key => key.endsWith('.css'));
+              if (anyCSSFile && virtualFS[anyCSSFile]) {
+                cssContent += virtualFS[anyCSSFile] + '\n\n';
+                console.log('🔍 CodePreview - Using fallback CSS file:', anyCSSFile);
+              }
             }
+            
+            // Always remove the import statement since we can't use it in browser
+            processedCode = processedCode.replace(importStatement, '');
           }
         });
       }

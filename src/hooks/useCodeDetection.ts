@@ -31,18 +31,23 @@ export const useCodeDetection = (content: string) => {
       return 'html';
     }
 
+    // Better CSS detection - check for CSS properties and selectors
+    if (lowerCode.includes('{') && lowerCode.includes('}') &&
+        (lowerCode.includes('color:') || lowerCode.includes('background:') ||
+         lowerCode.includes('font-') || lowerCode.includes('margin:') ||
+         lowerCode.includes('padding:') || lowerCode.includes('border:') ||
+         lowerCode.includes('width:') || lowerCode.includes('height:') ||
+         lowerCode.includes('display:') || lowerCode.includes('flex') ||
+         lowerCode.includes('.todo-list') || lowerCode.includes('#'))) {
+      console.log('🔍 detectLanguage - Detected CSS based on properties');
+      return 'css';
+    }
+
     if (lowerCode.includes('import react') || lowerCode.includes('from \'react\'') ||
         lowerCode.includes('usestate') || lowerCode.includes('useeffect') ||
         lowerCode.includes('return (') || lowerCode.includes('<div') ||
         lowerCode.includes('jsx') || lowerCode.includes('tsx')) {
       return 'jsx';
-    }
-
-    if (lowerCode.includes('{') && lowerCode.includes('}') &&
-        (lowerCode.includes('color:') || lowerCode.includes('background:') ||
-         lowerCode.includes('font-') || lowerCode.includes('margin:') ||
-         lowerCode.includes('padding:'))) {
-      return 'css';
     }
 
     if (lowerCode.includes('function') || lowerCode.includes('const ') ||
@@ -414,6 +419,18 @@ export const useCodeDetection = (content: string) => {
           }
         }
       }
+
+      // Post-process blocks to catch any CSS that might have been misclassified
+      blocks.forEach(block => {
+        if (block.language !== 'css') {
+          const detectedLang = detectLanguage(undefined, block.code);
+          if (detectedLang === 'css') {
+            console.log('🔍 useCodeDetection - Re-classifying block as CSS:', block.id);
+            block.language = 'css';
+            block.isRunnable = true;
+          }
+        }
+      });
 
       return blocks.sort((a, b) => a.startIndex - b.startIndex);
     };
