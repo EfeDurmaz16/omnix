@@ -780,7 +780,7 @@ export async function POST(req: NextRequest) {
           metadata: {
             stream: false,
             webSearchUsed: webSearchResults.length > 0,
-            ragEnabled: !useQuickMode && !!context,
+            ragEnabled: !useQuickMode && (enhancedMessages.length > processedMessages.length),
             attachedImages: attachedImages.length
           }
         }).catch(error => console.warn('Analytics tracking failed:', error));
