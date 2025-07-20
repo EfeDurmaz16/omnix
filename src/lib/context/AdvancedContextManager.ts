@@ -1640,6 +1640,47 @@ CRITICAL INSTRUCTIONS:
     
     return Array.from(activeUsers);
   }
+
+  /**
+   * Create a new context with specific configuration
+   */
+  async createContext(contextId: string, options: any): Promise<ConversationContext> {
+    // If context already exists, return it
+    if (this.activeContexts.has(contextId)) {
+      return this.activeContexts.get(contextId)!;
+    }
+
+    // Create new context using existing getOrCreateContext method
+    const context = await this.getOrCreateContext(
+      contextId,
+      options.userId || 'system',
+      options.maxTokens || 4000,
+      false, // Not quick mode
+      {
+        memoryEnabled: options.includeUserMemories !== false,
+        includeRecentContext: options.includeRecentContext !== false,
+        systemPrompt: options.systemPrompt
+      }
+    );
+
+    return context;
+  }
+
+  /**
+   * Clear/remove a context
+   */
+  async clearContext(contextId: string): Promise<void> {
+    const context = this.activeContexts.get(contextId);
+    if (context) {
+      // Store the context before removing it
+      await this.persistContext(context);
+      
+      // Remove from active contexts
+      this.activeContexts.delete(contextId);
+      
+      console.log(`🗑️ Cleared context: ${contextId}`);
+    }
+  }
 }
 
 // Singleton instance

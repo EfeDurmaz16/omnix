@@ -111,9 +111,8 @@ export class StreamProcessor {
       }
     }
 
-    // Extract text up to special pattern or in small chunks for smooth streaming
-    const chunkSize = Math.min(20, nearestIndex > 0 ? nearestIndex : this.state.buffer.length);
-    const text = this.state.buffer.substring(0, chunkSize);
+    // Send the entire chunk without artificial splitting
+    const text = nearestIndex > 0 ? this.state.buffer.substring(0, nearestIndex) : this.state.buffer;
 
     if (text) {
       await this.sendChunk({
@@ -345,6 +344,9 @@ export class StreamProcessor {
       timestamp: Date.now(),
       messageId: this.state.messageId
     };
+    
+    // Debug: Log what we're sending to frontend
+    console.log('📤 Sending chunk to frontend:', JSON.stringify(chunk.content));
     
     this.response.write(`data: ${JSON.stringify(event)}\n\n`);
   }

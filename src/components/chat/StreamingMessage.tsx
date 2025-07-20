@@ -149,9 +149,12 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
     }
   };
 
-  // Expose connect method for parent component
+  // Expose methods for parent component
   React.useImperativeHandle(React.createRef(), () => ({
-    connect: connectToStream
+    connect: connectToStream,
+    processChunk: (chunk: StreamChunk) => {
+      processChunk(chunk);
+    }
   }), []);
 
   const renderBlock = (block: MessageBlock, index: number) => {

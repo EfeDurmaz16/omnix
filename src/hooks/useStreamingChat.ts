@@ -250,10 +250,12 @@ export const useStreamingChat = (chatId: string) => {
                 break;
               }
 
-              // Accumulate text content
+              // Handle text content - accumulate properly
               if (chunk.type === 'text') {
+                // Add ONLY the new chunk content (not cumulative)
                 accumulatedContentRef.current += chunk.content;
                 
+                // Update the streaming message with accumulated content
                 updateStreamingMessage(assistantMessage.id, {
                   content: accumulatedContentRef.current
                 });

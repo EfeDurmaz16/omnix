@@ -1,12 +1,5 @@
-// Optional Redis import - fallback to memory if not available
-let Redis: any = null;
-try {
-  Redis = require('ioredis');
-} catch (error) {
-  console.warn('Redis not available, using memory-only caching for OptimizedMemoryService');
-}
-
-import { AdvancedContextManager } from '../context/AdvancedContextManager';
+import { Redis } from 'ioredis';
+import { AdvancedContextManager } from '../../context/AdvancedContextManager';
 
 export interface OptimizedMemory {
   id: string;
@@ -34,7 +27,8 @@ export interface MemoryContext {
 }
 
 export class OptimizedMemoryService {
-  private redis: Redis;
+  private redis: Redis | null = null;
+  private redisAvailable = false;
   private contextManager: AdvancedContextManager;
   
   private readonly CACHE_TTL = {
@@ -52,17 +46,35 @@ export class OptimizedMemoryService {
 
   constructor(contextManager: AdvancedContextManager) {
     this.contextManager = contextManager;
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: Number(process.env.REDIS_PORT) || 6379,
-      password: process.env.REDIS_PASSWORD,
-      enableAutoPipelining: true,
-      maxRetriesPerRequest: 3,
-      retryDelayOnFailover: 100,
-      // Connection pooling for better performance
-      lazyConnect: true,
-      keepAlive: 30000,
-    });
+    this.initializeRedis();
+  }
+
+  private async initializeRedis() {
+    try {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: Number(process.env.REDIS_PORT) || 6379,
+        password: process.env.REDIS_PASSWORD,
+        enableAutoPipelining: true,
+        maxRetriesPerRequest: 1,
+        retryDelayOnFailover: 100,
+        lazyConnect: true,
+        keepAlive: 30000,
+        connectTimeout: 2000,
+      });
+
+      // Test connection silently
+      await this.redis.ping();
+      this.redisAvailable = true;
+      console.log('✅ Redis L2 cache connected successfully');
+    } catch (error) {
+      this.redisAvailable = false;
+      console.warn('⚠️ Redis unavailable - using L1 cache only (still fast!)');
+      if (this.redis) {
+        this.redis.disconnect();
+        this.redis = null;
+      }
+    }
   }
 
   async getOptimizedMemories(
@@ -121,6 +133,9 @@ export class OptimizedMemoryService {
 
   private async getCachedConversationContext(chatId: string): Promise<OptimizedMemory[] | null> {
     try {
+      if (!this.redis || !this.redisAvailable) {
+        return null; // Use L1 cache only
+      }
       const cached = await this.redis.get(`chat:${chatId}:context`);
       return cached ? JSON.parse(cached) : null;
     } catch (error) {
@@ -131,6 +146,9 @@ export class OptimizedMemoryService {
 
   private async getCachedUserMemories(userId: string): Promise<OptimizedMemory[] | null> {
     try {
+      if (!this.redis || !this.redisAvailable) {
+        return null; // Use L1 cache only
+      }
       const cached = await this.redis.get(`user:${userId}:memories`);
       return cached ? JSON.parse(cached) : null;
     } catch (error) {
@@ -174,9 +192,18 @@ export class OptimizedMemoryService {
     budget: number
   ): Promise<OptimizedMemory[]> {
     try {
-      // Use existing context manager but with optimized parameters
+      // Create a temporary context for search  
+      const contextId = `search-${userId}-${Date.now()}`;
+      await this.contextManager.createContext(contextId, {
+        maxTokens: budget * 1.2,
+        includeRecentContext: true,
+        includeUserMemories: true,
+        memoryDepth: 'medium'
+      });
+
+      // Get context for the search
       const context = await this.contextManager.getContextForModel(
-        'optimized-search',
+        contextId,
         userId,
         query,
         { 
@@ -186,6 +213,9 @@ export class OptimizedMemoryService {
           memoryDepth: 'medium'
         }
       );
+
+      // Cleanup temporary context
+      await this.contextManager.clearContext(contextId);
 
       // Convert context to OptimizedMemory format
       return this.convertContextToOptimizedMemories(context, userId);
@@ -473,6 +503,11 @@ export class OptimizedMemoryService {
     conversation: OptimizedMemory[],
     user: OptimizedMemory[]
   ): Promise<void> {
+    // Only update Redis cache if available
+    if (!this.redis || !this.redisAvailable) {
+      return; // Skip Redis updates, use L1 cache only
+    }
+
     // Fire-and-forget cache updates
     Promise.all([
       this.redis.setex(

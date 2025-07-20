@@ -117,11 +117,25 @@ export async function POST(request: NextRequest) {
             // Start streaming from model
             const streamStartTime = Date.now();
             let totalContent = '';
+            let lastContentLength = 0;
 
             for await (const chunk of enhancedModelRouter.generateStream(enhancedRequest)) {
               if (chunk.content) {
-                totalContent += chunk.content;
-                await processor.processChunk(chunk.content);
+                // Debug: Log what we're receiving (cumulative content)
+                console.log('🔍 Raw chunk received (cumulative):', JSON.stringify(chunk.content));
+                
+                // Extract only the NEW content since chunks are cumulative
+                const newContent = chunk.content.slice(lastContentLength);
+                lastContentLength = chunk.content.length;
+                
+                console.log('🔍 New delta content:', JSON.stringify(newContent));
+                
+                if (newContent) {
+                  await processor.processChunk(newContent);
+                }
+                
+                // Track total content for saving to database
+                totalContent = chunk.content;
               }
 
               if (chunk.done) {

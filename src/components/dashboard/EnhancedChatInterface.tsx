@@ -1036,16 +1036,13 @@ export function EnhancedChatInterface({
                 <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
                   {message.role === 'assistant' && message.streaming && useStreaming ? (
                     <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
-                      <StreamingMessage
-                        ref={streamingMessageRef}
-                        messageId={message.id}
-                        onComplete={(content) => {
-                          console.log('✅ Streaming message completed:', content.length, 'chars');
-                        }}
-                        onError={(error) => {
-                          console.error('❌ Streaming message error:', error);
-                        }}
-                      />
+                      {/* Show simple streaming text instead of complex component for now */}
+                      <div className="text-white whitespace-pre-wrap">
+                        {message.content}
+                        {isStreaming && (
+                          <span className="animate-pulse ml-1">|</span>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div

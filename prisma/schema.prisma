@@ -341,7 +341,7 @@ model Team {
   credits      Int      @default(5000)
   maxMembers   Int      @default(10)
   ownerId      String
-  settings     Json     @default("{}")
+  settings     String   @default("{}")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
