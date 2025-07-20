@@ -509,36 +509,33 @@ export function EnhancedChatInterface({
     const messageFiles = [...uploadedFiles];
     setUploadedFiles([]);
 
-    if (useStreaming) {
-      // Use new streaming chat
-      try {
-        await sendStreamingMessage(inputMessage, {
-          model: selectedModel,
-          temperature: promptMode === 'flash' ? 0.3 : promptMode === 'think' ? 0.7 : 1.0,
-          maxTokens: 2000,
-          useWebSearch: webSearchEnabled,
-          memoryBudget: 2500,
-          onChunk: (chunk: StreamChunk) => {
-            console.log('📊 Streaming chunk:', chunk.type, chunk.content?.length);
-          },
-          onError: (error: string) => {
-            console.error('❌ Streaming error:', error);
-          },
-          onComplete: (message: ChatMessage) => {
-            console.log('✅ Streaming complete:', message.content.length, 'chars');
-          }
-        });
-
-        // Update session title if this is the first message
-        if (currentSession?.messages.length === 0) {
-          updateSessionTitle(sessionId, generateChatTitle(inputMessage));
+    // Always use streaming chat for proper memory system integration
+    try {
+      await sendStreamingMessage(inputMessage, {
+        model: selectedModel,
+        temperature: promptMode === 'flash' ? 0.3 : promptMode === 'think' ? 0.7 : 1.0,
+        maxTokens: 2000,
+        useWebSearch: webSearchEnabled,
+        memoryBudget: 2500,
+        onChunk: (chunk: StreamChunk) => {
+          console.log('📊 Streaming chunk:', chunk.type, chunk.content?.length);
+        },
+        onError: (error: string) => {
+          console.error('❌ Streaming error:', error);
+        },
+        onComplete: (message: ChatMessage) => {
+          console.log('✅ Streaming complete:', message.content.length, 'chars');
         }
-      } catch (error) {
-        console.error('Failed to send streaming message:', error);
+      });
+
+      // Update session title if this is the first message
+      if (currentSession?.messages.length === 0) {
+        updateSessionTitle(sessionId, generateChatTitle(inputMessage));
       }
-    } else {
-      // Fallback to legacy chat API
-      await handleLegacySendMessage(sessionId, messageFiles);
+    } catch (error) {
+      console.error('Failed to send streaming message:', error);
+      // Show error to user instead of falling back to legacy API
+      alert('Failed to send message. Please try again.');
     }
 
     setInputMessage('');

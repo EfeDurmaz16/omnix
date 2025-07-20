@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Send, 
@@ -60,15 +60,19 @@ export function EnhancedChatInput({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize logic for markdown input
+  // Auto-resize logic for markdown input - optimized with debouncing
   useEffect(() => {
-    // Simply count actual newlines for a more accurate row count
-    const lines = message.split('\n');
-    const newRows = Math.min(Math.max(lines.length, 1), 10); // Allow up to 10 rows for code blocks
-    setRows(newRows);
+    // Debounce the resize calculation to avoid excessive re-renders
+    const timeoutId = setTimeout(() => {
+      const lines = message.split('\n');
+      const newRows = Math.min(Math.max(lines.length, 1), 10); // Allow up to 10 rows for code blocks
+      setRows(newRows);
+    }, 50); // 50ms debounce
+
+    return () => clearTimeout(timeoutId);
   }, [message]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!message.trim() && attachedFiles.length === 0) return;
     
     let finalMessage = message.trim();
@@ -135,14 +139,19 @@ export function EnhancedChatInput({
     setMessage('');
     setAttachedFiles([]);
     setRows(1);
-  };
+  }, [message, attachedFiles, onSend]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
+
+  // Optimize the message change handler
+  const handleMessageChange = useCallback((value: string) => {
+    setMessage(value);
+  }, []);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -445,7 +454,7 @@ export function EnhancedChatInput({
         <div className="flex-1 relative min-w-0">
           <MarkdownInput
             value={message}
-            onChange={setMessage}
+            onChange={handleMessageChange}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled}

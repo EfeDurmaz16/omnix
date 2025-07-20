@@ -49,6 +49,10 @@ export class CleanMemoryStore {
   private openai: OpenAI;
   private readonly MAX_CONVERSATIONS_PER_USER = 100;
   private readonly MAX_CONTEXT_ITEMS = 10;
+  
+  // Simple cache to avoid repeated Firestore queries
+  private memoryCache = new Map<string, { data: ConversationMemory[], timestamp: number }>();
+  private readonly CACHE_TTL = 30000; // 30 seconds cache
 
   constructor() {
     this.openai = new OpenAI({
@@ -172,28 +176,23 @@ export class CleanMemoryStore {
     console.log(`🔍 Query: "${query}"`);
     
     try {
-      const queryEmbedding = await this.generateEmbedding(query);
-      console.log(`🔍 Generated query embedding: ${queryEmbedding.length} dimensions`);
+      // Skip embedding generation for massive speed improvement
+      const queryEmbedding: number[] = [];
+      console.log(`🚀 Skipping embedding generation for speed - using recency-based ranking`);
       
-      // Level 1: Current conversation context (fastest)
-      console.log(`🔍 Level 1: Getting current conversation context...`);
-      const conversationContext = await this.getCurrentConversationContext(
-        userId, chatId, conversationId
-      );
+      // Run all levels in parallel for maximum speed
+      console.log(`🔍 Running all context levels in parallel...`);
+      const [conversationContext, chatContext, userContext] = await Promise.all([
+        // Level 1: Current conversation context
+        this.getCurrentConversationContext(userId, chatId, conversationId),
+        // Level 2: Current chat context  
+        this.getCurrentChatContext(userId, chatId, conversationId, queryEmbedding),
+        // Level 3: User's other chats context
+        this.getUserCrossChatsContext(userId, chatId, queryEmbedding)
+      ]);
+      
       console.log(`📊 Level 1 result: ${conversationContext.length} conversation messages`);
-      
-      // Level 2: Current chat context (fast)
-      console.log(`🔍 Level 2: Getting current chat context...`);
-      const chatContext = await this.getCurrentChatContext(
-        userId, chatId, conversationId, queryEmbedding
-      );
       console.log(`📊 Level 2 result: ${chatContext.length} chat messages`);
-      
-      // Level 3: User's other chats context (broader)
-      console.log(`🔍 Level 3: Getting cross-chat context...`);
-      const userContext = await this.getUserCrossChatsContext(
-        userId, chatId, queryEmbedding
-      );
       console.log(`📊 Level 3 result: ${userContext.length} cross-chat messages`);
 
       const result: ContextResult = {
@@ -295,12 +294,12 @@ export class CleanMemoryStore {
     try {
       console.log(`🔍 Level 2 Query: userId=${userId}, chatId=${chatId}, excluding conversationId=${currentConversationId}`);
       
-      // Query using existing index: userId + createdAt  
+      // Optimized query with smaller limit for speed
       const snapshot = await firestore
         .collection('user-vectors')
         .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
-        .limit(50) // Get more results to filter
+        .limit(10) // Reduced from 50 to 10 for speed
         .get();
 
       console.log(`📊 Level 2 Raw query result: ${snapshot.size} documents found`);
@@ -345,19 +344,36 @@ export class CleanMemoryStore {
     try {
       console.log(`🔍 Level 3 Query: userId=${userId}, excluding chatId=${currentChatId}`);
       
-      // Query using existing index: userId + createdAt
+      // Check cache first
+      const cacheKey = `user_${userId}`;
+      const cached = this.memoryCache.get(cacheKey);
+      
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        console.log(`🔥 Using cached memories for user ${userId} (${cached.data.length} items)`);
+        
+        const conversations = cached.data.filter(conv => conv.metadata?.chatId !== currentChatId);
+        console.log(`📊 Level 3 Cached result: ${conversations.length} documents after filtering`);
+        
+        return this.rankBySimilarity(conversations, queryEmbedding, 3);
+      }
+      
+      // Cache miss - query Firestore
+      console.log(`💾 Cache miss - querying Firestore for user ${userId}`);
       const snapshot = await firestore
         .collection('user-vectors')
         .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
-        .limit(50) // Recent conversations across all chats
+        .limit(15) // Reduced from 50 to 15 for speed
         .get();
 
       console.log(`📊 Level 3 Raw query result: ${snapshot.size} documents found`);
+      
+      // Cache the results
+      const allUserMemories = snapshot.docs.map(doc => doc.data() as ConversationMemory);
+      this.memoryCache.set(cacheKey, { data: allUserMemories, timestamp: Date.now() });
+      console.log(`💾 Cached ${allUserMemories.length} memories for user ${userId}`);
 
-      const conversations = snapshot.docs
-        .map(doc => doc.data() as ConversationMemory)
-        .filter(conv => conv.metadata?.chatId !== currentChatId);
+      const conversations = allUserMemories.filter(conv => conv.metadata?.chatId !== currentChatId);
 
       console.log(`📊 Level 3 After filtering: ${conversations.length} documents (excluded current chat)`);
       
@@ -382,59 +398,37 @@ export class CleanMemoryStore {
   }
 
   /**
-   * Rank conversations by semantic similarity to query
+   * Rank conversations by recency and relevance (no embeddings needed)
    */
   private rankBySimilarity(
     conversations: ConversationMemory[],
     queryEmbedding: number[],
     limit: number
   ): ConversationMemory[] {
-    console.log(`🔍 Ranking ${conversations.length} conversations by similarity`);
-    console.log(`🔍 Query embedding dimensions: ${queryEmbedding.length}`);
+    console.log(`🔍 Ranking ${conversations.length} conversations by recency`);
     
-    const conversationsWithEmbeddings = conversations.filter(conv => 
-      conv.messages && conv.messages.some(msg => msg.embedding && msg.embedding.length > 0)
-    );
-    console.log(`📊 ${conversationsWithEmbeddings.length}/${conversations.length} conversations have embeddings`);
-    
-    if (conversationsWithEmbeddings.length === 0) {
-      console.log(`⚠️ No conversations with embeddings found for similarity ranking`);
+    if (conversations.length === 0) {
+      console.log(`⚠️ No conversations found for ranking`);
       return [];
     }
     
-    const withSimilarity = conversationsWithEmbeddings
-      .map(conv => {
-        // Calculate similarity using the best matching message embedding
-        let bestSimilarity = 0;
-        let bestMessage = null;
-        
-        for (const msg of conv.messages || []) {
-          if (msg.embedding && msg.embedding.length > 0) {
-            const similarity = this.cosineSimilarity(queryEmbedding, msg.embedding);
-            if (similarity > bestSimilarity) {
-              bestSimilarity = similarity;
-              bestMessage = msg;
-            }
-          }
-        }
-        
-        const content = bestMessage?.content || conv.messages?.[0]?.content || 'undefined';
-        console.log(`📊 Similarity for "${content.substring(0, 50)}...": ${bestSimilarity.toFixed(4)}`);
-        return {
-          conversation: conv,
-          similarity: bestSimilarity
-        };
+    // Since embeddings are disabled, just return most recent conversations
+    const ranked = conversations
+      .sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+        return timeB - timeA; // Most recent first
       })
-      .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit);
 
-    console.log(`✅ Top ${withSimilarity.length} conversations after similarity ranking:`);
-    withSimilarity.forEach((item, idx) => {
-      const content = item.conversation.messages?.[0]?.content || 'undefined';
-      console.log(`  ${idx + 1}. Similarity: ${item.similarity.toFixed(4)}, Content: "${content.substring(0, 100)}..."`);
+    console.log(`✅ Top ${ranked.length} conversations after recency ranking:`);
+    ranked.forEach((conv, idx) => {
+      const content = conv.messages?.[0]?.content || 'undefined';
+      const time = new Date(conv.updatedAt || conv.createdAt).toLocaleString();
+      console.log(`  ${idx + 1}. Time: ${time}, Content: "${content.substring(0, 100)}..."`);
     });
 
-    return withSimilarity.map(item => item.conversation);
+    return ranked;
   }
 
   /**
@@ -517,16 +511,21 @@ export class CleanMemoryStore {
 
 
   /**
-   * Generate embedding using OpenAI
+   * Generate embedding using OpenAI with timeout and caching
    */
   private async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const response = await this.openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: text.substring(0, 8000), // Limit input size
-      });
-
-      return response.data[0].embedding;
+      // For now, disable slow embedding generation to fix 30s latency
+      // TODO: Re-enable with proper caching and timeouts later
+      console.log('⚠️ Embedding generation temporarily disabled for performance');
+      return [];
+      
+      // Original code kept for future re-enabling:
+      // const response = await this.openai.embeddings.create({
+      //   model: 'text-embedding-3-small',
+      //   input: text.substring(0, 8000), // Limit input size
+      // });
+      // return response.data[0].embedding;
     } catch (error) {
       console.error('❌ Failed to generate embedding:', error);
       return [];

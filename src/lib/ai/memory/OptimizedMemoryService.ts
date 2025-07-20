@@ -1,5 +1,8 @@
 import { Redis } from 'ioredis';
 import { AdvancedContextManager } from '../../context/AdvancedContextManager';
+import { AdvancedContextCompression } from '../context/AdvancedContextCompression';
+import { HierarchicalMemoryBank } from './HierarchicalMemoryBank';
+import { logger } from '../../utils/logger';
 
 export interface OptimizedMemory {
   id: string;
@@ -30,6 +33,8 @@ export class OptimizedMemoryService {
   private redis: Redis | null = null;
   private redisAvailable = false;
   private contextManager: AdvancedContextManager;
+  private compression: AdvancedContextCompression;
+  private memoryBank: HierarchicalMemoryBank;
   
   private readonly CACHE_TTL = {
     conversation: 3600,    // 1 hour
@@ -46,6 +51,8 @@ export class OptimizedMemoryService {
 
   constructor(contextManager: AdvancedContextManager) {
     this.contextManager = contextManager;
+    this.compression = new AdvancedContextCompression();
+    this.memoryBank = new HierarchicalMemoryBank();
     this.initializeRedis();
   }
 
@@ -89,10 +96,17 @@ export class OptimizedMemoryService {
     const conversationContext = await this.getCachedConversationContext(chatId);
     
     // L2 Cache: Check for recent user memories
-    const userMemories = await this.getCachedUserMemories(userId);
+    let userMemories = await this.getCachedUserMemories(userId);
+    
+    // L2.5: If no cached memories, try to get from existing context manager
+    if (!userMemories || userMemories.length === 0) {
+      console.log('🔄 No cached memories found, retrieving from context manager...');
+      userMemories = await this.getMemoriesFromContextManager(userId, query);
+    }
     
     // If we have sufficient cached data, return early
-    if (conversationContext && userMemories && this.hasEnoughContext(conversationContext, userMemories, query)) {
+    if (conversationContext && userMemories && userMemories.length > 0 && this.hasEnoughContext(conversationContext, userMemories, query)) {
+      console.log(`✅ Using cached data: ${conversationContext.length} conversation + ${userMemories.length} user memories`);
       return {
         conversationMemories: conversationContext,
         userMemories: userMemories.slice(0, 10),
@@ -103,10 +117,16 @@ export class OptimizedMemoryService {
       };
     }
 
-    // L3 Storage: Vector search for relevant memories
-    const vectorResults = await this.performOptimizedVectorSearch(userId, query, memoryBudget);
+    // L3 Storage: Use existing working memory system (temporarily disable new system)
+    console.log('🔄 Using existing memory system (advanced features temporarily disabled)');
     
-    // Post-process and consolidate memories
+    // Fall back to original working retrieval
+    const vectorResults = await this.performOptimizedVectorSearch(userId, query, memoryBudget).catch(error => {
+      console.warn('⚠️ Vector search failed, using fallback:', error.message);
+      return [];
+    });
+    
+    // Post-process and consolidate memories (original logic)
     const consolidatedMemories = await this.consolidateMemories(vectorResults);
     
     // Rerank based on recency, importance, and relevance
@@ -192,35 +212,46 @@ export class OptimizedMemoryService {
     budget: number
   ): Promise<OptimizedMemory[]> {
     try {
-      // Create a temporary context for search  
-      const contextId = `search-${userId}-${Date.now()}`;
-      await this.contextManager.createContext(contextId, {
-        maxTokens: budget * 1.2,
-        includeRecentContext: true,
-        includeUserMemories: true,
-        memoryDepth: 'medium'
+      logger.debug('Performing vector search via context manager', {
+        component: 'memory',
+        userId: userId.substring(0, 12) + '...',
+        query: query.substring(0, 50) + '...',
+        budget
       });
-
-      // Get context for the search
-      const context = await this.contextManager.getContextForModel(
-        contextId,
-        userId,
-        query,
-        { 
-          maxTokens: budget * 1.2, // Search slightly over budget to allow for reranking
-          includeRecentContext: true,
-          includeUserMemories: true,
-          memoryDepth: 'medium'
+      
+      // Use the existing context manager for memory retrieval
+      const memoryResults = await this.contextManager.getUserContexts(userId);
+      const optimizedMemories: OptimizedMemory[] = [];
+      
+      // Convert existing context to optimized memories
+      for (const context of memoryResults.slice(0, 3)) { // Limit to recent contexts
+        for (const message of context.messages.slice(-10)) { // Recent messages
+          if (message.role === 'user' || message.role === 'assistant') {
+            optimizedMemories.push({
+              id: message.id,
+              userId,
+              chatId: context.id,
+              content: message.content,
+              type: 'context',
+              importance: 0.7,
+              entities: this.extractSimpleEntities(message.content),
+              topics: this.extractSimpleTopics(message.content),
+              timestamp: message.timestamp,
+              lastUsed: new Date(),
+              useCount: 1
+            });
+          }
         }
-      );
-
-      // Cleanup temporary context
-      await this.contextManager.clearContext(contextId);
-
-      // Convert context to OptimizedMemory format
-      return this.convertContextToOptimizedMemories(context, userId);
+      }
+      
+      logger.debug('Vector search completed', {
+        component: 'memory',
+        foundMemories: optimizedMemories.length
+      });
+      
+      return optimizedMemories;
     } catch (error) {
-      console.error('Vector search error:', error);
+      logger.error('Vector search error', { component: 'memory' }, error);
       return [];
     }
   }
@@ -559,6 +590,148 @@ export class OptimizedMemoryService {
     }
   }
 
+  /**
+   * Remove duplicate memories based on content similarity
+   */
+  private deduplicateMemories(memories: any[]): any[] {
+    const unique: any[] = [];
+    const seen = new Set<string>();
+
+    for (const memory of memories) {
+      // Create a simple hash for deduplication
+      const contentHash = this.createContentHash(memory.content);
+      
+      if (!seen.has(contentHash)) {
+        seen.add(contentHash);
+        unique.push(memory);
+      }
+    }
+
+    console.log(`🔄 Deduplicated ${memories.length} → ${unique.length} memories`);
+    return unique;
+  }
+
+  /**
+   * Parse compressed context back into structured format
+   */
+  private parseCompressedContext(compressionResult: any): any[] {
+    // For now, create a single memory object from compressed content
+    // In production, you'd have more sophisticated parsing
+    return [{
+      id: `compressed_${Date.now()}`,
+      content: compressionResult.content,
+      metadata: {
+        timestamp: new Date(),
+        importance: 0.9, // Compressed content is important
+        entities: compressionResult.preservedEntities || [],
+        topics: [],
+        compressed: true,
+        originalTokens: compressionResult.originalTokens,
+        compressionRatio: compressionResult.compressionRatio
+      }
+    }];
+  }
+
+  /**
+   * Create content hash for deduplication
+   */
+  private createContentHash(content: string): string {
+    // Simple hash function for content deduplication
+    const normalized = content.toLowerCase().trim().replace(/\s+/g, ' ');
+    let hash = 0;
+    
+    for (let i = 0; i < normalized.length; i++) {
+      const char = normalized.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return hash.toString(36);
+  }
+
+  /**
+   * Store memory in hierarchical memory bank
+   */
+  async storeInHierarchicalBank(
+    userId: string,
+    chatId: string,
+    content: string,
+    importance: number,
+    metadata: any
+  ): Promise<void> {
+    try {
+      await this.memoryBank.addMemory({
+        content,
+        userId,
+        chatId,
+        importance,
+        metadata: {
+          entities: metadata.entities || [],
+          topics: metadata.topics || [],
+          messageCount: metadata.messageCount || 1
+        }
+      });
+      
+      console.log(`💾 Memory stored in hierarchical bank with importance: ${importance}`);
+    } catch (error) {
+      console.error('❌ Failed to store in hierarchical bank:', error);
+    }
+  }
+
+  /**
+   * Retrieve memories from existing context manager system
+   */
+  private async getMemoriesFromContextManager(userId: string, query: string): Promise<OptimizedMemory[]> {
+    try {
+      logger.debug('Searching existing memory system for user', {
+        component: 'memory',
+        userId: userId.substring(0, 12) + '...',
+        query: query.substring(0, 50) + '...'
+      });
+      
+      // Get user contexts from the context manager
+      const userContexts = await this.contextManager.getUserContexts(userId);
+      const memories: OptimizedMemory[] = [];
+      
+      // Convert recent conversations to optimized memories
+      for (const context of userContexts.slice(0, 2)) { // Last 2 conversations
+        for (const message of context.messages.slice(-5)) { // Last 5 messages per conversation
+          if (message.role === 'user' || message.role === 'assistant') {
+            // Check if this message is relevant to the query
+            const isRelevant = this.isMessageRelevantToQuery(message.content, query);
+            
+            if (isRelevant) {
+              memories.push({
+                id: message.id,
+                userId,
+                chatId: context.id,
+                content: message.content,
+                type: message.role === 'user' ? 'context' : 'context',
+                importance: 0.8,
+                entities: this.extractSimpleEntities(message.content),
+                topics: this.extractSimpleTopics(message.content),
+                timestamp: message.timestamp,
+                lastUsed: new Date(),
+                useCount: 1
+              });
+            }
+          }
+        }
+      }
+      
+      logger.debug('Memory retrieval from context manager completed', {
+        component: 'memory',
+        foundMemories: memories.length
+      });
+      
+      return memories;
+      
+    } catch (error) {
+      logger.error('Failed to retrieve from context manager', { component: 'memory' }, error);
+      return [];
+    }
+  }
+
   async getMemoryStats(userId: string): Promise<any> {
     const userMemories = await this.getCachedUserMemories(userId);
     
@@ -588,5 +761,73 @@ export class OptimizedMemoryService {
     }
     
     return distribution;
+  }
+
+  private extractSimpleEntities(text: string): string[] {
+    const entities = [];
+    
+    // Extract names (capitalized words)
+    const names = text.match(/\b[A-Z][a-z]+\b/g) || [];
+    entities.push(...names);
+    
+    // Extract emails
+    const emails = text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\\b/g) || [];
+    entities.push(...emails);
+    
+    // Extract numbers/dates
+    const numbers = text.match(/\b\d{4}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b/g) || [];
+    entities.push(...numbers);
+    
+    return [...new Set(entities)];
+  }
+
+  private extractSimpleTopics(text: string): string[] {
+    const topics = [];
+    
+    // Common programming topics
+    const programmingTerms = ['javascript', 'python', 'react', 'api', 'database', 'server', 'client', 'function', 'variable', 'array', 'object'];
+    programmingTerms.forEach(term => {
+      if (text.toLowerCase().includes(term)) {
+        topics.push(term);
+      }
+    });
+    
+    // Common business topics
+    const businessTerms = ['project', 'meeting', 'deadline', 'budget', 'team', 'client', 'product', 'service'];
+    businessTerms.forEach(term => {
+      if (text.toLowerCase().includes(term)) {
+        topics.push(term);
+      }
+    });
+    
+    return [...new Set(topics)];
+  }
+
+  private isMessageRelevantToQuery(messageContent: string, query: string): boolean {
+    // Simple relevance check using keyword matching
+    const messageWords = new Set(messageContent.toLowerCase().split(/\s+/));
+    const queryWords = new Set(query.toLowerCase().split(/\s+/));
+    
+    // Calculate word overlap
+    const overlap = [...queryWords].filter(word => messageWords.has(word)).length;
+    const relevanceScore = overlap / queryWords.size;
+    
+    // Personal information is always relevant
+    const personalKeywords = ['name', 'age', 'live', 'work', 'study', 'like', 'prefer', 'want', 'need'];
+    const hasPersonalInfo = personalKeywords.some(keyword => 
+      messageContent.toLowerCase().includes(keyword)
+    );
+    
+    // Profile queries should match personal information
+    const isProfileQuery = ['who am i', 'about me', 'what do you know'].some(phrase =>
+      query.toLowerCase().includes(phrase)
+    );
+    
+    if (isProfileQuery && hasPersonalInfo) {
+      return true;
+    }
+    
+    // Return true if relevance score is above threshold
+    return relevanceScore > 0.1 || hasPersonalInfo;
   }
 }

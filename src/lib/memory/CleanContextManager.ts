@@ -21,6 +21,10 @@ export interface SimpleContext {
  */
 export class CleanContextManager {
   private memoryStore: CleanMemoryStore;
+  
+  // Immediate short-term memory for last few messages per chat
+  private shortTermMemory = new Map<string, SimpleMessage[]>();
+  private readonly MAX_SHORT_TERM_MESSAGES = 6; // Last 6 messages (3 exchanges)
 
   constructor() {
     this.memoryStore = new CleanMemoryStore();
@@ -47,16 +51,26 @@ export class CleanContextManager {
     try {
       console.log(`🧠 Getting memory context for user ${context.userId}, chat ${context.chatId}`);
       
-      // Get the user's last message for context search
+      // Step 1: Add immediate short-term memory (last few messages from this chat)
+      const shortTermKey = `${context.userId}-${context.chatId}`;
+      const recentMessages = this.shortTermMemory.get(shortTermKey) || [];
+      console.log(`💭 Short-term memory: Found ${recentMessages.length} recent messages for this chat`);
+      
+      // Step 2: Get the user's last message for context search
       const lastUserMessage = [...context.messages]
         .reverse()
         .find(msg => msg.role === 'user');
 
       if (!lastUserMessage) {
+        // Still add short-term memory even without new user message
+        if (recentMessages.length > 0) {
+          console.log(`✅ Adding ${recentMessages.length} short-term messages to context`);
+          return [...recentMessages, ...context.messages];
+        }
         return context.messages;
       }
 
-      // Get hierarchical context
+      // Step 3: Get hierarchical context (L1-L2-L3)
       const memoryContext = await this.memoryStore.getHierarchicalContext(
         context.userId,
         context.chatId,
@@ -64,11 +78,20 @@ export class CleanContextManager {
         lastUserMessage.content
       );
 
-      // Format and inject memory if found
+      // Step 4: Build comprehensive context with both short-term and long-term memory
+      let allMessages = [...context.messages];
+      
+      // Add short-term memory (immediate context)
+      if (recentMessages.length > 0) {
+        console.log(`✅ Adding ${recentMessages.length} short-term messages for immediate context`);
+        allMessages = [...recentMessages, ...allMessages];
+      }
+
+      // Add long-term hierarchical memory if found
       const formattedMemory = this.memoryStore.formatHierarchicalContext(memoryContext);
       
       if (formattedMemory.trim()) {
-        console.log(`✅ Injecting ${memoryContext.totalFound} memory items into context`);
+        console.log(`✅ Injecting ${memoryContext.totalFound} long-term memory items into context`);
         
         const memoryMessage: SimpleMessage = {
           id: 'memory-context',
@@ -83,22 +106,42 @@ IMPORTANT: This is persistent context about this user from previous conversation
 3. When the user asks "who am I" or about their background, refer to this context
 4. Don't say "I don't have access to personal information" when the context is provided above
 5. Maintain continuity with previous conversations using this context
+6. Pay attention to the recent conversation context above for immediate context
 
 Respond as if you have an ongoing relationship with this user based on the context provided.`,
           timestamp: new Date()
         };
 
         // Inject memory at the beginning of messages
-        return [memoryMessage, ...context.messages];
+        return [memoryMessage, ...allMessages];
       } else {
-        console.log('⚠️ No relevant memory found for context');
-        return context.messages;
+        console.log('⚠️ No relevant long-term memory found, using short-term memory only');
+        return allMessages;
       }
 
     } catch (error) {
       console.error('❌ Failed to inject memory context:', error);
       return context.messages;
     }
+  }
+
+  /**
+   * Store messages in immediate short-term memory
+   */
+  storeInShortTermMemory(userId: string, chatId: string, message: SimpleMessage): void {
+    const shortTermKey = `${userId}-${chatId}`;
+    let messages = this.shortTermMemory.get(shortTermKey) || [];
+    
+    // Add new message
+    messages.push(message);
+    
+    // Keep only last MAX_SHORT_TERM_MESSAGES
+    if (messages.length > this.MAX_SHORT_TERM_MESSAGES) {
+      messages = messages.slice(-this.MAX_SHORT_TERM_MESSAGES);
+    }
+    
+    this.shortTermMemory.set(shortTermKey, messages);
+    console.log(`💭 Stored message in short-term memory: ${messages.length}/${this.MAX_SHORT_TERM_MESSAGES} messages for chat ${chatId}`);
   }
 
   /**
