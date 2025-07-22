@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Send, 
@@ -52,7 +52,6 @@ export function EnhancedChatInput({
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [rows, setRows] = useState(1);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [transcriptionPreview, setTranscriptionPreview] = useState('');
   const modelInfo = useModelInfo(selectedModel);
@@ -60,16 +59,10 @@ export function EnhancedChatInput({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-resize logic for markdown input - optimized with debouncing
-  useEffect(() => {
-    // Debounce the resize calculation to avoid excessive re-renders
-    const timeoutId = setTimeout(() => {
-      const lines = message.split('\n');
-      const newRows = Math.min(Math.max(lines.length, 1), 10); // Allow up to 10 rows for code blocks
-      setRows(newRows);
-    }, 50); // 50ms debounce
-
-    return () => clearTimeout(timeoutId);
+  // Auto-resize logic - direct calculation without debouncing for better performance
+  const rows = useMemo(() => {
+    const lines = message.split('\n');
+    return Math.min(Math.max(lines.length, 1), 10); // Allow up to 10 rows for code blocks  
   }, [message]);
 
   const handleSend = useCallback(() => {

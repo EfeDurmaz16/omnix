@@ -118,10 +118,13 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
     }
   }, []);
 
-  // Persist conversations to localStorage
+  // Persist conversations to localStorage with debouncing
   useEffect(() => {
     if (conversations.length > 0) {
-      localStorage.setItem('omnix-conversations', JSON.stringify(conversations));
+      const timeoutId = setTimeout(() => {
+        localStorage.setItem('omnix-conversations', JSON.stringify(conversations));
+      }, 500); // 500ms debounce
+      return () => clearTimeout(timeoutId);
     }
   }, [conversations]);
 

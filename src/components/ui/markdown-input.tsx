@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef } from 'react';
+import React, { useRef, memo } from 'react';
 import { cn } from '@/lib/utils';
 
 interface MarkdownInputProps {
@@ -14,7 +14,7 @@ interface MarkdownInputProps {
   style?: React.CSSProperties;
 }
 
-export function MarkdownInput({
+const MarkdownInput = memo(function MarkdownInput({
   value,
   onChange,
   onKeyDown,
@@ -56,4 +56,6 @@ export function MarkdownInput({
       />
     </div>
   );
-}
+});
+
+export { MarkdownInput };

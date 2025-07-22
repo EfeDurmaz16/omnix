@@ -71,18 +71,23 @@ export async function POST(request: NextRequest) {
             const memoryStartTime = Date.now();
 
             // Build context using the proven CleanContextManager
+            const userMessage = {
+              id: messageId,
+              role: 'user' as const,
+              content: message,
+              timestamp: new Date()
+            };
+
             const simpleContext = {
               userId,
               chatId,
               conversationId: chatId, // Use chatId as conversationId for now
-              messages: [{
-                id: messageId,
-                role: 'user' as const,
-                content: message,
-                timestamp: new Date()
-              }],
+              messages: [userMessage],
               memoryEnabled: true
             };
+
+            // IMMEDIATELY store user message in short-term memory
+            cleanContextManager.storeInShortTermMemory(userId, chatId, userMessage);
 
             // Get enhanced messages with hierarchical memory context (L1-L2-L3)
             const enhancedMessages = await cleanContextManager.getContextWithMemory(simpleContext);
@@ -161,14 +166,22 @@ export async function POST(request: NextRequest) {
                 // Save conversation to database
                 await saveConversation(userId, chatId, message, totalContent, model);
                 
-                // Store conversation in CleanMemoryStore (fire-and-forget)
-                logger.info('Starting clean memory storage', {
+                // Store BOTH user and assistant messages in short-term memory immediately
+                const assistantMessage = {
+                  id: `assistant_${Date.now()}`,
+                  role: 'assistant' as const,
+                  content: totalContent,
+                  timestamp: new Date()
+                };
+                
+                cleanContextManager.storeInShortTermMemory(userId, chatId, assistantMessage);
+                logger.info('Stored both messages in short-term memory', {
                   component: 'memory',
-                  userId: userId.substring(0, 12) + '...',
-                  chatId,
                   userMessageLength: message.length,
                   assistantMessageLength: totalContent.length
                 });
+                
+                // Store conversation in CleanMemoryStore (fire-and-forget for long-term)
                 storeConversationMemory(userId, chatId, message, totalContent);
                 
                 break;
