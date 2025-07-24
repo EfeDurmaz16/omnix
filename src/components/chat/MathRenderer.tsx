@@ -10,13 +10,49 @@ import { useCodeDetection } from '@/hooks/useCodeDetection';
 
 interface MathRendererProps {
   content: string;
+  isStreaming?: boolean;
 }
 
-export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
+export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming = false }) => {
   const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
+  
+  // Detect if content is raw code without markdown fences
+  const detectRawCode = (text: string): { isCode: boolean; language: string } => {
+    // First check if it already has code fences
+    if (text.includes('```')) {
+      return { isCode: false, language: 'javascript' };
+    }
+    
+    // Check for React component patterns
+    if (text.includes('import React') && text.includes('export default')) {
+      return { isCode: true, language: 'jsx' };
+    }
+    
+    const codePatterns = [
+      { pattern: /import\s+React|from\s+['"]react['"]|JSX\.Element/i, language: 'jsx' },
+      { pattern: /import.*from\s+['"]|export\s+(default\s+)?/i, language: 'javascript' },
+      { pattern: /function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=/i, language: 'javascript' },
+      { pattern: /def\s+\w+|import\s+\w+|from\s+\w+\s+import/i, language: 'python' },
+      { pattern: /class\s+\w+|public\s+(class|interface)/i, language: 'java' }
+    ];
+    
+    const lines = text.trim().split('\n');
+    const codeLines = lines.filter(line => 
+      codePatterns.some(({ pattern }) => pattern.test(line.trim()))
+    );
+    
+    // If more than 30% of lines look like code
+    const isCode = codeLines.length / lines.length > 0.3;
+    const language = codePatterns.find(({ pattern }) => pattern.test(text))?.language || 'javascript';
+    
+    return { isCode, language };
+  };
   
   // Check if content is primarily code blocks to skip math processing
   const isCodeContent = (text: string): boolean => {
+    const { isCode } = detectRawCode(text);
+    if (isCode) return true;
+    
     const codeBlockCount = (text.match(/```[\s\S]*?```/g) || []).length;
     const totalLines = text.split('\n').length;
     const codeBlockLines = (text.match(/```[\s\S]*?```/g) || [])
@@ -27,18 +63,62 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     return codeBlockLines > totalLines * 0.6 || codeBlockCount > 2;
   };
   
+  // Auto-wrap raw code in markdown fences
+  const preprocessContent = (text: string): string => {
+    // Skip if already has code fences
+    if (text.includes('```')) {
+      return text;
+    }
+    
+    // Pattern to match React component code
+    const reactComponentPattern = /(import React[\s\S]*?export default \w+;)/g;
+    let processedText = text;
+    let matches = [...text.matchAll(reactComponentPattern)];
+    
+    if (matches.length > 0) {
+      console.log('🔧 Found React component(s), wrapping in markdown fences');
+      
+      // Process matches in reverse order to maintain indices
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const match = matches[i];
+        const codeOnly = match[1];
+        const startIndex = match.index!;
+        const endIndex = startIndex + match[0].length;
+        
+        processedText = 
+          processedText.substring(0, startIndex) +
+          `\n\`\`\`jsx\n${codeOnly}\n\`\`\`\n` +
+          processedText.substring(endIndex);
+      }
+      
+      return processedText;
+    }
+
+    // Fallback: check if the entire content is code
+    const { isCode, language } = detectRawCode(text);
+    
+    if (isCode) {
+      console.log('🔧 Auto-wrapping raw code in markdown fences:', language);
+      return `\`\`\`${language}\n${text}\n\`\`\``;
+    }
+    
+    return text;
+  };
+  
   // Use code detection hook to automatically detect web code
   const { combinedWebCode, hasRunnableCode } = useCodeDetection(content);
   
   // Debug: Log what we detect
+  const { isCode, language } = detectRawCode(content);
   console.log('🔍 MathRenderer - Content length:', content.length);
-  console.log('🔍 MathRenderer - Content preview:', content.substring(0, 500) + '...');
+  console.log('🔍 MathRenderer - Content preview:', content.substring(0, 200) + '...');
+  console.log('🔍 MathRenderer - Raw code detected:', isCode, 'Language:', language);
+  console.log('🔍 MathRenderer - Has code fences:', content.includes('```'));
+  console.log('🔍 MathRenderer - Has React imports:', content.includes('import React'));
+  console.log('🔍 MathRenderer - Has export default:', content.includes('export default'));
   console.log('🔍 MathRenderer - Has runnable code:', hasRunnableCode);
   console.log('🔍 MathRenderer - Combined web code:', combinedWebCode ? 'YES' : 'NO');
   console.log('🔍 MathRenderer - Is code content:', isCodeContent(content));
-  if (combinedWebCode) {
-    console.log('🔍 MathRenderer - Combined web code length:', combinedWebCode.length);
-  }
   
   const isRunnableLanguage = (language: string): boolean => {
     const runnableLanguages = ['html', 'javascript', 'js', 'jsx', 'tsx', 'react', 'css', 'typescript', 'ts'];
@@ -96,51 +176,42 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const fixPlaceholderMath = (text: string) => {
     let fixed = text;
     
-    // First, let's try a more direct approach - look for specific mathematical phrases
-    // and replace $1$ with appropriate expressions
+    // More sophisticated approach: look for mathematical context patterns
+    // and replace with appropriate expressions
     
-    // More comprehensive patterns with better context detection
-    const replacements = [
-      // Logarithm contexts
-      { pattern: /logarithm[^$]*\$1\$/gi, replacement: '$\\log(x)$' },
-      { pattern: /natural logarithm[^$]*\$1\$/gi, replacement: '$\\ln(x)$' },
-      { pattern: /log.*base[^$]*\$1\$/gi, replacement: '$\\log_b(x)$' },
+    // First, handle common mathematical contexts
+    const contextReplacements = [
+      // Specific function contexts
+      { pattern: /The derivative of\s*\$1\$/gi, replacement: 'The derivative of $f(x)$' },
+      { pattern: /derivative of\s*\$1\$/gi, replacement: 'derivative of $f(x)$' },
+      { pattern: /integral of\s*\$1\$/gi, replacement: 'integral of $f(x)$' },
+      { pattern: /The integral of\s*\$1\$/gi, replacement: 'The integral of $f(x)$' },
+      { pattern: /indefinite integral of\s*\$1\$/gi, replacement: 'indefinite integral of $f(x)$' },
+      { pattern: /definite integral of\s*\$1\$/gi, replacement: 'definite integral of $f(x)$' },
       
-      // Integration contexts
-      { pattern: /integral[^$]*\$1\$/gi, replacement: '$\\int f(x) dx$' },
-      { pattern: /integration[^$]*\$1\$/gi, replacement: '$\\int f(x) dx$' },
+      // Fraction contexts
+      { pattern: /fracddxf\(x\)/gi, replacement: '\\frac{d}{dx}f(x)' },
+      { pattern: /frac([^}]*)\$1\$/gi, replacement: '$\\frac{$1}{dx}$' },
       
-      // Derivative contexts
-      { pattern: /derivative[^$]*\$1\$/gi, replacement: '$\\frac{d}{dx}f(x)$' },
-      { pattern: /differentiat[^$]*\$1\$/gi, replacement: '$\\frac{d}{dx}f(x)$' },
-      { pattern: /respect to[^$]*\$1\$/gi, replacement: '$\\frac{d}{dx}f(x)$' },
+      // Series contexts  
+      { pattern: /sum of the first\s*\$1\$/gi, replacement: 'sum of the first $n$' },
+      { pattern: /series with first term\s*\$1\$/gi, replacement: 'series with first term $a$' },
+      { pattern: /common ratio\s*\$1\$/gi, replacement: 'common ratio $r$' },
+      { pattern: /where\s*\$1\$\s*\)/gi, replacement: 'where $|r| < 1$)' },
+      { pattern: /∑\s*n=1\s*infty\s*\$1\$/gi, replacement: '$\\sum_{n=1}^{\\infty} a_n$' },
       
-      // Square root contexts
-      { pattern: /square root[^$]*\$1\$/gi, replacement: '$\\sqrt{x}$' },
+      // Taylor series specific
+      { pattern: /expansion of\s*\$1\$/gi, replacement: 'expansion of $f(x)$' },
+      { pattern: /around\s*\$1\$/gi, replacement: 'around $x=a$' },
       
-      // Exponential contexts
-      { pattern: /exponential[^$]*\$1\$/gi, replacement: '$e^x$' },
-      
-      // Taylor series contexts
-      { pattern: /taylor series[^$]*\$1\$/gi, replacement: '$\\sum_{n=0}^{\\infty} \\frac{f^{(n)}(a)}{n!}(x-a)^n$' },
-      
-      // Generic mathematical variable contexts
-      { pattern: /where[^$]*initial[^$]*\$1\$/gi, replacement: '$y_0$' },
-      { pattern: /where[^$]*constant[^$]*\$1\$/gi, replacement: '$k$' },
-      { pattern: /where[^$]*time[^$]*\$1\$/gi, replacement: '$t$' },
-      { pattern: /where[^$]*quantity[^$]*\$1\$/gi, replacement: '$y_0$' },
-      
-      // Specific mathematical expressions
-      { pattern: /by taking[^$]*\$1\$/gi, replacement: '$\\ln(f(x))$' },
-      { pattern: /solve for[^$]*\$1\$/gi, replacement: '$t = \\frac{\\ln(y/y_0)}{k}$' },
-      { pattern: /change of base[^$]*\$1\$/gi, replacement: '$\\frac{\\log_c(x)}{\\log_c(b)}$' },
+      // Variables and constants
+      { pattern: /fracab/gi, replacement: '\\frac{a}{b}' },
+      { pattern: /intf\(x\)dx/gi, replacement: '\\int f(x)dx' },
     ];
     
-    // Apply replacements
-    for (const { pattern, replacement } of replacements) {
-      fixed = fixed.replace(pattern, (match) => {
-        return match.replace('$1$', replacement);
-      });
+    // Apply context-specific replacements
+    for (const { pattern, replacement } of contextReplacements) {
+      fixed = fixed.replace(pattern, replacement);
     }
     
     // Final fallback: replace any remaining $1$ with a generic expression
@@ -209,8 +280,11 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const showDebug = hasPlaceholders && process.env.NODE_ENV === 'development';
   
   const renderMathContent = (text: string) => {
-    // First, convert LaTeX notation to dollar notation
-    const processedText = processContent(text);
+    try {
+      // First, preprocess to auto-wrap raw code
+      const preprocessedText = preprocessContent(text);
+      // Then, convert LaTeX notation to dollar notation
+      const processedText = processContent(preprocessedText);
     
     // Handle markdown formatting that might interfere with math
     // Temporarily replace math expressions with placeholders to protect them
@@ -312,6 +386,15 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     }
     
     return parts;
+    } catch (error) {
+      console.error('Error rendering math content:', error);
+      // Fallback to simple ReactMarkdown rendering
+      return (
+        <ReactMarkdown components={markdownComponents}>
+          {text}
+        </ReactMarkdown>
+      );
+    }
   };
   
   const renderInlineMath = (text: string, baseKey: number) => {
@@ -539,6 +622,123 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     ),
   };
   
+  // Helper function to clean incomplete markdown during streaming
+  const safeMarkdownForStreaming = (md: string) => {
+    let cleaned = md;
+    
+    // Better code block detection - find complete code blocks
+    const completeCodeBlocks: Array<{start: number, end: number}> = [];
+    let currentPos = 0;
+    
+    while (true) {
+      const openingIndex = cleaned.indexOf('```', currentPos);
+      if (openingIndex === -1) break;
+      
+      // Look for closing ```
+      const closingIndex = cleaned.indexOf('```', openingIndex + 3);
+      if (closingIndex === -1) {
+        // No closing found, this is incomplete - remove everything from this point
+        cleaned = cleaned.substring(0, openingIndex);
+        break;
+      }
+      
+      // Found a complete code block
+      completeCodeBlocks.push({ start: openingIndex, end: closingIndex + 3 });
+      currentPos = closingIndex + 3;
+    }
+    
+    // Remove incomplete math blocks ($$...$$)
+    const mathBlocks = (cleaned.match(/\$\$/g) || []).length;
+    if (mathBlocks % 2 !== 0) {
+      // Find last incomplete math block and remove it
+      const lastMathBlock = cleaned.lastIndexOf('$$');
+      cleaned = cleaned.substring(0, lastMathBlock);
+    }
+    
+    // Remove incomplete inline math ($...$) but be careful not to break valid single $ chars
+    const singleDollars = cleaned.match(/\$[^$]*$/);
+    if (singleDollars && !cleaned.endsWith('$$')) {
+      // Find the last single $ that doesn't have a matching closing $
+      const lastDollar = cleaned.lastIndexOf('$');
+      if (lastDollar > -1 && cleaned.substring(lastDollar + 1).indexOf('$') === -1) {
+        cleaned = cleaned.substring(0, lastDollar);
+      }
+    }
+    
+    // Remove incomplete bold text
+    const bolds = (cleaned.match(/\*\*/g) || []).length;
+    if (bolds % 2 !== 0) {
+      // Find last incomplete bold and remove it
+      const lastBold = cleaned.lastIndexOf('**');
+      cleaned = cleaned.substring(0, lastBold);
+    }
+    
+    // Remove incomplete italic text
+    const italics = (cleaned.match(/(?<!\*)\*(?!\*)/g) || []).length;
+    if (italics % 2 !== 0) {
+      const lastItalic = cleaned.lastIndexOf('*');
+      if (lastItalic > -1 && cleaned[lastItalic - 1] !== '*' && cleaned[lastItalic + 1] !== '*') {
+        cleaned = cleaned.substring(0, lastItalic);
+      }
+    }
+    
+    // Remove incomplete inline code
+    const inlineCodes = (cleaned.match(/(?<!`)`(?!`)/g) || []).length;
+    if (inlineCodes % 2 !== 0) {
+      const lastBacktick = cleaned.lastIndexOf('`');
+      if (lastBacktick > -1 && cleaned[lastBacktick - 1] !== '`' && cleaned[lastBacktick + 1] !== '`') {
+        cleaned = cleaned.substring(0, lastBacktick);
+      }
+    }
+    
+    return cleaned;
+  };
+
+  // During streaming, try to render as much as possible while being safe
+  if (isStreaming) {
+    // Check if this looks like raw code during streaming
+    const { isCode } = detectRawCode(content);
+    
+    if (isCode) {
+      // For raw code during streaming, show it with basic formatting
+      // but don't wrap in fences yet until streaming is complete
+      return (
+        <div className="math-content max-w-none">
+          <div className="leading-relaxed">
+            <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto">
+              <code className="text-sm font-mono">{content}</code>
+            </pre>
+            <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse" />
+          </div>
+        </div>
+      );
+    }
+    
+    // For regular markdown during streaming, be less aggressive - only clean up truly problematic incomplete syntax
+    const safeContent = safeMarkdownForStreaming(content);
+    
+    // If the safe content is almost the full content, just render it all
+    const contentRatio = safeContent.length / content.length;
+    const shouldRenderFull = contentRatio > 0.95 || (content.length - safeContent.length) < 20;
+    
+    const contentToRender = shouldRenderFull ? content : safeContent;
+    const remainingContent = shouldRenderFull ? '' : content.substring(safeContent.length);
+    
+    return (
+      <div className="math-content max-w-none">
+        <div className="leading-relaxed">
+          {renderMathContent(contentToRender)}
+          {/* Show remaining incomplete content as plain text */}
+          {remainingContent && (
+            <span className="opacity-70 whitespace-pre-wrap">
+              {remainingContent}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="math-content max-w-none">
       {showDebug && (

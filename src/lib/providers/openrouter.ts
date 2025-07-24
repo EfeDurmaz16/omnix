@@ -315,12 +315,16 @@ export class OpenRouterProvider implements ModelProvider {
         ...(request.functions && { functions: request.functions })
       });
 
+      let accumulatedContent = '';
+      
       for await (const chunk of stream) {
         const choice = chunk.choices[0];
         if (choice?.delta?.content) {
+          accumulatedContent += choice.delta.content;
+          
           yield {
             id: chunk.id,
-            content: choice.delta.content,
+            content: accumulatedContent, // Return accumulated content, not delta
             model: request.model,
             done: false,
             metadata: {

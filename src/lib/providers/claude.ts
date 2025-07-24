@@ -415,7 +415,7 @@ export class ClaudeProvider implements ModelProvider {
           
           yield {
             id: responseId,
-            content: deltaText,
+            content: fullContent, // Return accumulated content, not delta
             role: 'assistant',
             model: request.model,
             usage: {

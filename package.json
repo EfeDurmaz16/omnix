@@ -75,6 +75,7 @@
     "react-pdf-js": "^5.1.0",
     "react-syntax-highlighter": "^15.6.1",
     "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "replicate": "^1.0.1",
     "stripe": "^18.2.1",

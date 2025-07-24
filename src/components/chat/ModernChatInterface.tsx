@@ -14,6 +14,7 @@ import { AdvancedModelSearch } from '../models/AdvancedModelSearch';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
 import { autoRouter } from '@/lib/routing/AutoRouter';
 import { useModelInfo } from '@/hooks/useModelInfo';
+import { useStreamingChat } from '@/hooks/useStreamingChat';
 
 interface Message {
   id: string;
@@ -91,6 +92,15 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [autoRoutingEnabled, setAutoRoutingEnabled] = useState(false);
   const modelInfo = useModelInfo(selectedModel);
+  
+  // Initialize new RAG + streaming system
+  const {
+    messages: streamingMessages,
+    sendMessage: sendStreamingMessage,
+    isStreaming: isStreamingNew,
+    clearMessages,
+    updateMessage
+  } = useStreamingChat({ chatId: currentConversation?.id || 'default' });
   const [showVoiceChat, setShowVoiceChat] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
@@ -305,23 +315,20 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
       setIsThinking(false);
       setIsStreaming(true);
 
-      // Call AI API with streaming
-      const response = await fetch('/api/chat', {
+      // Call new RAG + streaming API 
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
+          message: content.trim(),
+          chatId: currentConversation?.id || 'default',
           model: optimalModel,
-          mode: thinkingMode,
-          conversationId: currentConversation?.id,
-          files: files || [], // Include processed files
-          stream: true, // Request streaming response
-          enableWebSearch: webSearchEnabled // Include web search setting
+          temperature: 0.7,
+          maxTokens: 4096,
+          useWebSearch: webSearchEnabled,
+          memoryBudget: 2500 // Enable RAG with memory
         }),
         signal: controller.signal // Add abort signal
       });
@@ -339,6 +346,7 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullContent = '';
+        let buffer = '';
 
         try {
           while (true) {
@@ -347,8 +355,53 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            fullContent += chunk;
-            setStreamingMessage(fullContent);
+            buffer += chunk;
+
+            // Process complete SSE messages
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6); // Remove 'data: ' prefix
+                
+                if (data === '[DONE]') {
+                  break;
+                }
+
+                try {
+                  const parsed = JSON.parse(data);
+                  
+                  if (parsed.type === 'json' && parsed.content) {
+                    // Parse nested JSON content
+                    const nestedContent = JSON.parse(parsed.content);
+                    
+                    if (nestedContent.type === 'memory_context') {
+                      // Memory context updates - just log, don't display
+                      console.log('🧠 Memory:', nestedContent.content);
+                    } else if (nestedContent.type === 'text' && nestedContent.content) {
+                      // Text content - add to fullContent
+                      fullContent += nestedContent.content;
+                      setStreamingMessage(fullContent);
+                    }
+                  } else if (parsed.type === 'text' && parsed.content) {
+                    // Direct text content
+                    fullContent += parsed.content;
+                    setStreamingMessage(fullContent);
+                  } else if (parsed.type === 'done') {
+                    // Stream complete
+                    break;
+                  }
+                } catch (parseError) {
+                  // If JSON parsing fails, treat as plain text
+                  console.warn('⚠️ Failed to parse SSE data, treating as plain text:', data);
+                  if (data.trim()) {
+                    fullContent += data;
+                    setStreamingMessage(fullContent);
+                  }
+                }
+              }
+            }
           }
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
@@ -652,8 +705,8 @@ export function ModernChatInterface({ onModelRedirect }: ModernChatInterfaceProp
         {/* Messages Area */}
         <div className="flex-1 min-h-0 overflow-hidden cultural-bg" role="main" aria-label="Chat messages">
           <MessagesContainer
-            messages={messages}
-            isLoading={isLoading}
+            messages={[...messages, ...streamingMessages]}
+            isLoading={isStreamingNew}
             selectedModel={selectedModel}
             onModelSwitch={() => {}}
             isThinking={isThinking}

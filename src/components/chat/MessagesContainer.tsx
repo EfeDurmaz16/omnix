@@ -27,6 +27,7 @@ import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/pris
 import { format } from 'date-fns';
 import { useModelInfo } from '@/hooks/useModelInfo';
 import { MathRenderer } from './MathRenderer';
+import { StreamingMessage as EnhancedStreamingMessage } from './StreamingMessage';
 
 interface Message {
   id: string;
@@ -475,9 +476,10 @@ function StreamingMessage({
 
         <div className="bg-muted rounded-lg p-4 mr-12">
           <div className="max-w-none leading-relaxed">
-            <MathRenderer content={streamingMessage} />
-            {/* Typing cursor */}
-            <span className="inline-block w-3 h-5 bg-primary ml-1 animate-pulse" style={{ animationDuration: '1s' }} />
+            <EnhancedStreamingMessage 
+              content={streamingMessage} 
+              isStreaming={true}
+            />
           </div>
         </div>
       </div>

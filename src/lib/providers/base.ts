@@ -129,28 +129,52 @@ export interface ComputeModeConfig {
 export const COMPUTE_MODES: Record<ComputeMode, ComputeModeConfig> = {
   flash: {
     mode: 'flash',
-    systemPrompt: 'Provide quick, concise responses. Prioritize speed and efficiency.',
+    systemPrompt: `Provide quick, concise responses. Prioritize speed and efficiency.
+
+IMPORTANT FORMATTING RULES:
+- Always wrap code in proper code blocks with language specifiers: \`\`\`python, \`\`\`javascript, \`\`\`html, etc.
+- Use inline code \`like this\` only for single words, variables, or short snippets
+- For multi-line code, always use fenced code blocks with the appropriate language
+- Never provide large code blocks as plain text or multiple inline code segments`,
     temperature: 0.3,
     maxTokens: 1000,
     reasoning: false,
   },
   think: {
     mode: 'think',
-    systemPrompt: 'Take time to think through the problem step by step. Provide detailed reasoning.',
+    systemPrompt: `Take time to think through the problem step by step. Provide detailed reasoning.
+
+IMPORTANT FORMATTING RULES:
+- Always wrap code in proper code blocks with language specifiers: \`\`\`python, \`\`\`javascript, \`\`\`html, etc.
+- Use inline code \`like this\` only for single words, variables, or short snippets
+- For multi-line code, always use fenced code blocks with the appropriate language
+- Never provide large code blocks as plain text or multiple inline code segments`,
     temperature: 0.5,
     maxTokens: 2000,
     reasoning: true,
   },
   'ultra-think': {
     mode: 'ultra-think',
-    systemPrompt: 'Engage in deep analysis. Consider multiple perspectives, edge cases, and provide comprehensive reasoning.',
+    systemPrompt: `Engage in deep analysis. Consider multiple perspectives, edge cases, and provide comprehensive reasoning.
+
+IMPORTANT FORMATTING RULES:
+- Always wrap code in proper code blocks with language specifiers: \`\`\`python, \`\`\`javascript, \`\`\`html, etc.
+- Use inline code \`like this\` only for single words, variables, or short snippets
+- For multi-line code, always use fenced code blocks with the appropriate language
+- Never provide large code blocks as plain text or multiple inline code segments`,
     temperature: 0.7,
     maxTokens: 4000,
     reasoning: true,
   },
   'full-think': {
     mode: 'full-think',
-    systemPrompt: 'You are operating in maximum creativity mode with high temperature settings. Explore creative solutions, think outside the box, and provide diverse perspectives. Feel free to be innovative, imaginative, and explore multiple possibilities. Generate varied and creative responses while maintaining accuracy and helpfulness.',
+    systemPrompt: `You are operating in maximum creativity mode with high temperature settings. Explore creative solutions, think outside the box, and provide diverse perspectives. Feel free to be innovative, imaginative, and explore multiple possibilities. Generate varied and creative responses while maintaining accuracy and helpfulness.
+
+IMPORTANT FORMATTING RULES:
+- Always wrap code in proper code blocks with language specifiers: \`\`\`python, \`\`\`javascript, \`\`\`html, etc.
+- Use inline code \`like this\` only for single words, variables, or short snippets
+- For multi-line code, always use fenced code blocks with the appropriate language
+- Never provide large code blocks as plain text or multiple inline code segments`,
     temperature: 1.0,
     maxTokens: 3000,
     reasoning: true,

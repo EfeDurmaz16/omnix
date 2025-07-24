@@ -250,8 +250,14 @@ export const useStreamingChat = (chatId: string) => {
                 break;
               }
 
+              // Handle memory context chunks (don't add to message content)
+              if (chunk.type === 'memory_context') {
+                console.log('📝 Memory context:', chunk.content, chunk.metadata);
+                // Memory context is handled by the UI components, not accumulated in message content
+                // Just pass it through to onChunk for UI display
+              }
               // Handle text content - accumulate properly
-              if (chunk.type === 'text') {
+              else if (chunk.type === 'text') {
                 // Add ONLY the new chunk content (not cumulative)
                 accumulatedContentRef.current += chunk.content;
                 

@@ -78,16 +78,34 @@ export async function POST(request: NextRequest) {
               timestamp: new Date()
             };
 
+            // Generate unique conversationId for this conversation
+            const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
             const simpleContext = {
               userId,
               chatId,
-              conversationId: chatId, // Use chatId as conversationId for now
+              conversationId, // Use unique conversationId
               messages: [userMessage],
               memoryEnabled: true
             };
 
             // IMMEDIATELY store user message in short-term memory
             cleanContextManager.storeInShortTermMemory(userId, chatId, userMessage);
+
+            // Store user message in long-term memory BEFORE retrieval so it can be found in L1/L2
+            try {
+              await cleanContextManager['memoryStore'].storeConversation(
+                userId,
+                chatId,
+                conversationId,
+                userMessage,
+                'user',
+                { messageCount: 1, tokenCount: Math.ceil(userMessage.length / 4) }
+              );
+              console.log('✅ User message stored before memory retrieval');
+            } catch (error) {
+              console.error('❌ Failed to store user message before retrieval:', error);
+            }
 
             // Get enhanced messages with hierarchical memory context (L1-L2-L3)
             const enhancedMessages = await cleanContextManager.getContextWithMemory(simpleContext);
@@ -182,7 +200,7 @@ export async function POST(request: NextRequest) {
                 });
                 
                 // Store conversation in CleanMemoryStore (fire-and-forget for long-term)
-                storeConversationMemory(userId, chatId, message, totalContent);
+                storeConversationMemory(userId, chatId, conversationId, message, totalContent);
                 
                 break;
               }
@@ -285,6 +303,7 @@ async function saveConversation(
 async function storeConversationMemory(
   userId: string,
   chatId: string,
+  conversationId: string,
   userMessage: string,
   assistantMessage: string
 ) {
@@ -295,21 +314,21 @@ async function storeConversationMemory(
       chatId
     });
 
-    // Store user message  
-    await cleanContextManager['memoryStore'].storeConversation(
-      userId,
-      chatId,
-      chatId, // Use chatId as conversationId
-      userMessage,
-      'user',
-      { messageCount: 1, tokenCount: Math.ceil(userMessage.length / 4) }
-    );
+    console.log('🔧 DEBUG: storeConversationMemory parameters:', {
+      userId: userId?.substring(0, 20) + '...' || 'undefined',
+      chatId: chatId || 'undefined',
+      conversationId: conversationId || 'undefined',
+      userMessageLength: userMessage?.length || 0,
+      assistantMessageLength: assistantMessage?.length || 0
+    });
+
+    // User message already stored before memory retrieval - skip duplicate storage
 
     // Store assistant message
     await cleanContextManager['memoryStore'].storeConversation(
       userId,
       chatId,
-      chatId, // Use chatId as conversationId
+      conversationId, // Now correctly passed from calling function
       assistantMessage,
       'assistant',
       { messageCount: 1, tokenCount: Math.ceil(assistantMessage.length / 4) }

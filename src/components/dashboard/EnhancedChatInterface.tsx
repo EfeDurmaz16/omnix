@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { MarkdownInput } from '@/components/ui/markdown-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import { useAuth } from '@/components/auth/ClerkAuthWrapper';
 import { StreamingMessage, StreamChunk } from '@/components/chat/StreamingMessage';
 import { useStreamingChat, ChatMessage } from '@/hooks/useStreamingChat';
 import { useCodeDetection } from '@/hooks/useCodeDetection';
+import { MathRenderer } from '@/components/chat/MathRenderer';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
@@ -176,33 +178,52 @@ export function EnhancedChatInterface({
     localStorage.setItem('omnix-use-streaming', useStreaming.toString());
   }, [useStreaming]);
 
-  // Sync streaming messages with session messages
+  // Sync streaming messages with session messages - optimized to prevent typing lag
   useEffect(() => {
     if (currentSessionId && streamingMessages.length > 0) {
-      const sessionMessages = streamingMessages.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        model: msg.metadata?.model,
-        tokens: msg.metadata?.tokens,
-        cost: msg.metadata?.cost,
-        streaming: msg.streaming,
-        error: msg.error
-      }));
+      // Debounce the expensive sync operation to avoid blocking typing
+      const timeoutId = setTimeout(() => {
+        const sessionMessages = streamingMessages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          model: msg.metadata?.model,
+          tokens: msg.metadata?.tokens,
+          cost: msg.metadata?.cost,
+          streaming: msg.streaming,
+          error: msg.error
+        }));
 
-      const updatedSessions = sessions.map(session =>
-        session.id === currentSessionId 
-          ? { ...session, messages: sessionMessages as Message[], updatedAt: new Date() }
-          : session
-      );
+        const updatedSessions = sessions.map(session =>
+          session.id === currentSessionId 
+            ? { ...session, messages: sessionMessages as Message[], updatedAt: new Date() }
+            : session
+        );
+        
+        // Use a lighter comparison instead of expensive JSON.stringify
+        const currentSession = sessions.find(s => s.id === currentSessionId);
+        const needsUpdate = !currentSession || 
+          currentSession.messages.length !== sessionMessages.length ||
+          (sessionMessages.length > 0 && 
+           currentSession.messages[currentSession.messages.length - 1]?.content !== 
+           sessionMessages[sessionMessages.length - 1]?.content);
+        
+        if (needsUpdate) {
+          setSessions(updatedSessions);
+          // Debounce the save operation separately to avoid blocking
+          setTimeout(() => saveChatHistory(updatedSessions), 1000);
+        }
+      }, 100); // 100ms debounce
       
-      if (JSON.stringify(sessions) !== JSON.stringify(updatedSessions)) {
-        setSessions(updatedSessions);
-        saveChatHistory(updatedSessions);
-      }
+      return () => clearTimeout(timeoutId);
     }
   }, [streamingMessages, currentSessionId]);
+
+  // Input change handler for MarkdownInput (takes value directly)
+  const handleInputChange = useCallback((value: string) => {
+    setInputMessage(value);
+  }, []);
 
   // Pre-warm cache when session changes
   useEffect(() => {
@@ -519,6 +540,12 @@ export function EnhancedChatInterface({
         memoryBudget: 2500,
         onChunk: (chunk: StreamChunk) => {
           console.log('📊 Streaming chunk:', chunk.type, chunk.content?.length);
+          
+          // Filter out memory_context and other system chunks from being displayed as content
+          if (chunk.type === 'memory_context') {
+            console.log('🧠 Memory context chunk filtered out:', chunk.content);
+            return; // Don't process memory context chunks as regular content
+          }
         },
         onError: (error: string) => {
           console.error('❌ Streaming error:', error);
@@ -1033,9 +1060,9 @@ export function EnhancedChatInterface({
                 <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
                   {message.role === 'assistant' && message.streaming && useStreaming ? (
                     <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
-                      {/* Show simple streaming text instead of complex component for now */}
-                      <div className="text-white whitespace-pre-wrap">
-                        {message.content}
+                      {/* Use MathRenderer for proper markdown and math rendering during streaming */}
+                      <div className="text-white">
+                        <MathRenderer content={message.content} isStreaming={true} />
                         {isStreaming && (
                           <span className="animate-pulse ml-1">|</span>
                         )}
@@ -1049,7 +1076,11 @@ export function EnhancedChatInterface({
                           : 'bg-slate-800/50 border border-slate-700/50 text-white'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      {message.role === 'assistant' ? (
+                        <MathRenderer content={message.content} />
+                      ) : (
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                      )}
                       
                       {/* Web Search Results */}
                       {message.role === 'assistant' && (message as any).webSearchResults && (message as any).webSearchResults.length > 0 && (
@@ -1161,10 +1192,10 @@ export function EnhancedChatInterface({
 
           <div className="flex items-end space-x-2">
             <div className="flex-1">
-              <Textarea
+              <MarkdownInput
                         value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
-                        onKeyPress={handleKeyPress}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyPress}
                         placeholder={webSearchEnabled ? "Ask a question and I'll search the web for current information..." : "Type your message..."}
                 className="min-h-[60px] max-h-32 bg-slate-800/50 border-slate-700/50 text-white placeholder-slate-400 resize-none"
                         disabled={isStreaming || (isGuest && !canUseChat)}

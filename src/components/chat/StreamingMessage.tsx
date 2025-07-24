@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { EnhancedStreamProcessor, CodeBlock } from '@/lib/streaming/EnhancedStreamProcessor';
 
 export interface StreamChunk {
   id: string;
@@ -31,18 +34,24 @@ interface MessageBlock {
   metadata?: any;
 }
 
+interface EnhancedMessageBlock extends MessageBlock {
+  processedContent?: string;
+  codeBlocks?: Map<string, CodeBlock>;
+}
+
 export const StreamingMessage: React.FC<StreamingMessageProps> = ({
   messageId,
   onComplete,
   onError,
   className = ''
 }) => {
-  const [blocks, setBlocks] = useState<MessageBlock[]>([]);
+  const [blocks, setBlocks] = useState<EnhancedMessageBlock[]>([]);
   const [isStreaming, setIsStreaming] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [memoryContext, setMemoryContext] = useState<any>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const accumulatedContentRef = useRef<string>('');
+  const streamProcessorRef = useRef<EnhancedStreamProcessor>(new EnhancedStreamProcessor());
 
   useEffect(() => {
     return () => {
@@ -64,45 +73,116 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
       return;
     }
 
-    setBlocks(prevBlocks => {
-      const existingBlockIndex = prevBlocks.findIndex(
-        block => block.id === chunk.id
-      );
-
-      if (existingBlockIndex !== -1) {
-        // Update existing block
-        const updatedBlocks = [...prevBlocks];
-        updatedBlocks[existingBlockIndex] = {
-          ...updatedBlocks[existingBlockIndex],
-          content: chunk.complete 
-            ? chunk.content 
-            : updatedBlocks[existingBlockIndex].content + chunk.content,
-          complete: chunk.complete || false,
-          metadata: chunk.metadata
-        };
-        return updatedBlocks;
-      } else {
-        // Add new block
-        return [...prevBlocks, {
-          id: chunk.id,
-          type: chunk.type,
-          content: chunk.content,
-          language: chunk.language,
-          complete: chunk.complete || false,
-          metadata: chunk.metadata
-        }];
-      }
-    });
-
-    // Accumulate content for completion callback
+    // Process text chunks through enhanced processor
     if (chunk.type === 'text') {
+      const processed = streamProcessorRef.current.processChunk(chunk.content);
+      
+      setBlocks(prevBlocks => {
+        const existingBlockIndex = prevBlocks.findIndex(
+          block => block.id === chunk.id
+        );
+
+        if (existingBlockIndex !== -1) {
+          // Update existing block with processed content
+          const updatedBlocks = [...prevBlocks];
+          const existingBlock = updatedBlocks[existingBlockIndex];
+          
+          if (processed.type === 'code-complete') {
+            // Store complete code blocks
+            const codeBlocks = existingBlock.codeBlocks || new Map();
+            const codeId = `code-${Date.now()}`;
+            codeBlocks.set(codeId, {
+              language: processed.language || 'plaintext',
+              content: processed.content || ''
+            });
+            
+            updatedBlocks[existingBlockIndex] = {
+              ...existingBlock,
+              content: existingBlock.content + `\n%%CODE_BLOCK_${codeId}%%\n`,
+              processedContent: (existingBlock.processedContent || '') + (processed.raw || ''),
+              codeBlocks,
+              complete: chunk.complete || false
+            };
+          } else if (processed.type === 'markdown' && processed.content) {
+            updatedBlocks[existingBlockIndex] = {
+              ...existingBlock,
+              content: existingBlock.content + processed.content,
+              processedContent: (existingBlock.processedContent || '') + processed.content,
+              complete: chunk.complete || false
+            };
+          }
+          
+          return updatedBlocks;
+        } else {
+          // Add new block
+          let processedContent = chunk.content;
+          let codeBlocks = new Map<string, CodeBlock>();
+          
+          if (processed.type === 'code-complete') {
+            const codeId = `code-${Date.now()}`;
+            codeBlocks.set(codeId, {
+              language: processed.language || 'plaintext',
+              content: processed.content || ''
+            });
+            processedContent = `\n%%CODE_BLOCK_${codeId}%%\n`;
+          } else if (processed.type === 'markdown' && processed.content) {
+            processedContent = processed.content;
+          }
+          
+          return [...prevBlocks, {
+            id: chunk.id,
+            type: chunk.type,
+            content: processedContent,
+            processedContent,
+            codeBlocks,
+            language: chunk.language,
+            complete: chunk.complete || false,
+            metadata: chunk.metadata
+          }];
+        }
+      });
+
+      // Accumulate content for completion callback
       accumulatedContentRef.current += chunk.content;
+    } else {
+      // Handle non-text chunks normally
+      setBlocks(prevBlocks => {
+        const existingBlockIndex = prevBlocks.findIndex(
+          block => block.id === chunk.id
+        );
+
+        if (existingBlockIndex !== -1) {
+          // Update existing block
+          const updatedBlocks = [...prevBlocks];
+          updatedBlocks[existingBlockIndex] = {
+            ...updatedBlocks[existingBlockIndex],
+            content: chunk.complete 
+              ? chunk.content 
+              : updatedBlocks[existingBlockIndex].content + chunk.content,
+            complete: chunk.complete || false,
+            metadata: chunk.metadata
+          };
+          return updatedBlocks;
+        } else {
+          // Add new block
+          return [...prevBlocks, {
+            id: chunk.id,
+            type: chunk.type,
+            content: chunk.content,
+            language: chunk.language,
+            complete: chunk.complete || false,
+            metadata: chunk.metadata
+          }];
+        }
+      });
     }
   };
 
   const handleStreamComplete = () => {
+    // Finalize any remaining content
+    const finalizedContent = streamProcessorRef.current.finalize(accumulatedContentRef.current);
     setIsStreaming(false);
-    onComplete?.(accumulatedContentRef.current);
+    onComplete?.(finalizedContent);
   };
 
   // Connect to streaming endpoint via props or context
@@ -157,7 +237,7 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
     }
   }), []);
 
-  const renderBlock = (block: MessageBlock, index: number) => {
+  const renderBlock = (block: EnhancedMessageBlock, index: number) => {
     const blockVariants = {
       hidden: { opacity: 0, y: 10 },
       visible: { 
@@ -180,10 +260,10 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
             animate="visible"
             className="prose prose-neutral dark:prose-invert max-w-none"
           >
-            <TypewriterText 
-              text={block.content} 
-              speed={20}
-              className="whitespace-pre-wrap"
+            <EnhancedMarkdownRenderer
+              content={block.processedContent || block.content}
+              codeBlocks={block.codeBlocks || new Map()}
+              isStreaming={isStreaming && !block.complete}
             />
           </motion.div>
         );
@@ -525,6 +605,127 @@ const JSONRenderer: React.FC<JSONRendererProps> = ({
       </div>
     </div>
   );
+};
+
+// Enhanced Markdown Renderer Component
+interface EnhancedMarkdownRendererProps {
+  content: string;
+  codeBlocks: Map<string, CodeBlock>;
+  isStreaming?: boolean;
+}
+
+const EnhancedMarkdownRenderer: React.FC<EnhancedMarkdownRendererProps> = ({
+  content,
+  codeBlocks,
+  isStreaming = false
+}) => {
+  const components = {
+    code({ node, inline, className, children, ...props }: any) {
+      const match = /language-(\w+)/.exec(className || '');
+      const codeString = String(children).replace(/\n$/, '');
+      
+      // Check if this is a placeholder for a complete code block
+      if (codeString.startsWith('%%CODE_BLOCK_')) {
+        const id = codeString.replace(/%%CODE_BLOCK_|%%/g, '');
+        const codeBlock = codeBlocks.get(id);
+        
+        if (codeBlock) {
+          return (
+            <div className="my-4">
+              <div className="bg-gray-900 rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+                  <span className="text-sm text-gray-300 font-mono">
+                    {codeBlock.language}
+                  </span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(codeBlock.content)}
+                    className="text-gray-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <SyntaxHighlighter
+                  language={codeBlock.language}
+                  style={oneDark}
+                  customStyle={{
+                    margin: 0,
+                    padding: '16px',
+                    background: 'transparent'
+                  }}
+                  {...props}
+                >
+                  {codeBlock.content}
+                </SyntaxHighlighter>
+              </div>
+            </div>
+          );
+        }
+      }
+      
+      return !inline && match ? (
+        <div className="my-4">
+          <SyntaxHighlighter
+            style={oneDark}
+            language={match[1]}
+            PreTag="div"
+            customStyle={{
+              margin: 0,
+              padding: '16px',
+              borderRadius: '8px'
+            }}
+            {...props}
+          >
+            {codeString}
+          </SyntaxHighlighter>
+        </div>
+      ) : (
+        <code className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+          {children}
+        </code>
+      );
+    }
+  };
+
+  // For streaming content, clean up incomplete markdown
+  const safeContent = isStreaming ? cleanIncompleteMarkdown(content) : content;
+
+  return (
+    <div className="enhanced-markdown">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={components}
+      >
+        {safeContent}
+      </ReactMarkdown>
+      
+      {isStreaming && (
+        <span className="streaming-indicator animate-pulse">●</span>
+      )}
+    </div>
+  );
+};
+
+// Clean incomplete markdown during streaming
+const cleanIncompleteMarkdown = (content: string): string => {
+  let cleaned = content;
+  
+  // Remove incomplete code blocks
+  const codeBlockMatches = cleaned.match(/```/g);
+  if (codeBlockMatches && codeBlockMatches.length % 2 !== 0) {
+    const lastCodeBlock = cleaned.lastIndexOf('```');
+    cleaned = cleaned.substring(0, lastCodeBlock);
+  }
+  
+  // Remove incomplete inline code
+  const inlineMatches = cleaned.match(/(?<!`)`(?!`)/g);
+  if (inlineMatches && inlineMatches.length % 2 !== 0) {
+    const lastBacktick = cleaned.lastIndexOf('`');
+    if (lastBacktick > -1) {
+      cleaned = cleaned.substring(0, lastBacktick);
+    }
+  }
+  
+  return cleaned;
 };
 
 export default StreamingMessage;

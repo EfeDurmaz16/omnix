@@ -131,7 +131,6 @@ export function EnhancedChatInput({
     onSend(finalMessage, fileData);
     setMessage('');
     setAttachedFiles([]);
-    setRows(1);
   }, [message, attachedFiles, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

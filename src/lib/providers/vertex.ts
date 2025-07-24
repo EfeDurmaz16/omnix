@@ -650,7 +650,7 @@ export class VertexAIProvider implements ModelProvider {
 
         yield {
           id: `vertex-stream-${Date.now()}`,
-          content: chunkText,
+          content: fullText, // Return accumulated content, not delta
           role: 'assistant',
           model: request.model,
           usage: {

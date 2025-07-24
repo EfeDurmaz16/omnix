@@ -95,6 +95,13 @@ export class CleanMemoryStore {
       const docId = `${userId}-${conversationId}`;
       const docRef = firestore.collection('user-vectors').doc(docId);
       
+      console.log('🔧 DEBUG: About to check/create document:', {
+        docId: docId,
+        collection: 'user-vectors',
+        userId: userId?.substring(0, 20) + '...' || 'undefined',
+        conversationId: conversationId || 'undefined'
+      });
+      
       // Check if document exists
       const existingDoc = await docRef.get();
       
@@ -154,6 +161,21 @@ export class CleanMemoryStore {
 
         await docRef.set(memory);
         console.log(`✅ Created new conversation: ${docId}`);
+        
+        // Verify the document was created by immediately reading it back
+        const verifyDoc = await docRef.get();
+        if (verifyDoc.exists) {
+          const verifyData = verifyDoc.data() as ConversationMemory;
+          console.log('🔧 DEBUG: Document verification successful:', {
+            exists: verifyDoc.exists,
+            messagesCount: verifyData.messages?.length || 0,
+            userId: verifyData.userId?.substring(0, 20) + '...' || 'undefined',
+            conversationId: verifyData.conversationId || 'undefined',
+            chatId: verifyData.metadata?.chatId || 'undefined'
+          });
+        } else {
+          console.error('❌ Document verification failed - document not found after creation');
+        }
       }
 
     } catch (error) {
@@ -250,8 +272,15 @@ export class CleanMemoryStore {
     try {
       console.log(`🔍 Level 1 Query: userId=${userId}, chatId=${chatId}, conversationId=${conversationId}`);
       
+      const expectedDocId = `${userId}-${conversationId}`;
+      console.log('🔧 DEBUG: Level 1 looking for document:', {
+        expectedDocId: expectedDocId,
+        userId: userId?.substring(0, 20) + '...' || 'undefined',
+        conversationId: conversationId || 'undefined'
+      });
+      
       // Get specific conversation document
-      const docRef = firestore.collection('user-vectors').doc(`${userId}-${conversationId}`);
+      const docRef = firestore.collection('user-vectors').doc(expectedDocId);
       const doc = await docRef.get();
 
       if (!doc.exists) {
@@ -304,12 +333,35 @@ export class CleanMemoryStore {
 
       console.log(`📊 Level 2 Raw query result: ${snapshot.size} documents found`);
       
+      // Debug: Log all documents before filtering
+      if (snapshot.size > 0) {
+        console.log('🔧 DEBUG: Level 2 documents before filtering:');
+        snapshot.docs.forEach((doc, idx) => {
+          const data = doc.data() as ConversationMemory;
+          console.log(`  ${idx + 1}. docId=${doc.id}, stored_chatId=${data.metadata?.chatId}, stored_conversationId=${data.conversationId}`);
+        });
+        console.log(`🔧 DEBUG: Level 2 filtering criteria: chatId=${chatId}, exclude_conversationId=${currentConversationId}`);
+      }
+      
       const conversations = snapshot.docs
         .map(doc => doc.data() as ConversationMemory)
-        .filter(conv => 
-          conv.metadata?.chatId === chatId && 
-          conv.conversationId !== currentConversationId
-        );
+        .filter(conv => {
+          const matchesChatId = conv.metadata?.chatId === chatId;
+          const isDifferentConversation = conv.conversationId !== currentConversationId;
+          const shouldInclude = matchesChatId && isDifferentConversation;
+          
+          console.log(`🔧 DEBUG: Filter check for conversationId=${conv.conversationId}:`, {
+            stored_chatId: conv.metadata?.chatId,
+            target_chatId: chatId,
+            matchesChatId: matchesChatId,
+            stored_conversationId: conv.conversationId,
+            current_conversationId: currentConversationId,
+            isDifferentConversation: isDifferentConversation,
+            shouldInclude: shouldInclude
+          });
+          
+          return shouldInclude;
+        });
 
       console.log(`📊 Level 2 After filtering: ${conversations.length} documents (excluded current conversation)`);
       
@@ -445,52 +497,87 @@ export class CleanMemoryStore {
         if (conv.messages && conv.messages.length > 0) {
           // Include recent messages from current conversation naturally
           const recentMessages = conv.messages.slice(-5); // Last 5 messages
-          formatted += recentMessages
-            .map(msg => `${msg.role}: ${this.cleanContent(msg.content)}`)
-            .join('\n');
+          const filteredMessages = recentMessages.filter(msg => 
+            !this.containsSensitivePersonalInfo(msg.content)
+          );
+          if (filteredMessages.length > 0) {
+            formatted += filteredMessages
+              .map(msg => `${msg.role}: ${this.cleanContent(msg.content)}`)
+              .join('\n');
+          }
         }
       }
-      formatted += '\n\n';
+      if (formatted.endsWith('# Current Conversation\n\n')) {
+        formatted = ''; // Remove section if no relevant content
+      } else {
+        formatted += '\n\n';
+      }
     }
 
-    // Recent chat history
+    // Recent chat history (filtered for privacy)
     if (context.chatContext.length > 0) {
-      formatted += '# Recent Chat History\n\n';
-      formatted += context.chatContext
+      const relevantChats = context.chatContext
         .slice(0, 3) // Only show 3 most recent
         .map(conv => {
           const firstMessage = conv.messages?.[0];
-          if (firstMessage) {
+          if (firstMessage && !this.containsSensitivePersonalInfo(firstMessage.content)) {
             const content = this.cleanContent(firstMessage.content);
             return `Previous: ${content.substring(0, 120)}...`;
           }
           return '';
         })
-        .filter(Boolean)
-        .join('\n');
-      formatted += '\n\n';
+        .filter(Boolean);
+      
+      if (relevantChats.length > 0) {
+        formatted += '# Recent Chat History\n\n';
+        formatted += relevantChats.join('\n');
+        formatted += '\n\n';
+      }
     }
 
-    // Cross-chat context (very limited)
+    // Cross-chat context (very limited, filtered for privacy)
     if (context.userContext.length > 0) {
-      formatted += '# Related Previous Conversations\n\n';
-      formatted += context.userContext
+      const relevantContext = context.userContext
         .slice(0, 2) // Only show 2 most relevant
         .map(conv => {
           const firstMessage = conv.messages?.[0];
-          if (firstMessage) {
+          if (firstMessage && !this.containsSensitivePersonalInfo(firstMessage.content)) {
             const content = this.cleanContent(firstMessage.content);
             return `Earlier: ${content.substring(0, 100)}...`;
           }
           return '';
         })
-        .filter(Boolean)
-        .join('\n');
+        .filter(Boolean);
+      
+      if (relevantContext.length > 0) {
+        formatted += '# Related Previous Conversations\n\n';
+        formatted += relevantContext.join('\n');
+      }
     }
 
     return formatted.trim();
   }
 
+
+  /**
+   * Check if content contains sensitive personal information that shouldn't be shared
+   */
+  private containsSensitivePersonalInfo(content: string): boolean {
+    const lowerContent = content.toLowerCase();
+    
+    // Filter out personal details, names, ages, specific locations, etc.
+    const sensitivePatterns = [
+      /\b(my name is|i'm|i am) [a-z]+/i,
+      /\b(age|years? old|born in)\b.*\d/i,
+      /\b(university|college|school|student at)\b/i,
+      /\b(bilkent|istanbul|ankara|turkey)\b/i,
+      /\b(email|phone|address|personal)\b/i,
+      /\b(family|parents|siblings|brother|sister)\b/i,
+      /\b(studying|major|degree)\b/i,
+    ];
+    
+    return sensitivePatterns.some(pattern => pattern.test(lowerContent));
+  }
 
   /**
    * Clean content by removing XML tags and problematic formatting

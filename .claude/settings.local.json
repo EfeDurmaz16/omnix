@@ -4,7 +4,8 @@
       "Bash(firebase deploy:*)",
       "Bash(grep:*)",
       "Bash(find:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }

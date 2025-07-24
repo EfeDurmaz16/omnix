@@ -106,6 +106,12 @@ WORKFLOW:
 4. Provide explanations and documentation
 5. Suggest improvements and optimizations
 
+CRITICAL FORMATTING REQUIREMENTS:
+- Always wrap code in proper code blocks with language specifiers: \`\`\`python, \`\`\`javascript, \`\`\`html, etc.
+- Use inline code \`like this\` only for single words, variables, or short snippets
+- For multi-line code, always use fenced code blocks with the appropriate language
+- Never provide large code blocks as plain text or multiple inline code segments
+
 Always write production-ready code with proper error handling, comments, and follow best practices.`,
     model: 'gemini-2.0-flash-exp',
     temperature: 0.2,
