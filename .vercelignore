@@ -67,7 +67,7 @@ develop-eggs/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/ - REMOVED: This was excluding src/lib/ which we need!
 lib64/
 parts/
 sdist/
@@ -78,6 +78,12 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Python virtual environment lib directories (keep these excluded)
+**/venv/lib/
+**/env/lib/
+**/.venv/lib/
+chroma-venv/lib/
 
 # PyInstaller
 *.manifest
