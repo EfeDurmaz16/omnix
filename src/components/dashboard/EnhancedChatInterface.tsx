@@ -14,6 +14,7 @@ import { Bot, Send, User, Loader2, Plus, MessageSquare, Settings, Upload, File, 
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
 import { StreamingMessage, StreamChunk } from '@/components/chat/StreamingMessage';
 import { useStreamingChat, ChatMessage } from '@/hooks/useStreamingChat';
+import { MessagesContainer } from '@/components/chat/MessagesContainer';
 import { useCodeDetection } from '@/hooks/useCodeDetection';
 import { MathRenderer } from '@/components/chat/MathRenderer';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -106,6 +107,8 @@ export function EnhancedChatInterface({
   const [useStreaming, setUseStreaming] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [showPerformanceStats, setShowPerformanceStats] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [isStreamingLocal, setIsStreamingLocal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamingMessageRef = useRef<any>(null);
@@ -122,7 +125,6 @@ export function EnhancedChatInterface({
     isStreaming,
     error: streamingError,
     currentStreamingId,
-    renderTrigger,
     sendMessage: sendStreamingMessage,
     stopStreaming,
     clearMessages: clearStreamingMessages,
@@ -178,7 +180,6 @@ export function EnhancedChatInterface({
   useEffect(() => {
     localStorage.setItem('omnix-use-streaming', useStreaming.toString());
   }, [useStreaming]);
-
 
   // Sync streaming messages with session messages - optimized to prevent typing lag
   useEffect(() => {
@@ -532,30 +533,113 @@ export function EnhancedChatInterface({
     const messageFiles = [...uploadedFiles];
     setUploadedFiles([]);
 
-    // Always use streaming chat for proper memory system integration
+    // Initialize streaming state
+    setStreamingMessage('');
+    setIsStreamingLocal(true);
+
+    // Create abort controller
+    const controller = new AbortController();
+
     try {
-      await sendStreamingMessage(inputMessage, {
-        model: selectedModel,
-        temperature: promptMode === 'flash' ? 0.3 : promptMode === 'think' ? 0.7 : 1.0,
-        maxTokens: 2000,
-        useWebSearch: webSearchEnabled,
-        memoryBudget: 2500,
-        onChunk: (chunk: StreamChunk) => {
-          console.log('📊 Streaming chunk:', chunk.type, chunk.content?.length);
-          
-          // Filter out memory_context and other system chunks from being displayed as content
-          if (chunk.type === 'memory_context') {
-            console.log('🧠 Memory context chunk filtered out:', chunk.content);
-            return; // Don't process memory context chunks as regular content
-          }
+      // Call streaming API directly (same as ModernChatInterface)
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        onError: (error: string) => {
-          console.error('❌ Streaming error:', error);
-        },
-        onComplete: (message: ChatMessage) => {
-          console.log('✅ Streaming complete:', message.content.length, 'chars');
-        }
+        body: JSON.stringify({
+          message: inputMessage.trim(),
+          chatId: sessionId,
+          model: selectedModel,
+          temperature: promptMode === 'flash' ? 0.3 : promptMode === 'think' ? 0.7 : 1.0,
+          maxTokens: 2000,
+          useWebSearch: webSearchEnabled,
+          memoryBudget: 2500
+        }),
+        signal: controller.signal
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', response.status, response.statusText, errorText);
+        throw new Error(`Failed to get AI response: ${response.status} ${response.statusText}`);
+      }
+
+      // Handle streaming response (exact copy from ModernChatInterface)
+      const contentType = response.headers.get('content-type');
+      if (response.body && (contentType?.includes('text/plain') || contentType?.includes('text/event-stream'))) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+        let buffer = '';
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6).trim();
+                if (data === '[DONE]') break;
+
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.content && Array.isArray(parsed.content)) {
+                    for (const nestedContent of parsed.content) {
+                      if (nestedContent.type === 'memory_context') {
+                        console.log('🧠 Memory:', nestedContent.content);
+                      } else if (nestedContent.type === 'text' && nestedContent.content) {
+                        fullContent += nestedContent.content;
+                        console.log('🚨 DEBUG DASHBOARD: setStreamingMessage called with length:', fullContent.length, 'content preview:', fullContent.slice(0, 50));
+                        setStreamingMessage(fullContent);
+                      }
+                    }
+                  } else if (parsed.type === 'text' && parsed.content) {
+                    fullContent += parsed.content;
+                    console.log('🚨 DEBUG DASHBOARD: setStreamingMessage called with length:', fullContent.length, 'content preview:', fullContent.slice(0, 50));
+                    setStreamingMessage(fullContent);
+                  } else if (parsed.type === 'done') {
+                    break;
+                  }
+                } catch (parseError) {
+                  console.warn('⚠️ Failed to parse SSE data, treating as plain text:', data);
+                  if (data.trim()) {
+                    fullContent += data;
+                    console.log('🚨 DEBUG DASHBOARD: setStreamingMessage (fallback) called with length:', fullContent.length, 'content preview:', fullContent.slice(0, 50));
+                    setStreamingMessage(fullContent);
+                  }
+                }
+              }
+            }
+          }
+        } finally {
+          setIsStreamingLocal(false);
+        }
+
+        // Add the complete message to the session
+        if (fullContent.trim()) {
+          const assistantMessage: Message = {
+            id: `msg-${Date.now() + 1}`,
+            role: 'assistant',
+            content: fullContent,
+            timestamp: new Date(),
+            model: selectedModel,
+          };
+
+          const updatedSessions = sessions.map(session =>
+            session.id === sessionId 
+              ? { ...session, messages: [...session.messages, assistantMessage], updatedAt: new Date() }
+              : session
+          );
+          setSessions(updatedSessions);
+          await saveChatHistory(updatedSessions);
+        }
+      }
 
       // Update session title if this is the first message
       if (currentSession?.messages.length === 0) {
@@ -563,8 +647,10 @@ export function EnhancedChatInterface({
       }
     } catch (error) {
       console.error('Failed to send streaming message:', error);
-      // Show error to user instead of falling back to legacy API
+      setIsStreamingLocal(false);
       alert('Failed to send message. Please try again.');
+    } finally {
+      setStreamingMessage('');
     }
 
     setInputMessage('');
@@ -724,17 +810,6 @@ export function EnhancedChatInterface({
   };
 
   const messagesToDisplay = useStreaming ? streamingMessages : (currentSession?.messages || []);
-  
-  // Debug: Log message updates
-  console.log('🔍 messagesToDisplay length:', messagesToDisplay.length);
-  console.log('🔍 useStreaming:', useStreaming);
-  console.log('🔍 streamingMessages length:', streamingMessages.length);
-  console.log('🔍 isStreaming:', isStreaming);
-  if (messagesToDisplay.length > 0) {
-    const lastMessage = messagesToDisplay[messagesToDisplay.length - 1];
-    console.log('🔍 Last message content length:', lastMessage.content.length);
-    console.log('🔍 Last message streaming:', lastMessage.streaming);
-  }
 
   return (
     <div className="flex h-full cultural-bg">
@@ -1053,132 +1128,25 @@ export function EnhancedChatInterface({
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {!currentSession || messagesToDisplay.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center">
-                  <Bot className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-2">Start a Conversation</h3>
-                <p className="text-slate-400">Choose your AI model and prompt mode, then begin chatting</p>
-                    </div>
-                  </div>
-                ) : (
-            messagesToDisplay.map((message) => (
-                    <div
-                      key={`${message.id}-${renderTrigger}`}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
-                  {message.role === 'assistant' && message.streaming && useStreaming ? (
-                    <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
-                      {/* Use MathRenderer for proper markdown and math rendering during streaming */}
-                      <div className="text-white">
-                        <MathRenderer key={`streaming-${message.id}-${renderTrigger}`} content={message.content} isStreaming={true} />
-                        {isStreaming && (
-                          <span className="animate-pulse ml-1">|</span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className={`p-4 rounded-2xl ${
-                            message.role === 'user' 
-                          ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
-                          : 'bg-slate-800/50 border border-slate-700/50 text-white'
-                      }`}
-                    >
-                      {message.role === 'assistant' ? (
-                        <MathRenderer content={message.content} />
-                      ) : (
-                        <p className="whitespace-pre-wrap">{message.content}</p>
-                      )}
-                      
-                      {/* Web Search Results */}
-                      {message.role === 'assistant' && (message as any).webSearchResults && (message as any).webSearchResults.length > 0 && (
-                        <div className="mt-4 pt-3 border-t border-slate-600/30">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="flex items-center">
-                              <span className="text-emerald-400 text-sm">🌐</span>
-                              <Search className="w-2 h-2 text-emerald-400 ml-1" />
-                            </div>
-                            <span className="text-xs text-emerald-400 font-medium">
-                              Web Sources ({(message as any).webSearchResults.length})
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {(message as any).webSearchResults.map((result: any, index: number) => (
-                              <a
-                                key={index}
-                                href={result.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block p-2 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg transition-colors border border-slate-600/30 hover:border-emerald-400/30"
-                              >
-                                <div className="text-xs font-medium text-emerald-300 mb-1 line-clamp-1">
-                                  {result.title}
-                                </div>
-                                <div className="text-xs text-slate-400 line-clamp-2">
-                                  {result.snippet}
-                                </div>
-                                <div className="text-xs text-slate-500 mt-1 truncate">
-                                  {result.url}
-                                </div>
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="mt-2 flex items-center justify-between text-xs opacity-70">
-                        <div className="flex items-center gap-3">
-                          <span>{formatTimestamp(message.timestamp)}</span>
-                          {message.role === 'assistant' && (message as any).webSearchResults && (message as any).webSearchResults.length > 0 && (
-                            <div className="flex items-center gap-1 text-emerald-400">
-                              <span className="text-xs">🌐</span>
-                              <span>Web enhanced</span>
-                            </div>
-                          )}
-                          {message.error && (
-                            <span className="text-red-400">Error</span>
-                          )}
-                        </div>
-                        {message.role === 'assistant' && (message as any).tokens && (
-                          <span>{(message as any).tokens} tokens</span>
-                        )}
-                            </div>
-                          </div>
-                  )}
-                      </div>
-                <Avatar className={`${message.role === 'user' ? 'order-1 ml-2' : 'order-2 mr-2'} w-8 h-8`}>
-                  <AvatarFallback className={message.role === 'user' ? 'bg-purple-500' : 'bg-slate-700'}>
-                    {message.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                            </AvatarFallback>
-                          </Avatar>
-                    </div>
-                  ))
-                )}
-          
-          {/* Streaming Error Display */}
-          {streamingError && useStreaming && (
-            <div className="flex justify-start">
-              <div className="bg-red-900/20 border border-red-800 p-4 rounded-2xl max-w-[80%]">
-                <p className="text-red-400">{streamingError}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => retryLastMessage()}
-                  className="mt-2 border-red-500/50 text-red-400 hover:bg-red-500/20"
-                >
-                  Retry
-                </Button>
-              </div>
-            </div>
-          )}
-          
-                <div ref={messagesEndRef} />
-              </div>
+        <div className="flex-1 overflow-hidden">
+          <MessagesContainer
+            messages={messagesToDisplay.map(msg => ({
+              id: msg.id,
+              role: msg.role,
+              content: msg.content,
+              timestamp: msg.timestamp,
+              model: msg.metadata?.model
+            }))}
+            isLoading={false}
+            selectedModel={selectedModel}
+            onModelSwitch={() => {}}
+            isThinking={false}
+            isStreaming={isStreamingLocal}
+            streamingMessage={streamingMessage}
+            onStopGeneration={stopStreaming}
+            onEditMessage={() => {}}
+          />
+        </div>
 
               {/* Input Area */}
         <div className="p-4 border-t border-slate-700/50 bg-slate-900/50 backdrop-blur-xl">

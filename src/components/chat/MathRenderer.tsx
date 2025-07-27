@@ -16,123 +16,36 @@ interface MathRendererProps {
 export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming = false }) => {
   const [previewCode, setPreviewCode] = useState<{ code: string; language: string } | null>(null);
   
-  // Enhanced raw code detection with better patterns
+  // Detect if content is raw code without markdown fences
   const detectRawCode = (text: string): { isCode: boolean; language: string } => {
     // First check if it already has code fences
     if (text.includes('```')) {
       return { isCode: false, language: 'javascript' };
     }
     
-    // Trim the text for better analysis
-    const trimmedText = text.trim();
-    if (!trimmedText) return { isCode: false, language: 'javascript' };
-    
-    // Check for React component patterns (stronger detection)
-    const hasReactImport = (
-      trimmedText.includes('import React') || 
-      trimmedText.includes('from \'react\'') || 
-      trimmedText.includes('from "react"') ||
-      trimmedText.includes('useState') ||
-      trimmedText.includes('useEffect')
-    );
-    
-    const hasReactSyntax = (
-      trimmedText.includes('export default') || 
-      trimmedText.includes('const ') || 
-      trimmedText.includes('function ') ||
-      /<[A-Z]/.test(trimmedText) || // JSX components start with capital letter
-      /return\s*\(/.test(trimmedText) || // React return statements
-      trimmedText.includes('</') // JSX closing tags
-    );
-    
-    if (hasReactImport && hasReactSyntax) {
+    // Check for React component patterns
+    if (text.includes('import React') && text.includes('export default')) {
       return { isCode: true, language: 'jsx' };
     }
     
-    // Additional React/JSX detection without imports (for components without imports)
-    const hasJSXElements = /<[a-zA-Z]/.test(trimmedText) && trimmedText.includes('</');
-    const hasReactPatterns = (
-      trimmedText.includes('useState') ||
-      trimmedText.includes('useEffect') ||
-      trimmedText.includes('props.') ||
-      /\{[^}]*\}/.test(trimmedText) // JSX expressions
-    );
-    
-    if (hasJSXElements && (hasReactPatterns || trimmedText.includes('function ') || trimmedText.includes('const '))) {
-      return { isCode: true, language: 'jsx' };
-    }
-    
-    // Enhanced code patterns with more specific detection
     const codePatterns = [
-      // React/JSX patterns
-      { pattern: /import\s+React|from\s+['"]react['"]|JSX\.Element|<\/?\w+[^>]*>/i, language: 'jsx' },
-      
-      // JavaScript/TypeScript patterns
-      { pattern: /import.*from\s+['"]|export\s+(default\s+)?|module\.exports|require\(/i, language: 'javascript' },
-      { pattern: /(function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\s*[\(\{]/i, language: 'javascript' },
-      { pattern: /console\.(log|error|warn)|document\.|window\./i, language: 'javascript' },
-      
-      // Python patterns
-      { pattern: /def\s+\w+|import\s+\w+|from\s+\w+\s+import|if\s+__name__\s*==\s*['"]__main__['"]:/i, language: 'python' },
-      { pattern: /print\(|range\(|len\(|str\(|int\(/i, language: 'python' },
-      
-      // Java patterns
-      { pattern: /public\s+(class|interface|static)|private\s+|protected\s+/i, language: 'java' },
-      { pattern: /System\.out\.print|public\s+static\s+void\s+main/i, language: 'java' },
-      
-      // Rust patterns
-      { pattern: /fn\s+\w+|use\s+std::|impl\s+\w+|struct\s+\w+|enum\s+\w+/i, language: 'rust' },
-      { pattern: /println!|vec!|match\s+\w+\s*\{|let\s+mut\s+/i, language: 'rust' },
-      
-      // CSS patterns
-      { pattern: /\w+\s*\{[^}]*\}|\.[a-zA-Z-]+\s*\{|#[a-zA-Z-]+\s*\{/i, language: 'css' },
-      
-      // HTML patterns
-      { pattern: /<!DOCTYPE|<html|<head|<body|<div|<span|<p>|<h[1-6]>/i, language: 'html' }
+      { pattern: /import\s+React|from\s+['"]react['"]|JSX\.Element/i, language: 'jsx' },
+      { pattern: /import.*from\s+['"]|export\s+(default\s+)?/i, language: 'javascript' },
+      { pattern: /function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=/i, language: 'javascript' },
+      { pattern: /def\s+\w+|import\s+\w+|from\s+\w+\s+import/i, language: 'python' },
+      { pattern: /class\s+\w+|public\s+(class|interface)/i, language: 'java' }
     ];
     
-    const lines = trimmedText.split('\n');
-    const totalLines = lines.length;
-    
-    // Count lines that match code patterns
-    const codeLines = lines.filter(line => {
-      const cleanLine = line.trim();
-      if (!cleanLine) return false;
-      return codePatterns.some(({ pattern }) => pattern.test(cleanLine));
-    });
-    
-    // Count lines with common code syntax
-    const syntaxLines = lines.filter(line => {
-      const cleanLine = line.trim();
-      return cleanLine.includes('{') || cleanLine.includes('}') || 
-             cleanLine.includes(';') || cleanLine.includes('()') ||
-             cleanLine.includes('=') || cleanLine.includes('import ') ||
-             cleanLine.includes('export ');
-    });
-    
-    // Calculate code confidence
-    const codeRatio = codeLines.length / totalLines;
-    const syntaxRatio = syntaxLines.length / totalLines;
-    const avgLineLength = lines.reduce((sum, line) => sum + line.length, 0) / totalLines;
-    
-    // More sophisticated detection logic
-    const isCode = (
-      codeRatio > 0.2 ||  // At least 20% of lines match code patterns
-      (syntaxRatio > 0.4 && avgLineLength > 20) || // High syntax ratio with decent line length
-      (totalLines > 3 && codeRatio > 0.1 && syntaxRatio > 0.3) // Multi-line with some code patterns
+    const lines = text.trim().split('\n');
+    const codeLines = lines.filter(line => 
+      codePatterns.some(({ pattern }) => pattern.test(line.trim()))
     );
     
-    // Determine language based on strongest pattern match
-    const languageScores: { [key: string]: number } = {};
-    codePatterns.forEach(({ pattern, language }) => {
-      const matches = (trimmedText.match(new RegExp(pattern.source, 'gi')) || []).length;
-      languageScores[language] = (languageScores[language] || 0) + matches;
-    });
+    // If more than 30% of lines look like code
+    const isCode = codeLines.length / lines.length > 0.3;
+    const language = codePatterns.find(({ pattern }) => pattern.test(text))?.language || 'javascript';
     
-    const bestLanguage = Object.entries(languageScores)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'javascript';
-    
-    return { isCode, language: bestLanguage };
+    return { isCode, language };
   };
   
   // Check if content is primarily code blocks to skip math processing
@@ -150,151 +63,43 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming
     return codeBlockLines > totalLines * 0.6 || codeBlockCount > 2;
   };
   
-  // Enhanced auto-wrapping for raw code in markdown fences
+  // Auto-wrap raw code in markdown fences
   const preprocessContent = (text: string): string => {
-    // More sophisticated fence detection - check if we have BOTH opening and closing fences
-    const fenceMatches = text.match(/```/g);
-    const hasProperFences = fenceMatches && fenceMatches.length >= 2;
-    
-    if (hasProperFences) {
-      console.log('🔍 Skipping preprocessing - already has proper code fences');
+    // Skip if already has code fences
+    if (text.includes('```')) {
       return text;
     }
     
-    // Special case: Model claims to use markdown but doesn't actually include fences
-    if (text.includes('markdown code fences') || text.includes('properly formatted') || text.includes('with proper markdown')) {
-      console.log('🔍 Model claims to use markdown fences but doesn\'t - proceeding with preprocessing');
-    }
+    // Pattern to match React component code
+    const reactComponentPattern = /(import React[\s\S]*?export default \w+;)/g;
+    let processedText = text;
+    let matches = [...text.matchAll(reactComponentPattern)];
     
-    const trimmedText = text.trim();
-    if (!trimmedText) return text;
-    
-    // Check if the entire content is raw code first
-    const { isCode, language } = detectRawCode(trimmedText);
-    
-    console.log('🔍 Preprocessing check:', { 
-      hasFenceMatches: fenceMatches?.length || 0,
-      isCode, 
-      language,
-      textLength: trimmedText.length,
-      textPreview: trimmedText.substring(0, 50) + '...'
-    });
-    
-    // Enhanced mixed content detection with proper code boundary detection
-    const codeStartPatterns = [
-      /import React.*from.*react/i,
-      /function\s+\w+.*\(/,
-      /const\s+\w+.*=/,
-      /export default/i
-    ];
-    
-    let codeStartIndex = -1;
-    for (const pattern of codeStartPatterns) {
-      const match = trimmedText.match(pattern);
-      if (match && match.index !== undefined) {
-        codeStartIndex = match.index;
-        break;
-      }
-    }
-    
-    if (codeStartIndex > 0) {
-      // Find the end of the code block
-      const afterCodeStart = trimmedText.substring(codeStartIndex);
+    if (matches.length > 0) {
+      console.log('🔧 Found React component(s), wrapping in markdown fences');
       
-      // Look for code end patterns (export default, closing brace followed by explanation)
-      const codeEndPatterns = [
-        /export default \w+;?\s*$/m,  // export default Component; at end of line
-        /^}\s*$/m,  // closing brace on its own line
-        /^export default \w+;?\s*$/m  // export default at start of line
-      ];
-      
-      let codeEndIndex = afterCodeStart.length; // Default to end of content
-      
-      // Find the actual end of the code
-      for (const pattern of codeEndPatterns) {
-        const match = afterCodeStart.match(pattern);
-        if (match && match.index !== undefined) {
-          codeEndIndex = match.index + match[0].length;
-          break;
-        }
-      }
-      
-      // Extract the pure code content
-      const explanation = trimmedText.substring(0, codeStartIndex).trim();
-      const codeContent = afterCodeStart.substring(0, codeEndIndex).trim();
-      const afterCode = afterCodeStart.substring(codeEndIndex).trim();
-      
-      const codeDetection = detectRawCode(codeContent);
-      
-      if (codeDetection.isCode) {
-        console.log('🔧 Detected mixed content with boundaries:');
-        console.log('🔍 Explanation:', explanation.substring(0, 50) + '...');
-        console.log('🔍 Code:', codeContent.substring(0, 50) + '...');
-        console.log('🔍 After code:', afterCode.substring(0, 50) + '...');
+      // Process matches in reverse order to maintain indices
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const match = matches[i];
+        const codeOnly = match[1];
+        const startIndex = match.index!;
+        const endIndex = startIndex + match[0].length;
         
-        // Reconstruct with proper separation
-        let result = '';
-        if (explanation) result += explanation + '\n\n';
-        result += `\`\`\`${codeDetection.language}\n${codeContent}\n\`\`\``;
-        if (afterCode) result += '\n\n' + afterCode;
-        
-        console.log('🔧 Mixed content result preview:', result.substring(0, 100) + '...');
-        return result;
+        processedText = 
+          processedText.substring(0, startIndex) +
+          `\n\`\`\`jsx\n${codeOnly}\n\`\`\`\n` +
+          processedText.substring(endIndex);
       }
+      
+      return processedText;
     }
+
+    // Fallback: check if the entire content is code
+    const { isCode, language } = detectRawCode(text);
     
     if (isCode) {
-      console.log('🔧 Auto-wrapping detected raw code in markdown fences:', language);
-      console.log('🔍 Raw code preview:', trimmedText.substring(0, 100) + '...');
-      
-      // Add a brief explanation before the code if it looks like a complete component/function
-      let explanation = '';
-      if (language === 'jsx' && (trimmedText.includes('export default') || trimmedText.includes('function '))) {
-        explanation = "Here's a React component:\n\n";
-      } else if (language === 'rust' && trimmedText.includes('fn ')) {
-        explanation = "Here's a Rust implementation:\n\n";
-      } else if (language === 'python' && trimmedText.includes('def ')) {
-        explanation = "Here's a Python implementation:\n\n";
-      } else if (language === 'javascript' && (trimmedText.includes('function ') || trimmedText.includes('const '))) {
-        explanation = "Here's a JavaScript implementation:\n\n";
-      }
-      
-      const result = `${explanation}\`\`\`${language}\n${trimmedText}\n\`\`\``;
-      console.log('🔧 Preprocessing result preview:', result.substring(0, 100) + '...');
-      return result;
-    }
-    
-    // Advanced pattern matching for mixed content (text + code blocks)
-    const codeBlockPattern = /(import\s+[\w\s,{}]+\s+from\s+['"][^'"]+['"][\s\S]*?(?:export\s+default\s+\w+;?|}\s*$))/gm;
-    let processedText = text;
-    let hasMatches = false;
-    
-    // Look for embedded code blocks within text
-    processedText = processedText.replace(codeBlockPattern, (match) => {
-      const detectedCode = detectRawCode(match.trim());
-      if (detectedCode.isCode) {
-        hasMatches = true;
-        console.log('🔧 Found embedded code block, wrapping:', detectedCode.language);
-        return `\n\`\`\`${detectedCode.language}\n${match.trim()}\n\`\`\`\n`;
-      }
-      return match;
-    });
-    
-    // Look for function definitions that might be standalone
-    const functionPattern = /((?:function\s+\w+|const\s+\w+\s*=\s*(?:\([^)]*\)\s*=>\s*{|\w+))[^}]*})/gm;
-    processedText = processedText.replace(functionPattern, (match) => {
-      const detectedCode = detectRawCode(match.trim());
-      if (detectedCode.isCode && match.trim().length > 50) { // Only wrap substantial code blocks
-        hasMatches = true;
-        console.log('🔧 Found function definition, wrapping:', detectedCode.language);
-        return `\n\`\`\`${detectedCode.language}\n${match.trim()}\n\`\`\`\n`;
-      }
-      return match;
-    });
-    
-    if (hasMatches) {
-      console.log('🔧 Successfully wrapped embedded code blocks');
-      return processedText;
+      console.log('🔧 Auto-wrapping raw code in markdown fences:', language);
+      return `\`\`\`${language}\n${text}\n\`\`\``;
     }
     
     return text;
@@ -892,39 +697,14 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming
   // During streaming, try to render as much as possible while being safe
   if (isStreaming) {
     // Check if this looks like raw code during streaming
-    const { isCode, language } = detectRawCode(content);
+    const { isCode } = detectRawCode(content);
     
     if (isCode) {
-      // For raw code during streaming, apply preprocessing if it looks complete enough
-      const lines = content.trim().split('\n');
-      const looksComplete = (
-        lines.length > 3 && 
-        (content.includes('export default') || content.includes('function ') || content.includes('def ') || content.includes('fn '))
-      );
-      
-      if (looksComplete) {
-        console.log('🔧 Streaming: detected complete code block, applying preprocessing');
-        const preprocessed = preprocessContent(content);
-        if (preprocessed !== content) {
-          // Successfully preprocessed, render as markdown
-          return (
-            <div className="math-content max-w-none">
-              <div className="leading-relaxed">
-                {renderMathContent(preprocessed)}
-                <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse" />
-              </div>
-            </div>
-          );
-        }
-      }
-      
-      // For incomplete or unprocessed raw code, show with basic formatting
+      // For raw code during streaming, show it with basic formatting
+      // but don't wrap in fences yet until streaming is complete
       return (
         <div className="math-content max-w-none">
           <div className="leading-relaxed">
-            <div className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-              {language.toUpperCase()} Code:
-            </div>
             <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto">
               <code className="text-sm font-mono">{content}</code>
             </pre>
@@ -959,14 +739,6 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming
     );
   }
 
-  // Apply preprocessing for non-streaming content (CRITICAL FIX)
-  const finalContent = isStreaming ? content : preprocessContent(content);
-  
-  // Debug: Check if preprocessing worked
-  if (finalContent !== content) {
-    console.log('🔧 Preprocessing applied successfully');
-  }
-
   return (
     <div className="math-content max-w-none">
       {showDebug && (
@@ -981,7 +753,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming
           <div className="text-sm mb-2">
             <strong>Processed content:</strong>
             <pre className="text-xs bg-white p-2 rounded border mt-1 whitespace-pre-wrap">
-              {processContent(finalContent)}
+              {processContent(content)}
             </pre>
           </div>
           <div className="text-sm">
@@ -989,7 +761,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ content, isStreaming
           </div>
         </div>
       )}
-      {renderMathContent(finalContent)}
+      {renderMathContent(content)}
       
       
       {/* Code Preview Modal */}

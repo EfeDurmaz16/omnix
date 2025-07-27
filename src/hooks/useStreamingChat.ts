@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { flushSync } from 'react-dom';
 import { StreamChunk } from '@/components/chat/StreamingMessage';
 
 export interface ChatMessage {
@@ -9,7 +8,6 @@ export interface ChatMessage {
   timestamp: Date;
   streaming?: boolean;
   error?: string;
-  _renderKey?: number;
   metadata?: {
     model?: string;
     tokens?: number;
@@ -35,7 +33,6 @@ export interface StreamingChatState {
   isStreaming: boolean;
   error: string | null;
   currentStreamingId: string | null;
-  renderTrigger: number;
 }
 
 export const useStreamingChat = (chatId: string) => {
@@ -43,8 +40,7 @@ export const useStreamingChat = (chatId: string) => {
     messages: [],
     isStreaming: false,
     error: null,
-    currentStreamingId: null,
-    renderTrigger: 0
+    currentStreamingId: null
   });
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -72,34 +68,14 @@ export const useStreamingChat = (chatId: string) => {
     }));
   }, []);
 
-  // Update streaming message - force immediate synchronous re-render
+  // Update streaming message
   const updateStreamingMessage = useCallback((id: string, updates: Partial<ChatMessage>) => {
-    console.log('🔄 Updating message:', id, 'with content length:', updates.content?.length);
-    
-    // Use flushSync to force immediate synchronous rendering
-    flushSync(() => {
-      setState((prev) => {
-        const messageIndex = prev.messages.findIndex(msg => msg.id === id);
-        if (messageIndex === -1) {
-          console.log('❌ Message not found:', id);
-          return prev;
-        }
-        
-        // Create new array and update the message directly
-        const newMessages = [...prev.messages];
-        newMessages[messageIndex] = { ...newMessages[messageIndex], ...updates };
-        
-        console.log('✅ Message updated, forcing immediate render');
-        
-        return {
-          messages: newMessages,
-          isStreaming: prev.isStreaming,
-          error: prev.error,
-          currentStreamingId: prev.currentStreamingId,
-          renderTrigger: prev.renderTrigger + 1
-        };
-      });
-    });
+    setState(prev => ({
+      ...prev,
+      messages: prev.messages.map(msg => 
+        msg.id === id ? { ...msg, ...updates } : msg
+      )
+    }));
   }, []);
 
   // Send message with streaming
@@ -147,8 +123,7 @@ export const useStreamingChat = (chatId: string) => {
         ...prev,
         isStreaming: true,
         error: null,
-        currentStreamingId: assistantMessage.id,
-        renderTrigger: prev.renderTrigger + 1
+        currentStreamingId: assistantMessage.id
       }));
 
       // Create abort controller for this request
@@ -285,10 +260,8 @@ export const useStreamingChat = (chatId: string) => {
               else if (chunk.type === 'text') {
                 // Add ONLY the new chunk content (not cumulative)
                 accumulatedContentRef.current += chunk.content;
-                console.log('📝 Accumulated content length:', accumulatedContentRef.current.length);
-                console.log('📝 Latest chunk:', chunk.content);
                 
-                // Update the streaming message directly for real-time rendering
+                // Update the streaming message with accumulated content
                 updateStreamingMessage(assistantMessage.id, {
                   content: accumulatedContentRef.current
                 });
@@ -425,7 +398,6 @@ export const useStreamingChat = (chatId: string) => {
     isStreaming: state.isStreaming,
     error: state.error,
     currentStreamingId: state.currentStreamingId,
-    renderTrigger: state.renderTrigger,
     
     // Actions
     sendMessage,

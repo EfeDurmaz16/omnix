@@ -476,10 +476,24 @@ function StreamingMessage({
 
         <div className="bg-muted rounded-lg p-4 mr-12">
           <div className="max-w-none leading-relaxed">
-            <EnhancedStreamingMessage 
-              content={streamingMessage} 
-              isStreaming={true}
-            />
+            <div className="streaming-content">
+              {/* SIMPLE STREAMING RENDERER - just show the content directly */}
+              <div className="whitespace-pre-wrap">
+                {streamingMessage}
+                {streamingMessage ? (
+                  <span className="inline-block w-2 h-4 bg-green-400 ml-1 animate-pulse">|</span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                    </div>
+                    <span className="text-sm text-muted-foreground">AI is thinking...</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
