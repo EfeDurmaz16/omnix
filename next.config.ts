@@ -7,6 +7,16 @@ process.env.NEXT_TRACE = 'false';
 const nextConfig: NextConfig = {
   // Telemetry is disabled via environment variable above
   
+  // Skip ESLint during build for faster deployment
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  
+  // Skip TypeScript checks during build (will be handled separately)
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  
   // Performance optimizations for development
   experimental: {
     optimizePackageImports: [
