@@ -2,7 +2,19 @@ import { NextRequest } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/db';
 import { Plan as UserPlan } from '@prisma/client';
-import { rateLimiter, RateLimitResult } from '@/lib/rate-limiting/RedisRateLimiter';
+// Redis rate limiter only imported server-side
+let rateLimiter: any;
+let RateLimitResult: any;
+
+// Dynamic import for server-side only
+async function getRateLimiter() {
+  if (!rateLimiter && typeof window === 'undefined') {
+    const module = await import('@/lib/rate-limiting/RedisRateLimiter');
+    rateLimiter = module.rateLimiter;
+    RateLimitResult = module.RateLimitResult;
+  }
+  return rateLimiter;
+}
 
 export interface PlanLimits {
   monthlyCredits: number;
@@ -257,7 +269,12 @@ export class PlanEnforcer {
       }
 
       // Check rate limit using Redis or memory fallback
-      const rateLimitResult = await rateLimiter.checkRateLimit(key, limit, windowMs);
+      const limiter = await getRateLimiter();
+      if (!limiter) {
+        // Fallback to simple memory-based rate limiting
+        return { allowed: true, headers: {} };
+      }
+      const rateLimitResult = await limiter.checkRateLimit(key, limit, windowMs);
 
       // Generate rate limit headers
       const headers = {
@@ -427,7 +444,11 @@ export class PlanEnforcer {
           break;
       }
 
-      const status = await rateLimiter.getRateLimitStatus(key, limit, windowMs);
+      const limiter = await getRateLimiter();
+      if (!limiter) {
+        throw new Error('Rate limiter not available');
+      }
+      const status = await limiter.getRateLimitStatus(key, limit, windowMs);
 
       const headers = {
         'X-RateLimit-Limit': limit.toString(),
@@ -461,14 +482,20 @@ export class PlanEnforcer {
       ? `rate_limit:${userId}:${window}:${endpoint}`
       : `rate_limit:${userId}:${window}`;
     
-    await rateLimiter.resetRateLimit(key);
+    const limiter = await getRateLimiter();
+    if (limiter) {
+      await limiter.resetRateLimit(key);
+    }
   }
 
   /**
    * Cleanup expired rate limit entries (delegated to RedisRateLimiter)
    */
   static cleanupRateLimits(): void {
-    rateLimiter.cleanupMemoryStore();
+    // Only cleanup if running server-side
+    if (typeof window === 'undefined' && rateLimiter) {
+      rateLimiter.cleanupMemoryStore();
+    }
   }
 }
 

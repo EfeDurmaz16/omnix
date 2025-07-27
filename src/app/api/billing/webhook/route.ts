@@ -177,59 +177,36 @@ async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscrip
     
     console.log('📈 Updating user plan:', clerkUserId, 'to', planName);
     
-    // Call our API to update the user plan
+    // Update user plan using PrismaStripeCreditManager
     try {
-      const apiUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/user/plan`;
-      console.log('🔗 Making API call to:', apiUrl);
+      const { prismaStripeCreditManager } = await import('@/lib/credits/PrismaStripeCreditManager');
       
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Include a server-side auth header or use a different auth method
-          'x-clerk-user-id': clerkUserId, // Custom header for webhook auth
-        },
-        body: JSON.stringify({
-          plan: planName,
-          ...subscriptionData
-        })
-      });
-
-      const responseText = await response.text();
-      console.log('🔍 API Response status:', response.status);
-      console.log('🔍 API Response body:', responseText);
-
-      if (!response.ok) {
-        throw new Error(`Plan update API call failed: ${response.status} - ${responseText}`);
+      // Ensure user exists in database first
+      const userResult = await prismaStripeCreditManager.ensureUserExists(clerkUserId);
+      if (!userResult.success) {
+        console.error('❌ Failed to ensure user exists:', userResult.error);
+        return;
       }
-
-      const result = JSON.parse(responseText);
+      
+      // Update plan with database transaction
+      const result = await prismaStripeCreditManager.updateUserPlan(
+        clerkUserId,
+        planName as any,
+        subscriptionData
+      );
       
       if (result.success) {
-        console.log('✅ User plan updated successfully via API');
-        
-        // Also update credits based on plan
-        await updateUserCredits(clerkUserId, planName);
+        console.log('✅ User plan updated successfully via database:', {
+          clerkUserId,
+          planName,
+          newBalance: result.newBalance
+        });
       } else {
-        throw new Error(result.error || 'API returned unsuccessful result');
+        console.error('❌ Failed to update user plan:', result.error);
       }
 
-    } catch (apiError) {
-      console.error('❌ Failed to call plan update API, using direct update:', apiError);
-      
-      // Fallback: direct update using the userPlans Map
-      const { userPlans } = await import('@/app/api/user/plan/route');
-      
-      userPlans.set(clerkUserId, {
-        plan: planName as 'FREE' | 'PRO' | 'ULTRA' | 'TEAM',
-        ...subscriptionData,
-        updatedAt: new Date()
-      });
-      
-      console.log('✅ User plan updated directly via fallback');
-      
-      // Also update credits based on plan
-      await updateUserCredits(clerkUserId, planName);
+    } catch (dbError) {
+      console.error('❌ Failed to update user plan in database:', dbError);
     }
     
   } catch (error) {
@@ -237,41 +214,7 @@ async function updateUserPlan(clerkUserId: string, subscription: Stripe.Subscrip
   }
 }
 
-async function updateUserCredits(clerkUserId: string, planName: string) {
-  try {
-    // Set appropriate credits based on plan
-    let credits = 100; // Default FREE credits
-    switch (planName) {
-      case 'PRO':
-        credits = 2000;
-        break;
-      case 'ULTRA':
-        credits = 5000;
-        break;
-      case 'TEAM':
-        credits = 10000; // Team plan gets highest credits
-        break;
-    }
-    
-    console.log('💰 Setting credits for plan:', { planName, credits });
-    
-    // Try to update credits in database
-    try {
-      const { prisma } = await import('@/lib/db');
-      await prisma.user.update({
-        where: { clerkId: clerkUserId },
-        data: { credits: credits }
-      });
-      
-      console.log('✅ Credits updated in database');
-    } catch (dbError) {
-      console.error('❌ Failed to update credits in database:', dbError);
-    }
-    
-  } catch (error) {
-    console.error('❌ Failed to update user credits:', error);
-  }
-}
+// Credit updates are now handled by PrismaStripeCreditManager.updateUserPlan()
 
 async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkout.Session) {
   try {
@@ -318,55 +261,34 @@ async function handleCreditPurchase(clerkUserId: string, session: Stripe.Checkou
         sessionId: session.id
       });
       
-      // Add credits to database using the EnhancedCreditManager
+      // Add credits to database using the PrismaStripeCreditManager
       try {
-        const { EnhancedCreditManager } = await import('@/lib/credits/EnhancedCreditManager');
-        const creditManager = EnhancedCreditManager.getInstance();
+        const { prismaStripeCreditManager } = await import('@/lib/credits/PrismaStripeCreditManager');
         
-        // Add credits with transaction record
-        const result = await creditManager.addCredits(
-          creditAmount,
-          `Credit purchase - ${creditAmount} credits from Stripe payment`,
-          {
-            stripeSessionId: session.id,
-            priceId: priceId,
-            purchaseType: 'one-time',
-            timestamp: new Date().toISOString()
-          },
-          clerkUserId
+        // Ensure user exists in database first
+        const userResult = await prismaStripeCreditManager.ensureUserExists(clerkUserId);
+        if (!userResult.success) {
+          console.error('❌ Failed to ensure user exists:', userResult.error);
+          return;
+        }
+        
+        // Add credits with full transaction record
+        const result = await prismaStripeCreditManager.handleStripeCreditPurchase(
+          clerkUserId,
+          priceId!,
+          session.id
         );
         
         if (result.success) {
-          console.log('✅ Credits successfully added to database:', {
+          console.log('✅ Credits successfully added via Stripe webhook:', {
             userId: clerkUserId,
             amount: creditAmount,
             newBalance: result.newBalance,
+            transactionId: result.transactionId,
             sessionId: session.id
           });
         } else {
-          console.error('❌ Failed to add credits via EnhancedCreditManager:', result.error);
-          
-          // Fallback: try direct database update
-          const { prisma } = await import('@/lib/db');
-          const user = await prisma.user.findUnique({
-            where: { clerkId: clerkUserId },
-            select: { credits: true }
-          });
-          
-          if (user) {
-            const newCredits = (user.credits || 0) + creditAmount;
-            await prisma.user.update({
-              where: { clerkId: clerkUserId },
-              data: { credits: newCredits }
-            });
-            
-            console.log('✅ Credits added via direct database update:', {
-              userId: clerkUserId,
-              previousCredits: user.credits,
-              addedCredits: creditAmount,
-              newTotal: newCredits
-            });
-          }
+          console.error('❌ Failed to add credits via PrismaStripeCreditManager:', result.error);
         }
         
       } catch (dbError) {

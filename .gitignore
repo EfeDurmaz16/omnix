@@ -63,3 +63,4 @@ adk-service/__pycache__/
 adk-service/*.pyc
 
 chroma-venv/
+.vercel
