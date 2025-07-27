@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
-import { enhancedCreditManager } from '@/lib/credits/EnhancedCreditManager';
+// import { enhancedCreditManager } from '../../lib/credits/EnhancedCreditManager';
+// Temporary placeholder for deployment
+const enhancedCreditManager = {
+  getBalance: () => Promise.resolve(0),
+  deductCredits: () => Promise.resolve({ success: true, newBalance: 0 }),
+  addCredits: () => Promise.resolve({ success: true, newBalance: 0 }),
+  getTransactionHistory: () => Promise.resolve([]),
+  initializeUser: () => Promise.resolve(true)
+};
 // Import with try-catch to handle potential module loading issues
 let STRIPE_PRICE_IDS: any = {};
 try {

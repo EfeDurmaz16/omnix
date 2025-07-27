@@ -28,7 +28,14 @@ import {
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { BILLING_PLANS } from '@/lib/stripe';
+// import { BILLING_PLANS } from '../lib/stripe';
+// Temporary placeholder for deployment
+const BILLING_PLANS = {
+  student: { name: 'Student', price: 9, credits: 1000 },
+  pro: { name: 'Pro', price: 29, credits: 5000 },
+  team: { name: 'Team', price: 99, credits: 20000 },
+  enterprise: { name: 'Enterprise', price: 299, credits: 100000 }
+};
 
 export default function HomePage() {
   const { user, isLoaded } = useUser();

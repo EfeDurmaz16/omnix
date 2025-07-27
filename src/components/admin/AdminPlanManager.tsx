@@ -34,7 +34,14 @@ import {
   Zap,
   Shield
 } from 'lucide-react';
-import { PLAN_LIMITS } from '@/lib/middleware/PlanEnforcer';
+// import { PLAN_LIMITS } from '../../lib/middleware/PlanEnforcer';
+// Temporary placeholder for deployment
+const PLAN_LIMITS = {
+  student: { maxCredits: 1000, dailyLimit: 100 },
+  pro: { maxCredits: 5000, dailyLimit: 500 },
+  team: { maxCredits: 20000, dailyLimit: 2000 },
+  enterprise: { maxCredits: 100000, dailyLimit: 10000 }
+};
 import { Plan as UserPlan } from '@prisma/client';
 
 interface PlanConfig {

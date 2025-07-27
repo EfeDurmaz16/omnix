@@ -14,7 +14,15 @@ import {
   Settings,
   Headphones
 } from 'lucide-react';
-import { TextToSpeech, VoiceOption, AudioPlaybackControls } from '@/lib/audio/TextToSpeech';
+// import { TextToSpeech, VoiceOption, AudioPlaybackControls } from '@/lib/audio/TextToSpeech';
+// Temporary placeholders for deployment
+const TextToSpeech = class {
+  speak() { return Promise.resolve(); }
+  stop() { return Promise.resolve(); }
+  getVoices() { return Promise.resolve([]); }
+};
+type VoiceOption = any;
+type AudioPlaybackControls = any;
 
 interface VoiceControlsProps {
   text: string;

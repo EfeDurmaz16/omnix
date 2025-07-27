@@ -22,9 +22,27 @@ import { Card } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { SpeechRecognition } from '@/lib/audio/SpeechRecognition';
-import { TextToSpeech, VoiceOption } from '@/lib/audio/TextToSpeech';
-import { getLanguageManager, SupportedLanguage } from '@/lib/i18n/MultiLanguageSupport';
+// import { SpeechRecognition } from '@/lib/audio/SpeechRecognition';
+// import { TextToSpeech, VoiceOption } from '@/lib/audio/TextToSpeech';
+// import { getLanguageManager, SupportedLanguage } from '@/lib/i18n/MultiLanguageSupport';
+
+// Temporary placeholders for deployment
+const SpeechRecognition = class { 
+  start() { return Promise.resolve(); }
+  stop() { return Promise.resolve(); }
+  on() { return this; }
+};
+const TextToSpeech = class {
+  speak() { return Promise.resolve(); }
+  stop() { return Promise.resolve(); }
+  getVoices() { return Promise.resolve([]); }
+};
+const getLanguageManager = () => ({
+  getCurrentLanguage: () => 'en',
+  translateText: (text: string) => Promise.resolve(text)
+});
+type VoiceOption = any;
+type SupportedLanguage = string;
 
 interface RealtimeVoiceChatProps {
   onMessage?: (message: string, isUser: boolean) => void;

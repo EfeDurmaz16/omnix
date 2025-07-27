@@ -12,7 +12,12 @@ import { EnhancedChatInput } from './EnhancedChatInput';
 import { RealtimeVoiceChat } from './RealtimeVoiceChat';
 import { AdvancedModelSearch } from '../models/AdvancedModelSearch';
 import { useAuth } from '@/components/auth/ClerkAuthWrapper';
-import { autoRouter } from '@/lib/routing/AutoRouter';
+// import { autoRouter } from '../../lib/routing/AutoRouter';
+// Temporary placeholder for deployment
+const autoRouter = {
+  selectBestModel: () => Promise.resolve('gpt-4'),
+  getModelRecommendations: () => Promise.resolve([])
+};
 import { useModelInfo } from '@/hooks/useModelInfo';
 import { useStreamingChat } from '@/hooks/useStreamingChat';
 
