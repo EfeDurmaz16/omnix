@@ -122,6 +122,7 @@ export function EnhancedChatInterface({
     isStreaming,
     error: streamingError,
     currentStreamingId,
+    renderTrigger,
     sendMessage: sendStreamingMessage,
     stopStreaming,
     clearMessages: clearStreamingMessages,
@@ -177,6 +178,7 @@ export function EnhancedChatInterface({
   useEffect(() => {
     localStorage.setItem('omnix-use-streaming', useStreaming.toString());
   }, [useStreaming]);
+
 
   // Sync streaming messages with session messages - optimized to prevent typing lag
   useEffect(() => {
@@ -722,6 +724,17 @@ export function EnhancedChatInterface({
   };
 
   const messagesToDisplay = useStreaming ? streamingMessages : (currentSession?.messages || []);
+  
+  // Debug: Log message updates
+  console.log('🔍 messagesToDisplay length:', messagesToDisplay.length);
+  console.log('🔍 useStreaming:', useStreaming);
+  console.log('🔍 streamingMessages length:', streamingMessages.length);
+  console.log('🔍 isStreaming:', isStreaming);
+  if (messagesToDisplay.length > 0) {
+    const lastMessage = messagesToDisplay[messagesToDisplay.length - 1];
+    console.log('🔍 Last message content length:', lastMessage.content.length);
+    console.log('🔍 Last message streaming:', lastMessage.streaming);
+  }
 
   return (
     <div className="flex h-full cultural-bg">
@@ -1054,7 +1067,7 @@ export function EnhancedChatInterface({
                 ) : (
             messagesToDisplay.map((message) => (
                     <div
-                      key={message.id}
+                      key={`${message.id}-${renderTrigger}`}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                 <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : 'order-1'}`}>
@@ -1062,7 +1075,7 @@ export function EnhancedChatInterface({
                     <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-4">
                       {/* Use MathRenderer for proper markdown and math rendering during streaming */}
                       <div className="text-white">
-                        <MathRenderer content={message.content} isStreaming={true} />
+                        <MathRenderer key={`streaming-${message.id}-${renderTrigger}`} content={message.content} isStreaming={true} />
                         {isStreaming && (
                           <span className="animate-pulse ml-1">|</span>
                         )}
