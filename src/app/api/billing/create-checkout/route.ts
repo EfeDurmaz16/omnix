@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-05-28.basil',
-});
+// Initialize Stripe lazily to avoid build-time errors
+function getStripe() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY is not set');
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: '2025-05-28.basil',
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,6 +39,7 @@ export async function POST(request: NextRequest) {
     let stripeCustomer;
     
     // Try to find existing customer by email
+    const stripe = getStripe();
     const existingCustomers = await stripe.customers.list({
       email: user.emailAddresses[0]?.emailAddress,
       limit: 1,
