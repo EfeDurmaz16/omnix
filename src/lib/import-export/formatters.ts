@@ -547,4 +547,4 @@ export class ChatExportFormatter {
   }
 }
 
-export { ExportFormatters };
+export { ChatExportFormatter as ExportFormatters };

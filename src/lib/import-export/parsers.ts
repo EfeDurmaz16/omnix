@@ -578,4 +578,4 @@ export class ChatImportParser {
   }
 }
 
-export { ImportParsers };
+export { ChatImportParser as ImportParsers };
