@@ -31,10 +31,39 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 // import { BILLING_PLANS } from '../lib/stripe';
 // Temporary placeholder for deployment
 const BILLING_PLANS = [
-  { id: 'student', name: 'Student', price: 9, credits: 1000 },
-  { id: 'pro', name: 'Pro', price: 29, credits: 5000, popular: true },
-  { id: 'team', name: 'Team', price: 99, credits: 20000 },
-  { id: 'enterprise', name: 'Enterprise', price: 299, credits: 100000 }
+  { 
+    id: 'student', 
+    name: 'Student', 
+    price: 9, 
+    monthlyPrice: 9,
+    credits: 1000,
+    features: ['1,000 credits/month', 'Basic AI models', 'Email support', 'Basic analytics']
+  },
+  { 
+    id: 'pro', 
+    name: 'Pro', 
+    price: 29, 
+    monthlyPrice: 29,
+    credits: 5000, 
+    popular: true,
+    features: ['5,000 credits/month', 'Advanced AI models', 'Priority support', 'Advanced analytics', 'Custom integrations']
+  },
+  { 
+    id: 'team', 
+    name: 'Team', 
+    price: 99, 
+    monthlyPrice: 99,
+    credits: 20000,
+    features: ['20,000 credits/month', 'Team collaboration', '24/7 support', 'Advanced analytics', 'Custom integrations', 'API access']
+  },
+  { 
+    id: 'enterprise', 
+    name: 'Enterprise', 
+    price: 299, 
+    monthlyPrice: 299,
+    credits: 100000,
+    features: ['100,000 credits/month', 'Unlimited models', 'Dedicated support', 'Custom analytics', 'White-label', 'SLA guarantee']
+  }
 ];
 
 export default function HomePage() {
