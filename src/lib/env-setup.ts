@@ -9,7 +9,17 @@ export function setupEnvironment() {
   }
   
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = './omni-463513-88580bf51818.json';
+    // Check for Render secret file first, then fallback to local
+    const renderSecretPath = '/etc/secrets/omni-463513-88580bf51818.json';
+    const localPath = './omni-463513-88580bf51818.json';
+    
+    // Use require to check file existence synchronously
+    const fs = require('fs');
+    if (fs.existsSync(renderSecretPath)) {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = renderSecretPath;
+    } else {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = localPath;
+    }
   }
   
   console.log('🔧 Environment variables set:', {
