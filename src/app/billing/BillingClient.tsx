@@ -9,7 +9,8 @@ const enhancedCreditManager = {
   deductCredits: () => Promise.resolve({ success: true, newBalance: 0 }),
   addCredits: () => Promise.resolve({ success: true, newBalance: 0 }),
   getTransactionHistory: () => Promise.resolve([]),
-  initializeUser: () => Promise.resolve(true)
+  initializeUser: () => Promise.resolve(true),
+  handleStripePurchase: (amount: number) => Promise.resolve(true)
 };
 // Import with try-catch to handle potential module loading issues
 let STRIPE_PRICE_IDS: any = {};
