@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:fast": "next dev --turbo",
     "dev:clean": "rimraf .next && npm run dev",
-    "build": "prisma generate && next build",
+    "build": "node scripts/setup-credentials.js && prisma generate && next build",
     "build:analyze": "ANALYZE=true next build", 
     "postinstall": "prisma generate",
     "start": "next start",
