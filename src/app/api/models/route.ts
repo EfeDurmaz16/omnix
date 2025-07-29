@@ -8,25 +8,33 @@ export async function GET() {
   try {
     console.log('Models API called');
     
-    const { userId } = await auth();
-    console.log('User ID:', userId);
+    let userId: string | null = null;
+    let isAuthenticated = false;
     
-    // Allow unauthenticated access for basic model listing
-    // Authenticated users get more detailed access control
-    const isAuthenticated = !!userId;
+    try {
+      const authResult = await auth();
+      userId = authResult.userId;
+      isAuthenticated = !!userId;
+      console.log('User ID:', userId);
+    } catch (authError) {
+      console.warn('Auth failed, continuing without authentication:', authError);
+    }
 
-    console.log('Initializing enhanced router...');
-    const router = enhancedModelRouter;
-    console.log('Enhanced router initialized:', !!router);
+    let allModels: any[] = [];
     
-    // Import model catalog (singleton, already initialized)
-    const { modelCatalog } = await import('@/lib/catalog/ModelCatalog');
-    console.log('Model catalog imported');
-    
-    // Get all available models using enhanced router
-    console.log('Getting available models from enhanced router...');
-    const allModels = await router.getAvailableModels();
-    console.log('All models from enhanced router:', allModels?.length || 0);
+    try {
+      console.log('Initializing enhanced router...');
+      const router = enhancedModelRouter;
+      console.log('Enhanced router initialized:', !!router);
+      
+      // Get all available models using enhanced router
+      console.log('Getting available models from enhanced router...');
+      allModels = await router.getAvailableModels();
+      console.log('All models from enhanced router:', allModels?.length || 0);
+    } catch (routerError) {
+      console.warn('Enhanced router failed, using fallback models:', routerError);
+      allModels = [];
+    }
     
     // If no models found or very few, add fallback models
     if (!allModels || allModels.length <= 1) {
@@ -279,12 +287,27 @@ export async function GET() {
     
     // Get provider health status
     console.log('Getting provider health...');
-    const providerHealthMap = router.getProviderHealth();
-    const providerHealth: Record<string, boolean> = {};
-    for (const [providerId, health] of providerHealthMap.entries()) {
-      providerHealth[providerId] = health.isHealthy;
+    let providerHealth: Record<string, boolean> = {};
+    
+    try {
+      const router = enhancedModelRouter;
+      const providerHealthMap = router.getProviderHealth();
+      for (const [providerId, health] of providerHealthMap.entries()) {
+        providerHealth[providerId] = health.isHealthy;
+      }
+      console.log('Provider health:', providerHealth);
+    } catch (healthError) {
+      console.warn('Failed to get provider health, using defaults:', healthError);
+      // Set default health for common providers
+      providerHealth = {
+        openai: true,
+        vertex: true,
+        anthropic: true,
+        replicate: true,
+        midjourney: true,
+        stability: true
+      };
     }
-    console.log('Provider health:', providerHealth);
     
     // Group models by provider
     const modelsByProvider = availableModels.reduce((acc: Record<string, any[]>, model: any) => {

@@ -8,6 +8,7 @@ import { mockApi } from '@/lib/mock-api';
 // Temporary placeholder for deployment
 const clientCreditManager = {
   getBalance: () => Promise.resolve(0),
+  getCredits: () => Promise.resolve(0),
   deductCredits: () => Promise.resolve({ success: true, newBalance: 0 }),
   addCredits: () => Promise.resolve({ success: true, newBalance: 0 })
 };
