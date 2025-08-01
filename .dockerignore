@@ -1,0 +1,86 @@
+# Dockerfile ignore patterns for OmniX
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env
+.env*.local
+.env.development
+.env.production
+
+# Development files
+.next/
+.vercel/
+.vscode/
+.idea/
+
+# Testing
+coverage/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# Documentation
+*.md
+docs/
+README*
+
+# Git
+.git/
+.gitignore
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build artifacts (keep .next for production build)
+dist/
+build/
+
+# Test files
+test/
+tests/
+__tests__/
+
+# Database
+*.sqlite
+*.db
+prisma/dev.db
+
+# Uploads directory (should use Cloud Storage)
+uploads/
+
+# Video storage (should use Cloud Storage)
+video-storage.json
+
+# Local development scripts
+setup-*.sh
+start-*.sh
+test-*.js

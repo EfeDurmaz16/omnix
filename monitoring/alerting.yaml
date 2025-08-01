@@ -1,0 +1,136 @@
+# Google Cloud Monitoring Alerting Policies for OmniX
+
+# High Error Rate Alert
+- displayName: "OmniX - High Error Rate"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "Error rate > 5%"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" resource.labels.service_name="omnix-app"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 0.05
+        duration: 300s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_RATE
+            crossSeriesReducer: REDUCE_MEAN
+            groupByFields:
+              - resource.labels.service_name
+  notificationChannels:
+    - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+  alertStrategy:
+    autoClose: 604800s  # 7 days
+
+# High Response Time Alert  
+- displayName: "OmniX - High Response Time"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "95th percentile response time > 5s"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" resource.labels.service_name="omnix-app" metric.type="run.googleapis.com/request_latencies"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 5000  # 5 seconds
+        duration: 300s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_DELTA
+            crossSeriesReducer: REDUCE_PERCENTILE_95
+            groupByFields:
+              - resource.labels.service_name
+  notificationChannels:
+    - projects/PROJECT_ID/notificationChannels/NOTIFICATION_CHANNEL_ID
+
+# Database Connection Issues
+- displayName: "OmniX - Database Connection Issues"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "SQL connection failures"
+      conditionThreshold:
+        filter: 'resource.type="cloudsql_database" resource.labels.database_id="PROJECT_ID:omnix-postgres-production"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 10
+        duration: 180s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_RATE
+            crossSeriesReducer: REDUCE_SUM
+
+# High CPU Usage
+- displayName: "OmniX - High CPU Usage"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "CPU utilization > 80%"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" resource.labels.service_name="omnix-app"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 0.8
+        duration: 300s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+            crossSeriesReducer: REDUCE_MEAN
+
+# High Memory Usage
+- displayName: "OmniX - High Memory Usage"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "Memory utilization > 85%"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" resource.labels.service_name="omnix-app"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 0.85
+        duration: 300s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_MEAN
+            crossSeriesReducer: REDUCE_MEAN
+
+# Low Instance Count (Production)
+- displayName: "OmniX - No Healthy Instances"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "Active instances = 0"
+      conditionAbsent:
+        filter: 'resource.type="cloud_run_revision" resource.labels.service_name="omnix-app" metric.type="run.googleapis.com/container/instance_count"'
+        duration: 300s
+        aggregations:
+          - alignmentPeriod: 60s
+            crossSeriesReducer: REDUCE_SUM
+
+# AI Service Failures
+- displayName: "OmniX - AI Service Failures"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "High AI API error rate"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" resource.labels.service_name="omnix-app" metric.label.response_code_class="5xx"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 5
+        duration: 180s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_RATE
+            crossSeriesReducer: REDUCE_SUM
+
+# Storage Issues
+- displayName: "OmniX - Storage Issues"
+  combiner: OR
+  enabled: true
+  conditions:
+    - displayName: "High storage error rate"
+      conditionThreshold:
+        filter: 'resource.type="gce_instance" metric.type="storage.googleapis.com/api/request_count" metric.label.response_code!="200"'
+        comparison: COMPARISON_GREATER_THAN
+        threshlidValue: 10
+        duration: 300s
+        aggregations:
+          - alignmentPeriod: 60s
+            perSeriesAligner: ALIGN_RATE
+            crossSeriesReducer: REDUCE_SUM

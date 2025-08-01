@@ -1,0 +1,206 @@
+# GitHub Actions CI/CD Pipeline for OmniX
+name: Deploy to Google Cloud
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  PROJECT_ID: omni-463513
+  REGION: us-central1
+  SERVICE_NAME: omnix-app
+
+jobs:
+  # Test and Lint
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run type checking
+        run: npx tsc --noEmit
+
+      # Uncomment when tests are available
+      # - name: Run tests
+      #   run: npm test
+
+  # Build and Deploy to Staging
+  deploy-staging:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: staging
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_NAME="gcr.io/$PROJECT_ID/omnix"
+          docker build -t $IMAGE_NAME:$GITHUB_SHA -t $IMAGE_NAME:latest .
+          docker push $IMAGE_NAME:$GITHUB_SHA
+          docker push $IMAGE_NAME:latest
+
+      - name: Deploy to Cloud Run (Staging)
+        run: |
+          gcloud run deploy $SERVICE_NAME-staging \
+            --image gcr.io/$PROJECT_ID/omnix:$GITHUB_SHA \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 2Gi \
+            --cpu 2 \
+            --min-instances 0 \
+            --max-instances 10 \
+            --service-account omnix-service-account@$PROJECT_ID.iam.gserviceaccount.com \
+            --vpc-connector projects/$PROJECT_ID/locations/$REGION/connectors/omnix-connector \
+            --vpc-egress private-ranges-only \
+            --set-env-vars NODE_ENV=production,NEXT_TELEMETRY_DISABLED=1,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION
+
+      - name: Run database migrations
+        run: |
+          # Create temporary migration job
+          JOB_NAME="omnix-migrate-$GITHUB_RUN_ID"
+          gcloud run jobs create $JOB_NAME \
+            --image gcr.io/$PROJECT_ID/omnix:$GITHUB_SHA \
+            --args "npx,prisma,migrate,deploy" \
+            --service-account omnix-service-account@$PROJECT_ID.iam.gserviceaccount.com \
+            --region $REGION \
+            --max-retries 1 \
+            --parallelism 1 \
+            --task-count 1 \
+            --cpu 1 \
+            --memory 1Gi \
+            --task-timeout 300s
+          
+          # Execute migration
+          gcloud run jobs execute $JOB_NAME --region $REGION --wait
+          
+          # Clean up
+          gcloud run jobs delete $JOB_NAME --region $REGION --quiet
+
+      - name: Get staging URL
+        id: staging-url
+        run: |
+          URL=$(gcloud run services describe $SERVICE_NAME-staging --region $REGION --format "value(status.url)")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Comment staging URL on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 Staging deployment completed!\n\n**Staging URL:** ${{ steps.staging-url.outputs.url }}'
+            })
+
+  # Deploy to Production (manual approval required)
+  deploy-production:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run (Production)
+        run: |
+          gcloud run deploy $SERVICE_NAME \
+            --image gcr.io/$PROJECT_ID/omnix:$GITHUB_SHA \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 4Gi \
+            --cpu 4 \
+            --min-instances 1 \
+            --max-instances 100 \
+            --service-account omnix-service-account@$PROJECT_ID.iam.gserviceaccount.com \
+            --vpc-connector projects/$PROJECT_ID/locations/$REGION/connectors/omnix-connector \
+            --vpc-egress private-ranges-only \
+            --set-env-vars NODE_ENV=production,NEXT_TELEMETRY_DISABLED=1,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION
+
+      - name: Run production database migrations
+        run: |
+          # Create temporary migration job
+          JOB_NAME="omnix-migrate-prod-$GITHUB_RUN_ID"
+          gcloud run jobs create $JOB_NAME \
+            --image gcr.io/$PROJECT_ID/omnix:$GITHUB_SHA \
+            --args "npx,prisma,migrate,deploy" \
+            --service-account omnix-service-account@$PROJECT_ID.iam.gserviceaccount.com \
+            --region $REGION \
+            --max-retries 1 \
+            --parallelism 1 \
+            --task-count 1 \
+            --cpu 2 \
+            --memory 2Gi \
+            --task-timeout 600s
+          
+          # Execute migration
+          gcloud run jobs execute $JOB_NAME --region $REGION --wait
+          
+          # Clean up
+          gcloud run jobs delete $JOB_NAME --region $REGION --quiet
+
+      - name: Get production URL
+        id: production-url
+        run: |
+          URL=$(gcloud run services describe $SERVICE_NAME --region $REGION --format "value(status.url)")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Notify deployment success
+        run: |
+          echo "🎉 Production deployment completed successfully!"
+          echo "Production URL: ${{ steps.production-url.outputs.url }}"

@@ -1,0 +1,115 @@
+# Google Cloud Run service configuration for OmniX
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: omnix-app
+  annotations:
+    # Cloud Run annotations
+    run.googleapis.com/ingress: all
+    run.googleapis.com/ingress-status: all
+    # Enable HTTP/2
+    run.googleapis.com/cpu-throttling: "false"
+spec:
+  template:
+    metadata:
+      annotations:
+        # Resource limits
+        run.googleapis.com/memory: "2Gi"
+        run.googleapis.com/cpu: "2"
+        # Scaling
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "100"
+        # Session affinity for WebSocket connections
+        run.googleapis.com/sessionAffinity: true
+        # VPC connector for private resources
+        run.googleapis.com/vpc-access-connector: projects/PROJECT_ID/locations/us-central1/connectors/omnix-connector
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      serviceAccountName: omnix-service-account@PROJECT_ID.iam.gserviceaccount.com
+      containerConcurrency: 1000
+      timeoutSeconds: 300
+      containers:
+      - name: omnix-app
+        image: gcr.io/PROJECT_ID/omnix:latest
+        ports:
+        - name: http1
+          containerPort: 3000
+        env:
+        # Database
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: database-url
+        # Redis
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: redis-url
+        # AI Services
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: openai-api-key
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: anthropic-api-key
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "PROJECT_ID"
+        - name: GOOGLE_CLOUD_LOCATION
+          value: "us-central1"
+        # Clerk Authentication
+        - name: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: clerk-publishable-key
+        - name: CLERK_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: clerk-secret-key
+        # Stripe
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: stripe-secret-key
+        - name: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: omnix-secrets
+              key: stripe-publishable-key
+        # Application
+        - name: NODE_ENV
+          value: "production"
+        - name: NEXT_TELEMETRY_DISABLED
+          value: "1"
+        resources:
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+          requests:
+            cpu: "1000m"
+            memory: "1Gi"
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

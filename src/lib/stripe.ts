@@ -1,5 +1,10 @@
 import { loadStripe } from '@stripe/stripe-js';
 
+// Environment variable validation
+if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+  console.error('❌ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set');
+}
+
 export const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const STRIPE_PRICE_IDS = {
