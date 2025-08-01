@@ -20,6 +20,8 @@ const TextToSpeech = class {
   speak() { return Promise.resolve(); }
   stop() { return Promise.resolve(); }
   getVoices() { return Promise.resolve([]); }
+  static getAvailableVoices() { return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']; }
+  static isSupported() { return true; }
 };
 type VoiceOption = any;
 type AudioPlaybackControls = any;

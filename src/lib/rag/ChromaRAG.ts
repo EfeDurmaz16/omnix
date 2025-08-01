@@ -1,5 +1,13 @@
-import { ChromaClient, Collection, getEmbeddingFunction } from 'chromadb';
 import OpenAI from 'openai';
+
+// Dynamic import types for ChromaDB
+type ChromaClient = any;
+type Collection = any;
+type ChromaApi = {
+  ChromaClient: new (...args: any[]) => ChromaClient;
+  Collection: any;
+  getEmbeddingFunction: (...args: any[]) => any;
+};
 
 export interface MemoryResult {
   content: string;
@@ -34,47 +42,64 @@ export interface SearchResult {
 }
 
 export class ChromaRAG {
-  private client: ChromaClient;
+  private client: ChromaClient | null = null;
   private openai: OpenAI;
   private embeddingFunction: any;
-  private isConnected = true;
+  private isConnected = false;
   private collections: Map<string, Collection> = new Map();
+  private chromaApi: ChromaApi | null = null;
 
   constructor() {
+    // Always initialize OpenAI first
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined') {
+      console.log('📝 Chroma disabled in browser environment - using fallback storage');
+      this.isConnected = false;
+      return;
+    }
+
     // Check if Chroma is enabled
     const chromaEnabled = process.env.CHROMA_ENABLED !== 'false';
     
     if (!chromaEnabled) {
       console.log('📝 Chroma disabled via environment variable - RAG features will use fallback storage');
       this.isConnected = false;
-      // Still initialize OpenAI for embeddings
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      });
+      return;
+    }
+
+    // ChromaDB will be initialized lazily when needed
+    this.isConnected = true;
+  }
+
+  // Lazy initialization of ChromaDB
+  private async initializeChromaDB(): Promise<void> {
+    if (this.client || !this.isConnected) {
       return;
     }
 
     try {
+      // Dynamic import of ChromaDB (server-side only)
+      this.chromaApi = await import('chromadb');
+      
       const chromaMode = process.env.CHROMA_MODE || 'server';
       
       if (chromaMode === 'embedded') {
         // Use embedded Chroma (no server required)
-        this.client = new ChromaClient({
+        this.client = new this.chromaApi.ChromaClient({
           // No path needed for embedded mode - uses local storage
         });
         console.log('✅ Chroma RAG system initialized in embedded mode');
       } else {
         // Use server mode
-        this.client = new ChromaClient({
+        this.client = new this.chromaApi.ChromaClient({
           path: process.env.CHROMA_URL || 'http://localhost:8000'
         });
         console.log('✅ Chroma RAG system initialized in server mode');
       }
-
-      // Initialize OpenAI for embeddings
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      });
 
       // Create embedding function (will be initialized when first used)
       this.embeddingFunction = null;
@@ -82,15 +107,19 @@ export class ChromaRAG {
     } catch (error) {
       console.warn('⚠️ Chroma initialization failed - RAG features will be limited:', error);
       this.isConnected = false;
-      
-      // Still initialize OpenAI for fallback
-      this.openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      });
+      this.client = null;
     }
   }
 
-  private async getOrCreateCollection(name: string): Promise<Collection> {
+  private async getOrCreateCollection(name: string): Promise<Collection | null> {
+    // Initialize ChromaDB if not already done
+    await this.initializeChromaDB();
+    
+    if (!this.client) {
+      console.warn(`⚠️ ChromaDB not available, cannot access collection: ${name}`);
+      return null;
+    }
+
     if (this.collections.has(name)) {
       return this.collections.get(name)!;
     }
@@ -120,7 +149,7 @@ export class ChromaRAG {
       return collection;
     } catch (error) {
       console.error(`❌ Failed to get/create collection ${name}:`, error);
-      throw error;
+      return null;
     }
   }
 
@@ -148,6 +177,11 @@ export class ChromaRAG {
     try {
       const collectionName = `conversations_${userId}`;
       const collection = await this.getOrCreateCollection(collectionName);
+      
+      if (!collection) {
+        console.warn('⚠️ Could not access collection, skipping conversation storage');
+        return;
+      }
       
       // Process each message
       for (let i = 0; i < conversation.messages.length; i++) {
@@ -201,6 +235,11 @@ export class ChromaRAG {
     try {
       const collectionName = `conversations_${userId}`;
       const collection = await this.getOrCreateCollection(collectionName);
+      
+      if (!collection) {
+        console.warn('⚠️ Could not access collection, returning empty memories');
+        return [];
+      }
 
       // Build where clause for filtering
       let whereClause: any = {};
@@ -281,6 +320,11 @@ export class ChromaRAG {
       const collectionName = `websearch_${userId}`;
       const collection = await this.getOrCreateCollection(collectionName);
       
+      if (!collection) {
+        console.warn('⚠️ Could not access collection, skipping web search storage');
+        return;
+      }
+      
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         const documentId = `${Date.now()}_${i}_${result.url.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -324,6 +368,11 @@ export class ChromaRAG {
     try {
       const collectionName = `websearch_${userId}`;
       const collection = await this.getOrCreateCollection(collectionName);
+      
+      if (!collection) {
+        console.warn('⚠️ Could not access collection, returning empty web history');
+        return [];
+      }
 
       // Generate query embedding
       const queryEmbedding = await this.generateEmbedding(query);
@@ -428,6 +477,15 @@ Return empty array if no extractable information.`;
     try {
       const collectionName = `conversations_${userId}`;
       const collection = await this.getOrCreateCollection(collectionName);
+      
+      if (!collection) {
+        return {
+          totalConversations: 0,
+          totalMemories: 0,
+          memoryBreakdown: {},
+          lastActivity: null
+        };
+      }
 
       // Get all documents
       const results = await collection.get({});
@@ -493,6 +551,14 @@ Return empty array if no extractable information.`;
     }
 
     try {
+      // Initialize ChromaDB if needed
+      await this.initializeChromaDB();
+      
+      if (!this.client) {
+        console.log('⚠️ ChromaDB not available, cannot clear memories');
+        return;
+      }
+
       const conversationCollection = `conversations_${userId}`;
       const websearchCollection = `websearch_${userId}`;
 
@@ -525,6 +591,9 @@ Return empty array if no extractable information.`;
     if (!this.isConnected) return false;
     
     try {
+      await this.initializeChromaDB();
+      if (!this.client) return false;
+      
       await this.client.heartbeat();
       return true;
     } catch {

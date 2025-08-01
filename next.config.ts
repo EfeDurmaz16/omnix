@@ -35,6 +35,25 @@ const nextConfig: NextConfig = {
   
   // Webpack optimizations
   webpack: (config, { dev, isServer }) => {
+    // Fix ChromaDB import issues
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+        stream: false,
+        util: false,
+        url: false,
+        buffer: false,
+      };
+    }
+
+    // Externalize ChromaDB for SSR
+    if (isServer) {
+      config.externals = [...(config.externals || []), 'chromadb'];
+    }
+
     if (dev && !isServer) {
       // Reduce bundle size in development
       config.optimization = {

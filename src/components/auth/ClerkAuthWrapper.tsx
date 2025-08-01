@@ -4,14 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { useUser } from '@clerk/nextjs';
 import { User, UsageStats } from '@/lib/types';
 import { mockApi } from '@/lib/mock-api';
-// import { clientCreditManager } from '../../lib/credits/ClientCreditManager';
-// Temporary placeholder for deployment
-const clientCreditManager = {
-  getBalance: () => Promise.resolve(0),
-  getCredits: () => Promise.resolve(0),
-  deductCredits: () => Promise.resolve({ success: true, newBalance: 0 }),
-  addCredits: () => Promise.resolve({ success: true, newBalance: 0 })
-};
+// Note: Now using /api/user/data endpoint instead of clientCreditManager
 
 interface AuthContextType {
   user: User | null;
@@ -61,28 +54,40 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       // Get cached plan from localStorage or default to 'free'
       const cachedPlan = localStorage.getItem(`aspendos_plan_${clerkUser.id}`) || 'free';
       
-      // ALWAYS get REAL credits from database first
-      const defaultCredits = 5000; // Fallback only
+      // Get REAL user data from Prisma database
+      fetch('/api/user/data')
+        .then(response => response.json())
+        .then(userData => {
+          if (userData && !userData.error) {
+            console.log('🔄 Got REAL user data from database:', userData);
+            setUser(prev => prev ? { 
+              ...prev, 
+              credits: userData.credits,
+              plan: userData.plan,
+              email: userData.email,
+              name: userData.name
+            } : prev);
+            setUsageStats(prev => prev ? { 
+              ...prev, 
+              remainingCredits: userData.credits 
+            } : prev);
+            
+            // Save to localStorage
+            localStorage.setItem(`aspendos_credits_${clerkUser.id}`, userData.credits.toString());
+            localStorage.setItem(`aspendos_plan_${clerkUser.id}`, userData.plan);
+          }
+        })
+        .catch(error => {
+          console.warn('Failed to get real user data:', error);
+        });
       
-      // Get current credits from database immediately
-      clientCreditManager.getCredits(true).then(realCredits => {
-        console.log('🔄 Got REAL credits from database:', realCredits);
-        setUser(prev => prev ? { ...prev, credits: realCredits } : prev);
-        setUsageStats(prev => prev ? { ...prev, remainingCredits: realCredits } : prev);
-        
-        // Save to localStorage
-        localStorage.setItem(`aspendos_credits_${clerkUser.id}`, realCredits.toString());
-      }).catch(() => {
-        console.warn('Failed to get real credits, using fallback');
-      });
-      
-      // Create the userData with cached plan
+      // Create the userData with cached plan (will be updated by API call above)
       const userData: User = {
         id: clerkUser.id,
         email: clerkUser.emailAddresses[0]?.emailAddress || '',
         name: clerkUser.fullName || clerkUser.firstName || 'User',
         plan: cachedPlan,
-        credits: defaultCredits,
+        credits: 0, // Will be updated by API call
         createdAt: clerkUser.createdAt || new Date(),
         updatedAt: new Date()
       };
@@ -92,7 +97,7 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         textTokens: 0,
         imageGenerations: 0,
         videoGenerations: 0,
-        remainingCredits: defaultCredits,
+        remainingCredits: 0, // Will be updated by API call
         monthlyUsage: 0,
         lastReset: new Date()
       };
@@ -102,28 +107,7 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       setUsageStats(usageData);
       setLoading(false);
 
-      // Just fetch plan, don't touch credits after initial setup
-      fetch('/api/user/plan')
-        .then(response => {
-          if (response.ok) {
-            return response.json();
-          }
-        })
-        .then(planData => {
-          if (planData && planData.success && planData.data.plan) {
-            const actualPlan = planData.data.plan.toLowerCase();
-            console.log('📋 Fetched user plan from API:', actualPlan);
-            
-            // Update localStorage cache
-            localStorage.setItem(`aspendos_plan_${clerkUser.id}`, actualPlan);
-            
-            // Update user with actual plan
-            setUser(prevUser => prevUser ? { ...prevUser, plan: actualPlan } : prevUser);
-          }
-        })
-        .catch(error => {
-          console.warn('Failed to fetch plan:', error);
-        });
+      // Plan and credits are now fetched together from /api/user/data above
       
       console.log('✅ User initialized:', userData);
     } else if (!clerkUser && user) {
@@ -171,11 +155,14 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     if (user) {
       try {
         console.log('🔄 refreshUsageStats called for user:', user.id);
-        const credits = await clientCreditManager.getCredits(true);
-        console.log('💰 Refreshed credits:', credits);
-        
-        setUser(prev => prev ? { ...prev, credits } : prev);
-        setUsageStats(prev => prev ? { ...prev, remainingCredits: credits } : prev);
+        const response = await fetch('/api/user/data');
+        if (response.ok) {
+          const userData = await response.json();
+          console.log('💰 Refreshed credits:', userData.credits);
+          
+          setUser(prev => prev ? { ...prev, credits: userData.credits } : prev);
+          setUsageStats(prev => prev ? { ...prev, remainingCredits: userData.credits } : prev);
+        }
       } catch (error) {
         console.error('Failed to refresh usage stats:', error);
       }
@@ -194,18 +181,23 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       setUser(newUser);
       setUsageStats(newUsageStats);
       
-      // Deduct credits from database
-      clientCreditManager.deductCredits(amount, 'Manual credit update', {})
+      // Update credits in database
+      fetch('/api/user/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credits: newCredits })
+      })
+        .then(response => response.json())
         .then(result => {
-          if (result.success) {
-            console.log('💰 Credits deducted from database:', result.newBalance);
+          if (!result.error) {
+            console.log('💰 Credits updated in database:', result.credits);
             // Update state with actual database balance
-            setUser(prev => prev ? { ...prev, credits: result.newBalance } : prev);
-            setUsageStats(prev => prev ? { ...prev, remainingCredits: result.newBalance } : prev);
+            setUser(prev => prev ? { ...prev, credits: result.credits } : prev);
+            setUsageStats(prev => prev ? { ...prev, remainingCredits: result.credits } : prev);
           }
         })
         .catch(error => {
-          console.error('Failed to deduct credits from database:', error);
+          console.error('Failed to update credits in database:', error);
         });
     }
   };
@@ -213,37 +205,37 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const addCredits = (amount: number) => {
     console.log('💰 addCredits called with:', amount);
     
-    // 1. IMMEDIATELY update navbar (usageStats.remainingCredits)
-    setUsageStats(prev => {
-      const currentCredits = prev?.remainingCredits || 0;
-      const newCredits = currentCredits + amount;
-      console.log(`🔄 NAVBAR UPDATE: ${currentCredits} + ${amount} = ${newCredits}`);
-      
-      // 4. SAVE TO LOCALSTORAGE immediately so it persists
-      if (clerkUser?.id) {
-        localStorage.setItem(`aspendos_credits_${clerkUser.id}`, newCredits.toString());
-        console.log('💾 Saved to localStorage:', newCredits);
-      }
-      
-      return prev ? { ...prev, remainingCredits: newCredits } : prev;
-    });
-    
-    // 2. Also update user credits
-    setUser(prev => {
-      const newCredits = (prev?.credits || 0) + amount;
-      return prev ? { ...prev, credits: newCredits } : prev;
-    });
-    
-    // 3. Save to database for persistence
-    clientCreditManager.addCredits(amount, 'Credit purchase', {})
+    // Use dedicated credit addition endpoint with atomic transaction
+    fetch('/api/user/credits/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        amount, 
+        description: 'Credit purchase via Stripe' 
+      })
+    })
+      .then(response => response.json())
       .then(result => {
-        console.log('💾 Database updated:', result.success);
+        if (result.success) {
+          console.log('✅ Credits added successfully:', result);
+          
+          // Update local state with new credits
+          setUser(prev => prev ? { ...prev, credits: result.credits } : prev);
+          setUsageStats(prev => prev ? { ...prev, remainingCredits: result.credits } : prev);
+          
+          // Update localStorage
+          if (clerkUser?.id) {
+            localStorage.setItem(`aspendos_credits_${clerkUser.id}`, result.credits.toString());
+          }
+        } else {
+          throw new Error(result.error || 'Failed to add credits');
+        }
       })
       .catch(error => {
-        console.error('Database update failed:', error);
+        console.error('❌ Failed to add credits:', error);
+        // Fallback: refresh user data to get current state
+        refreshUsageStats();
       });
-    
-    console.log('✅ Credits added to navbar and database:', amount);
   };
 
   const refreshUserPlan = async () => {
@@ -252,26 +244,22 @@ export const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     try {
       console.log('🔄 Refreshing user plan and credits...');
       
-      const [planResponse, newCredits] = await Promise.all([
-        fetch('/api/user/plan'),
-        clientCreditManager.getCredits(true)
-      ]);
+      const response = await fetch('/api/user/data');
       
-      if (planResponse.ok) {
-        const planData = await planResponse.json();
-        if (planData.success && planData.data.plan) {
-          const newPlan = planData.data.plan.toLowerCase();
-          console.log('📋 Plan:', newPlan, 'Credits:', newCredits);
+      if (response.ok) {
+        const userData = await response.json();
+        if (userData && !userData.error) {
+          console.log('📋 Plan:', userData.plan, 'Credits:', userData.credits);
           
           setUser(prevUser => prevUser ? { 
             ...prevUser, 
-            plan: newPlan,
-            credits: newCredits
+            plan: userData.plan,
+            credits: userData.credits
           } : prevUser);
           
           setUsageStats(prevStats => prevStats ? {
             ...prevStats,
-            remainingCredits: newCredits
+            remainingCredits: userData.credits
           } : prevStats);
         }
       }

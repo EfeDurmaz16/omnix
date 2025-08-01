@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { databaseService } from '@/lib/database/DatabaseService';
+import { prisma } from '@/lib/db';
 
 interface UserProfile {
   age?: number;
@@ -37,15 +37,17 @@ export async function GET(req: NextRequest) {
       }
     }
     
-    // Also get basic user data from database
-    const userData = await databaseService.getUserByClerkId(userId);
+    // Also get basic user data from Prisma database
+    const userData = await prisma.user.findUnique({
+      where: { clerkId: userId }
+    });
     
     const response = {
       profile: userProfile,
       userData: userData ? {
         name: userData.name,
         email: userData.email,
-        plan: userData.plan,
+        plan: userData.plan.toLowerCase(),
         credits: userData.credits,
         createdAt: userData.createdAt,
         updatedAt: userData.updatedAt
